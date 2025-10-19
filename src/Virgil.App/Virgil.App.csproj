@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Virgil.App</RootNamespace>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup>
+    <Page Include="App.xaml" />
+    <Compile Include="App.xaml.cs" />
+    <Page Include="MainWindow.xaml" />
+    <Compile Include="MainWindow.xaml.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
+  </ItemGroup>
+</Project>
