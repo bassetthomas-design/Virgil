@@ -1,0 +1,32 @@
+name: Build .NET and produce artifact
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Publish (win-x64)
+        run: dotnet publish -c Release -r win-x64 --self-contained false -o publish-output
+
+      - name: Archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-app
+          path: publish-output
