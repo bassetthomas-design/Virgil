@@ -1,8 +1,55 @@
 <Window x:Class="Virgil.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Virgil" Height="450" Width="800">
-    <Grid>
-        <TextBlock Text="Bienvenue dans Virgil" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="24" />
+        Title="Virgil Dashboard" Height="500" Width="800">
+    <!--
+        A simple dashboard interface for the Virgil application. The top row
+        displays the application title, the second row contains action
+        buttons to trigger cleaning, updates and monitoring, and the
+        remaining area is reserved for output logs. Buttons are wired
+        up to event handlers in the code-behind (see MainWindow.xaml.cs).
+    -->
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <!-- Title -->
+        <TextBlock Text="Virgil Dashboard"
+                   FontSize="24"
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,10" />
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    Margin="0,0,0,10">
+            <Button x:Name="CleanButton"
+                    Content="Scan &amp; Clean"
+                    Click="CleanButton_Click"
+                    Margin="5"
+                    Padding="10" />
+            <Button x:Name="UpdateButton"
+                    Content="Check Updates"
+                    Click="UpdateButton_Click"
+                    Margin="5"
+                    Padding="10" />
+            <Button x:Name="MonitorButton"
+                    Content="Start Monitoring"
+                    Click="MonitorButton_Click"
+                    Margin="5"
+                    Padding="10" />
+        </StackPanel>
+        <!-- Output log area -->
+        <TextBox x:Name="OutputBox"
+                 Grid.Row="2"
+                 VerticalScrollBarVisibility="Auto"
+                 AcceptsReturn="True"
+                 IsReadOnly="True"
+                 TextWrapping="Wrap"
+                 FontFamily="Consolas"
+                 FontSize="14" />
     </Grid>
 </Window>
