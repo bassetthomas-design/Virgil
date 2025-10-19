@@ -1,0 +1,8 @@
+<Window x:Class="Virgil.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Virgil" Height="450" Width="800">
+    <Grid>
+        <TextBlock Text="Bienvenue dans Virgil" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="24" />
+    </Grid>
+</Window>
