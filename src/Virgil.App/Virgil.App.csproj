@@ -10,4 +10,4 @@
   <ItemGroup>
     <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
   </ItemGroup>
-</Pro
+</Project>
