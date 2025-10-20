@@ -1,4 +1,6 @@
 using System;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using Virgil.Core;
 
@@ -24,12 +26,12 @@ namespace Virgil.App
         }
 
         /// <summary>
-        /// Handles the click event for the Scan & Clean button.
-        /// Scans the temporary folder, reports the size and deletes it.
+        /// Handles the click event for the Scan &amp; Clean button. Scans the
+        /// temporary folder for accumulated files and removes them.
         /// </summary>
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Scanning temporary files…\n");
+            OutputBox.AppendText($"[{DateTime.Now:T}] Scanning temporary files...\n");
             var size = _cleaningService.GetTempFilesSize();
             var sizeMb = size / (1024.0 * 1024.0);
             OutputBox.AppendText($"[{DateTime.Now:T}] Found {sizeMb:F1} MB of temporary files.\n");
@@ -39,12 +41,13 @@ namespace Virgil.App
         }
 
         /// <summary>
-        /// Handles the click event for the Check Updates button.
-        /// Invokes winget to upgrade all installed packages and displays the result.
+        /// Handles the click event for the Check Updates button. Invokes
+        /// winget to upgrade all installed packages and streams the
+        /// collected output to the UI when complete.
         /// </summary>
         private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Checking for updates via winget…\n");
+            OutputBox.AppendText($"[{DateTime.Now:T}] Checking for updates via winget...\n");
             var result = await _updateService.UpgradeAllAsync();
             OutputBox.AppendText(result + "\n\n");
             OutputBox.ScrollToEnd();
@@ -52,7 +55,7 @@ namespace Virgil.App
 
         /// <summary>
         /// Handles the click event for the Start/Stop Monitoring button.
-        /// Starts or stops periodic sampling of CPU and memory usage.
+        /// Starts or stops the periodic sampling of CPU and memory usage.
         /// </summary>
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
@@ -75,7 +78,7 @@ namespace Virgil.App
         private void OnMetricsUpdated(object? sender, EventArgs e)
         {
             var metrics = _monitoringService.LatestMetrics;
-            // Ensure UI updates occur on the dispatcher thread
+            // Marshal back to the UI thread if necessary
             Dispatcher.Invoke(() =>
             {
                 OutputBox.AppendText($"CPU: {metrics.CpuUsage:F1}%  Memory: {metrics.MemoryUsage:F1}%\n");
