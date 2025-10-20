@@ -1,170 +1,103 @@
 using System;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using Virgil.Core;
 using Virgil.App.Controls;
 
 namespace Virgil.App
 {
+    /// <summary>
+    /// Interaction logic for MainWindow.xaml
+    /// </summary>
     public partial class MainWindow : Window
     {
         private readonly MonitoringService _monitoringService;
         private readonly CleaningService _cleaningService;
+        private readonly UpdateService _updateService;
         private readonly ApplicationUpdateService _appUpdateService;
         private readonly DriverUpdateService _driverUpdateService;
-        private readonly BrowserCleaningService _browserCleaningService;
-        private readonly WindowsUpdateService _windowsUpdateService;
         private readonly StartupManager _startupManager;
         private readonly ProcessService _processService;
+        private readonly BrowserCleaningService _browserCleaningService;
+        private readonly WindowsUpdateService _windowsUpdateService;
+        private readonly MaintenancePresetsService _presetsService;
         private readonly ServiceManager _serviceManager;
-        private readonly MaintenancePresetsService _maintenancePresetsService;
-        private readonly DialogService _dialogService;
         private readonly MoodService _moodService;
-        private readonly LoggingService _loggingService;
+        private readonly DialogService _dialogService;
         private readonly VirgilAvatarViewModel _avatarViewModel;
         private bool _isMonitoring;
 
         public MainWindow()
         {
             InitializeComponent();
-
             _monitoringService = new MonitoringService();
             _cleaningService = new CleaningService();
+            _updateService = new UpdateService();
             _appUpdateService = new ApplicationUpdateService();
             _driverUpdateService = new DriverUpdateService();
-            _browserCleaningService = new BrowserCleaningService();
-            _windowsUpdateService = new WindowsUpdateService();
             _startupManager = new StartupManager();
             _processService = new ProcessService();
-            _serviceManager = new ServiceManager();
-            _maintenancePresetsService = new MaintenancePresetsService();
-            _dialogService = new DialogService();
+            _browserCleaningService = new BrowserCleaningService();
+            _windowsUpdateService = new WindowsUpdateService();
             _moodService = new MoodService();
-            _loggingService = new LoggingService();
+            _dialogService = new DialogService();
+            _avatarViewModel = new VirgilAvatarViewModel(_moodService, _dialogService);
+            _serviceManager = new ServiceManager();
+            _presetsService = new MaintenancePresetsService(_cleaningService, _browserCleaningService, _appUpdateService, _driverUpdateService, _windowsUpdateService);
 
-            _avatarViewModel = new VirgilAvatarViewModel();
+            // Bind the avatar control to its view model
             AvatarControl.DataContext = _avatarViewModel;
 
+            // Subscribe to monitoring events
             _monitoringService.MetricsUpdated += OnMetricsUpdated;
 
+            // Display a greeting on startup
             var greeting = _dialogService.GetRandomMessage("startup");
             _avatarViewModel.Message = greeting;
-            _avatarViewModel.Color = _moodService.GetColor(Mood.Neutral);
             OutputBox.AppendText($"[{DateTime.Now:T}] {greeting}\n");
-            _loggingService.LogInfo("Application started.");
+            LoggingService.LogInfo("Application started.");
         }
 
-        private void UpdateMood(Mood mood, string? category = null)
-        {
-            _avatarViewModel.Color = _moodService.GetColor(mood);
-            if (category != null)
-            {
-                _avatarViewModel.Message = _dialogService.GetRandomMessage(category);
-            }
-        }
-
-        private void LogAndAppend(string message)
-        {
-            OutputBox.AppendText(message + "\n");
-            OutputBox.ScrollToEnd();
-            _loggingService.LogInfo(message);
-        }
-
+        /// <summary>
+        /// Handles the click event for the Scan &amp; Clean button. Scans the
+        /// temporary folder for accumulated files and removes them.
+        /// </summary>
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
-            UpdateMood(Mood.Vigilant);
-            LogAndAppend($"[{DateTime.Now:T}] Scanning temporary files...");
+            OutputBox.AppendText($"[{DateTime.Now:T}] Scanning temporary files...\n");
+            LoggingService.LogInfo("Scanning temporary files.");
             var size = _cleaningService.GetTempFilesSize();
-            var mb = size / (1024.0 * 1024.0);
-            LogAndAppend($"[{DateTime.Now:T}] Found {mb:F1} MB of temporary files.");
+            var sizeMb = size / (1024.0 * 1024.0);
+            OutputBox.AppendText($"[{DateTime.Now:T}] Found {sizeMb:F1} MB of temporary files.\n");
             _cleaningService.CleanTempFiles();
-            LogAndAppend($"[{DateTime.Now:T}] Temporary files cleaned.\n");
-            UpdateMood(Mood.Proud, "clean_success");
+            OutputBox.AppendText($"[{DateTime.Now:T}] Temporary files cleaned.\n\n");
+            LoggingService.LogInfo($"Temporary files cleaned ({sizeMb:F1} MB).");
+            // Update mood and dialogue
+            _avatarViewModel.SetMood(Mood.Proud, "clean_success");
+            OutputBox.ScrollToEnd();
         }
 
-        private async void AppUpdateButton_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// Handles the click event for the Check Updates button. Invokes
+        /// winget to upgrade all installed packages and streams the
+        /// collected output to the UI when complete.
+        /// </summary>
+        private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
-            UpdateMood(Mood.Vigilant);
-            LogAndAppend($"[{DateTime.Now:T}] Updating applications and games...");
-            var result = await _appUpdateService.UpdateAllApplicationsAsync();
-            LogAndAppend(result + "\n");
-            UpdateMood(Mood.Proud, "update_success");
+            OutputBox.AppendText($"[{DateTime.Now:T}] Checking for updates via winget...\n");
+            LoggingService.LogInfo("Checking for updates via winget.");
+            var result = await _updateService.UpgradeAllAsync();
+            OutputBox.AppendText(result + "\n\n");
+            LoggingService.LogInfo("Winget update completed.");
+            _avatarViewModel.SetMood(Mood.Proud, "update_success");
+            OutputBox.ScrollToEnd();
         }
 
-        private async void DriverUpdateButton_Click(object sender, RoutedEventArgs e)
-        {
-            UpdateMood(Mood.Vigilant);
-            LogAndAppend($"[{DateTime.Now:T}] Updating drivers...");
-            var result = await _driverUpdateService.UpdateDriversAsync();
-            LogAndAppend(result + "\n");
-            UpdateMood(Mood.Proud, "driver_update_success");
-        }
-
-        private void BrowserCleanButton_Click(object sender, RoutedEventArgs e)
-        {
-            UpdateMood(Mood.Vigilant);
-            LogAndAppend($"[{DateTime.Now:T}] Cleaning browser caches...");
-            _browserCleaningService.CleanBrowserCaches();
-            LogAndAppend($"[{DateTime.Now:T}] Browser caches cleaned.\n");
-            UpdateMood(Mood.Proud, "browser_clean_success");
-        }
-
-        private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
-        {
-            UpdateMood(Mood.Vigilant);
-            LogAndAppend($"[{DateTime.Now:T}] Running Windows Update...");
-            var result = await _windowsUpdateService.UpdateWindowsAsync();
-            LogAndAppend(result + "\n");
-            UpdateMood(Mood.Proud, "windows_update_success");
-        }
-
-        private void StartupButton_Click(object sender, RoutedEventArgs e)
-        {
-            UpdateMood(Mood.Neutral);
-            LogAndAppend($"[{DateTime.Now:T}] Listing startup programs...");
-            var list = _startupManager.GetStartupPrograms();
-            foreach (var item in list)
-            {
-                LogAndAppend("  " + item);
-            }
-            LogAndAppend(string.Empty);
-            UpdateMood(Mood.Neutral, "startup_list");
-        }
-
-        private void ProcessesButton_Click(object sender, RoutedEventArgs e)
-        {
-            UpdateMood(Mood.Neutral);
-            LogAndAppend($"[{DateTime.Now:T}] Listing processes...");
-            var procs = _processService.ListProcesses();
-            foreach (var p in procs)
-            {
-                LogAndAppend("  " + p);
-            }
-            LogAndAppend(string.Empty);
-            UpdateMood(Mood.Neutral, "process_list");
-        }
-
-        private void ServicesButton_Click(object sender, RoutedEventArgs e)
-        {
-            UpdateMood(Mood.Neutral);
-            LogAndAppend($"[{DateTime.Now:T}] Listing services...");
-            var list = _serviceManager.ListServices();
-            foreach (var svc in list)
-            {
-                LogAndAppend($"  {svc.DisplayName} - {svc.Status}");
-            }
-            LogAndAppend(string.Empty);
-            UpdateMood(Mood.Neutral, "service_list");
-        }
-
-        private async void MaintenanceButton_Click(object sender, RoutedEventArgs e)
-        {
-            UpdateMood(Mood.Vigilant);
-            LogAndAppend($"[{DateTime.Now:T}] Running full maintenance...");
-            var summary = await _maintenancePresetsService.RunFullMaintenanceAsync();
-            LogAndAppend(summary + "\n");
-            UpdateMood(Mood.Proud, "maintenance_complete");
-        }
-
+        /// <summary>
+        /// Handles the click event for the Start/Stop Monitoring button.
+        /// Starts or stops the periodic sampling of CPU and memory usage.
+        /// </summary>
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
             _isMonitoring = !_isMonitoring;
@@ -172,37 +105,132 @@ namespace Virgil.App
             {
                 _monitoringService.Start();
                 MonitorButton.Content = "Stop Monitoring";
-                UpdateMood(Mood.Vigilant);
-                LogAndAppend($"[{DateTime.Now:T}] Monitoring started.");
+                OutputBox.AppendText($"[{DateTime.Now:T}] Monitoring started.\n");
             }
             else
             {
                 _monitoringService.Stop();
                 MonitorButton.Content = "Start Monitoring";
-                UpdateMood(Mood.Neutral);
-                LogAndAppend($"[{DateTime.Now:T}] Monitoring stopped.");
+                OutputBox.AppendText($"[{DateTime.Now:T}] Monitoring stopped.\n\n");
             }
+            OutputBox.ScrollToEnd();
         }
 
         private void OnMetricsUpdated(object? sender, EventArgs e)
         {
             var metrics = _monitoringService.LatestMetrics;
+            // Marshal back to the UI thread if necessary
             Dispatcher.Invoke(() =>
             {
-                LogAndAppend($"CPU: {metrics.CpuUsage:F1}%  Mem: {metrics.MemoryUsage:F1}%  Disk: {metrics.DiskUsage:F1}%");
-                if (metrics.CpuUsage > 90 || metrics.MemoryUsage > 90)
+                OutputBox.AppendText($"CPU: {metrics.CpuUsage:F1}%  Memory: {metrics.MemoryUsage:F1}%  Disk: {metrics.DiskUsage:F1}%\n");
+                // Update mood based on resource usage
+                if (metrics.CpuUsage > 90 || metrics.MemoryUsage > 90 || metrics.DiskUsage > 90)
                 {
-                    UpdateMood(Mood.Alert, "alert_temp");
+                    _moodService.CurrentMood = Mood.Alert;
                 }
-                else if (metrics.CpuUsage > 80 || metrics.MemoryUsage > 80)
+                else if (metrics.CpuUsage > 75 || metrics.MemoryUsage > 75 || metrics.DiskUsage > 75)
                 {
-                    UpdateMood(Mood.Vigilant);
+                    _moodService.CurrentMood = Mood.Vigilant;
                 }
                 else
                 {
-                    UpdateMood(Mood.Neutral);
+                    _moodService.CurrentMood = Mood.Neutral;
                 }
+                OutputBox.ScrollToEnd();
             });
+        }
+
+        /// <summary>
+        /// Handles the click event for the Update Apps button. Updates all installed
+        /// applications and games via the ApplicationUpdateService.
+        /// </summary>
+        private async void AppUpdateButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Updating applications...\n");
+            LoggingService.LogInfo("Updating applications...");
+            var result = await _appUpdateService.UpdateAllApplicationsAsync();
+            OutputBox.AppendText(result + "\n\n");
+            LoggingService.LogInfo("Application update completed.");
+            _avatarViewModel.SetMood(Mood.Proud, "update_success");
+            OutputBox.ScrollToEnd();
+        }
+
+        /// <summary>
+        /// Handles the click event for the Update Drivers button. Updates system
+        /// drivers via the DriverUpdateService.
+        /// </summary>
+        private async void DriverUpdateButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Updating drivers...\n");
+            LoggingService.LogInfo("Updating drivers...");
+            var result = await _driverUpdateService.UpdateDriversAsync();
+            OutputBox.AppendText(result + "\n\n");
+            LoggingService.LogInfo("Driver update completed.");
+            _avatarViewModel.SetMood(Mood.Proud, "driver_update_success");
+            OutputBox.ScrollToEnd();
+        }
+
+        /// <summary>
+        /// Handles the click event for the Clean Browsers button. Cleans
+        /// caches for supported browsers.
+        /// </summary>
+        private void BrowserCleanButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Cleaning browser caches...\n");
+            LoggingService.LogInfo("Cleaning browser caches...");
+            var result = _browserCleaningService.CleanBrowserCaches();
+            OutputBox.AppendText(result + "\n\n");
+            LoggingService.LogInfo("Browser cleaning completed.");
+            _avatarViewModel.SetMood(Mood.Proud, "browser_clean_success");
+            OutputBox.ScrollToEnd();
+        }
+
+        /// <summary>
+        /// Handles the click event for the Update Windows button. Runs the
+        /// Windows Update sequence via WindowsUpdateService.
+        /// </summary>
+        private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Updating Windows...\n");
+            LoggingService.LogInfo("Updating Windows...");
+            var result = await _windowsUpdateService.UpdateWindowsAsync();
+            OutputBox.AppendText(result + "\n\n");
+            LoggingService.LogInfo("Windows update completed.");
+            _avatarViewModel.SetMood(Mood.Proud, "windows_update_success");
+            OutputBox.ScrollToEnd();
+        }
+
+        /// <summary>
+        /// Handles the click event for the Manage Services button. Lists
+        /// all Windows services and their statuses.
+        /// </summary>
+        private void ServicesButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Listing services...\n");
+            LoggingService.LogInfo("Listing services...");
+            var services = _serviceManager.ListServices();
+            foreach (var svc in services)
+            {
+                OutputBox.AppendText($"{svc.ServiceName}: {svc.Status}\n");
+            }
+            _avatarViewModel.SetMood(Mood.Neutral, "service_list");
+            OutputBox.AppendText("\n");
+            OutputBox.ScrollToEnd();
+        }
+
+        /// <summary>
+        /// Handles the click event for the Run Maintenance button. Executes
+        /// the full maintenance routine defined in MaintenancePresetsService.
+        /// </summary>
+        private async void MaintenanceButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Running full maintenance...\n");
+            LoggingService.LogInfo("Running full maintenance...");
+            var result = await _presetsService.RunFullMaintenanceAsync();
+            OutputBox.AppendText(result + "\n\n");
+            LoggingService.LogInfo("Full maintenance completed.");
+            _avatarViewModel.SetMood(Mood.Proud, "maintenance_complete");
+            OutputBox.ScrollToEnd();
         }
     }
 }
