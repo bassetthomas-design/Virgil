@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.10" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.10" />
   </ItemGroup>
 
   <ItemGroup>
