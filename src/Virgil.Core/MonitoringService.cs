@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Timers;
 
 namespace Virgil.Core
 {
@@ -12,7 +11,8 @@ namespace Virgil.Core
     /// </summary>
     public class MonitoringService
     {
-        private readonly Timer _timer;
+        // Use fully qualified System.Timers.Timer to avoid ambiguity with System.Threading.Timer.
+        private readonly System.Timers.Timer _timer;
         private readonly PerformanceCounter _cpuCounter;
         private readonly PerformanceCounter _memCounter;
 
@@ -33,7 +33,8 @@ namespace Virgil.Core
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _memCounter = new PerformanceCounter("Memory", "% Committed Bytes In Use");
 
-            _timer = new Timer(1000);
+            // Create the timer with a 1‑second interval. Use the fully qualified type name to disambiguate.
+            _timer = new System.Timers.Timer(1000);
             _timer.Elapsed += OnTimerElapsed;
         }
 
@@ -47,7 +48,7 @@ namespace Virgil.Core
         /// </summary>
         public void Stop() => _timer.Stop();
 
-        private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
+        private void OnTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
         {
             try
             {
