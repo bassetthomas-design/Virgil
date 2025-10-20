@@ -11,4 +11,10 @@
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.10" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="virgil-dialogues.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
