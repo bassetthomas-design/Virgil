@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 
 namespace Virgil.Core
 {
@@ -15,6 +17,8 @@ namespace Virgil.Core
         private readonly System.Timers.Timer _timer;
         private readonly PerformanceCounter _cpuCounter;
         private readonly PerformanceCounter _memCounter;
+        // Optional counter for disk usage. Not all systems expose this counter, so it may be null.
+        private readonly PerformanceCounter? _diskCounter;
 
         /// <summary>
         /// Gets the most recently sampled metrics. This property is updated
@@ -32,8 +36,18 @@ namespace Virgil.Core
             // Initialize performance counters for total CPU and memory usage.
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _memCounter = new PerformanceCounter("Memory", "% Committed Bytes In Use");
+            // Attempt to create a performance counter for disk usage. On systems where this counter
+            // is unavailable, assignment will fail and we will fall back to DriveInfo.
+            try
+            {
+                _diskCounter = new PerformanceCounter("LogicalDisk", "% Disk Time", "_Total");
+            }
+            catch
+            {
+                _diskCounter = null;
+            }
 
-            // Create the timer with a 1‑second interval. Use the fully qualified type name to disambiguate.
+            // Create the timer with a 1‑second interval. Fully qualified type name to disambiguate.
             _timer = new System.Timers.Timer(1000);
             _timer.Elapsed += OnTimerElapsed;
         }
@@ -54,6 +68,39 @@ namespace Virgil.Core
             {
                 LatestMetrics.CpuUsage = _cpuCounter.NextValue();
                 LatestMetrics.MemoryUsage = _memCounter.NextValue();
+                // Update disk usage using the counter if available; otherwise fall back to DriveInfo.
+                if (_diskCounter != null)
+                {
+                    try
+                    {
+                        LatestMetrics.DiskUsage = _diskCounter.NextValue();
+                    }
+                    catch
+                    {
+                        LatestMetrics.DiskUsage = 0f;
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        var sysDrive = System.IO.DriveInfo.GetDrives()
+                            .FirstOrDefault(d => d.IsReady && d.Name == System.IO.Path.GetPathRoot(Environment.SystemDirectory));
+                        if (sysDrive != null)
+                        {
+                            var used = sysDrive.TotalSize - sysDrive.TotalFreeSpace;
+                            LatestMetrics.DiskUsage = (float)(used * 100.0 / sysDrive.TotalSize);
+                        }
+                    }
+                    catch
+                    {
+                        LatestMetrics.DiskUsage = 0f;
+                    }
+                }
+                // GPU usage and temperature are not yet implemented; set to zero as stubs.
+                LatestMetrics.GpuUsage = 0f;
+                LatestMetrics.Temperature = 0f;
+
                 MetricsUpdated?.Invoke(this, EventArgs.Empty);
             }
             catch
@@ -77,5 +124,20 @@ namespace Virgil.Core
         /// Gets or sets the memory usage percentage of committed bytes.
         /// </summary>
         public float MemoryUsage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the disk usage percentage (approximation).
+        /// </summary>
+        public float DiskUsage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the GPU usage percentage (stub implementation).
+        /// </summary>
+        public float GpuUsage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the temperature in degrees Celsius (stub implementation).
+        /// </summary>
+        public float Temperature { get; set; }
     }
 }
