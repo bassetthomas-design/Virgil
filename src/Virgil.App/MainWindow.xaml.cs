@@ -233,4 +233,40 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
     }
+private void StartupButton_Click(object sender, RoutedEventArgs e)
+{
+    OutputBox.AppendText($"[{DateTime.Now:T}] Listing startup items...\n");
+    LoggingService.Info("Listing startup items...");
+
+    var items = _startupManager.ListItems(); // IEnumerable<StartupItem>
+    foreach (var it in items)
+    {
+        OutputBox.AppendText($"{it.Name}  [{it.Location}]  {(it.Enabled ? "Enabled" : "Disabled")}\n");
+    }
+
+    _avatarViewModel.SetMood(Mood.Neutral, "startup_list");
+    OutputBox.ScrollToEnd();
+}
+
+private async void ProcessesButton_Click(object sender, RoutedEventArgs e)
+{
+    OutputBox.AppendText($"[{DateTime.Now:T}] Listing processes...\n");
+    LoggingService.Info("Listing processes...");
+
+    var processes = await _processService.ListAsync(); // IReadOnlyList<ProcInfo>
+
+    foreach (var p in processes
+                    .OrderByDescending(p => p.CpuUsage)
+                    .ThenByDescending(p => p.MemoryMb)
+                    .Take(30))
+    {
+        OutputBox.AppendText(
+            $"{p.Name,-28} PID:{p.Pid,6}  CPU:{p.CpuUsage,5:F1}%  MEM:{p.MemoryMb,6:F0} MB\n");
+    }
+
+    var heavy = processes.Any(p => p.CpuUsage > 75 || p.MemoryMb > 1500);
+    _avatarViewModel.SetMood(heavy ? Mood.Alert : Mood.Neutral,
+                             heavy ? "high_usage_detected" : "process_list");
+
+    OutputBox.ScrollToEnd();
 }
