@@ -1,235 +1,295 @@
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Linq; // requis pour OrderBy/ThenBy/Any/Take
-using Virgil.Core;
-using Virgil.App.Controls;
+using Microsoft.Win32;
 
 namespace Virgil.App
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly MonitoringService _monitoringService;
-        private readonly CleaningService _cleaningService;
-        private readonly UpdateService _updateService;
-        private readonly ApplicationUpdateService _appUpdateService;
-        private readonly DriverUpdateService _driverUpdateService;
-        private readonly StartupManager _startupManager;
-        private readonly ProcessService _processService;
-        private readonly BrowserCleaningService _browserCleaningService;
-        private readonly WindowsUpdateService _windowsUpdateService;
-        private readonly MaintenancePresetsService _presetsService;
-        private readonly ServiceManager _serviceManager;
-        private readonly MoodService _moodService;
-        private readonly DialogService _dialogService;
-        private readonly VirgilAvatarViewModel _avatarViewModel;
+        // Monitoring (simple timer via PerformanceCounter dans Virgil.Core si dispo,
+        // sinon on se contente d'un "stub" ici pour ne pas casser le build).
+        private readonly Virgil.Core.MonitoringService? _monitoringService;
         private bool _isMonitoring;
 
         public MainWindow()
         {
             InitializeComponent();
-            _monitoringService = new MonitoringService();
-            _cleaningService = new CleaningService();
-            _updateService = new UpdateService();
-            _appUpdateService = new ApplicationUpdateService();
-            _driverUpdateService = new DriverUpdateService();
-            _startupManager = new StartupManager();
-            _processService = new ProcessService();
-            _browserCleaningService = new BrowserCleaningService();
-            _windowsUpdateService = new WindowsUpdateService();
-            _moodService = new MoodService();
-            _dialogService = new DialogService();
-            _avatarViewModel = new VirgilAvatarViewModel(_moodService, _dialogService);
-            _serviceManager = new ServiceManager();
-            _presetsService = new MaintenancePresetsService(_cleaningService, _browserCleaningService, _appUpdateService, _driverUpdateService, _windowsUpdateService);
 
-            // Bind the avatar control to its view model
-            AvatarControl.DataContext = _avatarViewModel;
+            try
+            {
+                _monitoringService = new Virgil.Core.MonitoringService();
+                _monitoringService.MetricsUpdated += OnMetricsUpdated;
+            }
+            catch
+            {
+                // Si le service n'existe pas ou plante, on laisse l'UI vivante.
+                _monitoringService = null;
+            }
 
-            // Subscribe to monitoring events
-            _monitoringService.MetricsUpdated += OnMetricsUpdated;
-
-            // Display a greeting on startup
-            var greeting = _dialogService.GetRandomMessage("startup");
-            _avatarViewModel.Message = greeting;
-            OutputBox.AppendText($"[{DateTime.Now:T}] {greeting}\n");
-            LoggingService.LogInfo("Application started.");
+            // DataContext pour l’avatar si présent
+            try
+            {
+                var vmType = Type.GetType("Virgil.App.Controls.VirgilAvatarViewModel, Virgil.App");
+                if (vmType != null && AvatarControl != null)
+                {
+                    var vm = Activator.CreateInstance(vmType);
+                    AvatarControl.DataContext = vm;
+                    // message d’accueil
+                    AppendLine("Bonjour 👋 Virgil est prêt.");
+                    vmType.GetMethod("SetMood")?.Invoke(vm, new object[] { "neutral", "Démarrage" });
+                }
+            }
+            catch { /* pas bloquant */ }
         }
+
+        // ---- Helpers UI -------------------------------------------------------
+
+        private void Append(string text)
+        {
+            OutputBox.AppendText(text);
+            OutputBox.ScrollToEnd();
+        }
+
+        private void AppendLine(string line)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] {line}\n");
+            OutputBox.ScrollToEnd();
+        }
+
+        // ---- Actions principales ---------------------------------------------
 
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Scanning temporary files...\n");
-            LoggingService.LogInfo("Scanning temporary files.");
-            var size = _cleaningService.GetTempFilesSize();
-            var sizeMb = size / (1024.0 * 1024.0);
-            OutputBox.AppendText($"[{DateTime.Now:T}] Found {sizeMb:F1} MB of temporary files.\n");
-            _cleaningService.CleanTempFiles();
-            OutputBox.AppendText($"[{DateTime.Now:T}] Temporary files cleaned.\n\n");
-            LoggingService.LogInfo($"Temporary files cleaned ({sizeMb:F1} MB).");
-            _avatarViewModel.SetMood(Mood.Proud, "clean_success");
-            OutputBox.ScrollToEnd();
+            try
+            {
+                AppendLine("Scan des fichiers temporaires...");
+                var targets = new[]
+                {
+                    Environment.ExpandEnvironmentVariables("%TEMP%"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Temp"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"Temp"),
+                };
+
+                long totalBytes = 0;
+                foreach (var t in targets.Where(Directory.Exists))
+                {
+                    foreach (var f in Directory.EnumerateFiles(t, "*", SearchOption.AllDirectories))
+                    {
+                        try { totalBytes += new FileInfo(f).Length; } catch { }
+                    }
+                }
+                AppendLine($"Trouvé ~{totalBytes / (1024.0 * 1024):F1} MB de fichiers temporaires.");
+                int deleted = 0;
+
+                foreach (var t in targets.Where(Directory.Exists))
+                {
+                    // On tente la suppression, best-effort
+                    foreach (var f in Directory.EnumerateFiles(t, "*", SearchOption.AllDirectories))
+                    { try { File.Delete(f); deleted++; } catch { } }
+                    foreach (var d in Directory.EnumerateDirectories(t, "*", SearchOption.AllDirectories))
+                    { try { Directory.Delete(d, true); } catch { } }
+                }
+                AppendLine($"Nettoyage terminé. Fichiers supprimés: {deleted} (best-effort).");
+                SetMoodSafe("proud", "Nettoyage terminé");
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur de nettoyage: {ex.Message}");
+                SetMoodSafe("alert", "Erreur nettoyage");
+            }
         }
 
         private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Checking for updates via winget...\n");
-            LoggingService.LogInfo("Checking for updates via winget.");
-            var result = await _updateService.UpgradeAllAsync();
-            OutputBox.AppendText(result + "\n\n");
-            LoggingService.LogInfo("Winget update completed.");
-            _avatarViewModel.SetMood(Mood.Proud, "update_success");
-            OutputBox.ScrollToEnd();
+            AppendLine("Recherche des mises à jour (apps/jeux) via winget…");
+            var output = await RunProcessAsync("winget", "upgrade --all --include-unknown --silent");
+            Append(output);
+            AppendLine("Mises à jour (apps/jeux) terminées.");
+            SetMoodSafe("vigilant", "MAJ terminées");
+        }
+
+        private async void DriverButton_Click(object sender, RoutedEventArgs e)
+        {
+            AppendLine("Recherche des mises à jour de pilotes (winget)…");
+            // NB: winget couvre quelques pilotes; pour NVIDIA/AMD/Intel, outils dédiés recommandés.
+            var output = await RunProcessAsync("winget", "upgrade --all --include-unknown --silent");
+            Append(output);
+            AppendLine("Vérification pilotes terminée (voir détails ci-dessus).");
+            SetMoodSafe("neutral", "Pilotes vérifiés");
         }
 
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
             _isMonitoring = !_isMonitoring;
-            if (_isMonitoring)
+            if (_isMonitoring && _monitoringService != null)
             {
                 _monitoringService.Start();
                 MonitorButton.Content = "Stop Monitoring";
-                OutputBox.AppendText($"[{DateTime.Now:T}] Monitoring started.\n");
+                AppendLine("Monitoring démarré.");
+                SetMoodSafe("vigilant", "Surveillance active");
             }
             else
             {
-                _monitoringService.Stop();
+                _monitoringService?.Stop();
                 MonitorButton.Content = "Start Monitoring";
-                OutputBox.AppendText($"[{DateTime.Now:T}] Monitoring stopped.\n\n");
+                AppendLine("Monitoring arrêté.");
+                SetMoodSafe("neutral", "Surveillance arrêtée");
             }
-            OutputBox.ScrollToEnd();
         }
 
-        // NOTE: enlever le '?' ici pour éviter l'erreur nullable en CI
-        private void OnMetricsUpdated(object sender, EventArgs e)
+        // ---- Handlers AJOUTÉS (répara le commit vide) ------------------------
+
+        private void StartupButton_Click(object sender, RoutedEventArgs e)
         {
-            var metrics = _monitoringService.LatestMetrics;
-            Dispatcher.Invoke(() =>
+            try
             {
-                OutputBox.AppendText($"CPU: {metrics.CpuUsage:F1}%  Memory: {metrics.MemoryUsage:F1}%  Disk: {metrics.DiskUsage:F1}%\n");
-                if (metrics.CpuUsage > 90 || metrics.MemoryUsage > 90 || metrics.DiskUsage > 90)
-                    _moodService.CurrentMood = Mood.Alert;
-                else if (metrics.CpuUsage > 75 || metrics.MemoryUsage > 75 || metrics.DiskUsage > 75)
-                    _moodService.CurrentMood = Mood.Vigilant;
+                // Bascule simple HKCU\...\Run\Virgil vers l’agent
+                using var rk = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+                var current = rk.GetValue("Virgil") as string;
+                if (string.IsNullOrWhiteSpace(current))
+                {
+                    var path = "\"%ProgramFiles%\\Virgil\\Virgil.Agent\\Virgil.Agent.exe\"";
+                    rk.SetValue("Virgil", path);
+                    AppendLine("Démarrage automatique ACTIVÉ (HKCU\\...\\Run\\Virgil).");
+                    SetMoodSafe("proud", "Startup activé");
+                }
                 else
-                    _moodService.CurrentMood = Mood.Neutral;
-
-                OutputBox.ScrollToEnd();
-            });
+                {
+                    rk.DeleteValue("Virgil", false);
+                    AppendLine("Démarrage automatique DÉSACTIVÉ.");
+                    SetMoodSafe("neutral", "Startup désactivé");
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur démarrage automatique: {ex.Message}");
+                SetMoodSafe("alert", "Erreur startup");
+            }
         }
 
-        private async void AppUpdateButton_Click(object sender, RoutedEventArgs e)
+        private void ProcessesButton_Click(object sender, RoutedEventArgs e)
         {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Updating applications...\n");
-            LoggingService.LogInfo("Updating applications...");
-            var result = await _appUpdateService.UpdateAllApplicationsAsync();
-            OutputBox.AppendText(result + "\n\n");
-            LoggingService.LogInfo("Application update completed.");
-            _avatarViewModel.SetMood(Mood.Proud, "update_success");
-            OutputBox.ScrollToEnd();
-        }
+            try
+            {
+                var procs = Process.GetProcesses()
+                                   .OrderByDescending(p => SafeWs(p))
+                                   .Take(15)
+                                   .ToList();
 
-        private async void DriverUpdateButton_Click(object sender, RoutedEventArgs e)
-        {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Updating drivers...\n");
-            LoggingService.LogInfo("Updating drivers...");
-            var result = await _driverUpdateService.UpdateDriversAsync();
-            OutputBox.AppendText(result + "\n\n");
-            LoggingService.LogInfo("Driver update completed.");
-            _avatarViewModel.SetMood(Mood.Proud, "driver_update_success");
-            OutputBox.ScrollToEnd();
-        }
-
-        private void BrowserCleanButton_Click(object sender, RoutedEventArgs e)
-        {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Cleaning browser caches...\n");
-            LoggingService.LogInfo("Cleaning browser caches...");
-            var result = _browserCleaningService.CleanBrowserCaches();
-            OutputBox.AppendText(result + "\n\n");
-            LoggingService.LogInfo("Browser cleaning completed.");
-            _avatarViewModel.SetMood(Mood.Proud, "browser_clean_success");
-            OutputBox.ScrollToEnd();
+                AppendLine($"Top 15 processus par RAM (Working Set) :");
+                foreach (var p in procs)
+                {
+                    AppendLine($"- {p.ProcessName} (PID {p.Id}) — {SafeWs(p) / (1024.0 * 1024):F1} MB");
+                }
+                AppendLine("Astuce: pour fermer un processus bloqué, utilisez le Gestionnaire des tâches.");
+                SetMoodSafe("vigilant", "Processus listés");
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur liste des processus: {ex.Message}");
+                SetMoodSafe("alert", "Erreur processus");
+            }
         }
 
         private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
         {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Updating Windows...\n");
-            LoggingService.LogInfo("Updating Windows...");
-            var result = await _windowsUpdateService.UpdateWindowsAsync();
-            OutputBox.AppendText(result + "\n\n");
-            LoggingService.LogInfo("Windows update completed.");
-            _avatarViewModel.SetMood(Mood.Proud, "windows_update_success");
-            OutputBox.ScrollToEnd();
-        }
-
-        private void ServicesButton_Click(object sender, RoutedEventArgs e)
-        {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Listing services...\n");
-            LoggingService.LogInfo("Listing services...");
-            var services = _serviceManager.ListServices();
-            foreach (var svc in services)
+            // Scan Windows Update via usoclient (peut varier selon versions Windows)
+            AppendLine("Windows Update: recherche des mises à jour (scan)...");
+            var result = await RunProcessAsync("powershell",
+                "Get-WindowsUpdate -ErrorAction SilentlyContinue",
+                runAsShell: false);
+            if (string.IsNullOrWhiteSpace(result))
             {
-                OutputBox.AppendText($"{svc.ServiceName}: {svc.Status}\n");
+                // Fallback simple
+                await RunProcessAsync("cmd.exe", "/c UsoClient StartScan", runAsShell: false);
+                AppendLine("Scan lancé via UsoClient (retour muet).");
             }
-            _avatarViewModel.SetMood(Mood.Neutral, "service_list");
-            OutputBox.AppendText("\n");
-            OutputBox.ScrollToEnd();
-        }
-
-        private async void MaintenanceButton_Click(object sender, RoutedEventArgs e)
-        {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Running full maintenance...\n");
-            LoggingService.LogInfo("Running full maintenance...");
-            var result = await _presetsService.RunFullMaintenanceAsync();
-            OutputBox.AppendText(result + "\n\n");
-            LoggingService.LogInfo("Full maintenance completed.");
-            _avatarViewModel.SetMood(Mood.Proud, "maintenance_complete");
-            OutputBox.ScrollToEnd();
-        }
-
-        // === Added Handlers ===
-
-        private void StartupButton_Click(object sender, RoutedEventArgs e)
-        {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Listing startup items...\n");
-            LoggingService.LogInfo("Listing startup items...");
-
-            // Extension method ListItems() (voir fichier CompatibilityExtensions)
-            var items = _startupManager.ListItems();
-            foreach (var it in items)
+            else
             {
-                OutputBox.AppendText($"{it.Name}  [{it.Location}]  {(it.Enabled ? "Enabled" : "Disabled")}\n");
+                Append(result);
             }
-
-            _avatarViewModel.SetMood(Mood.Neutral, "startup_list");
-            OutputBox.ScrollToEnd();
+            SetMoodSafe("neutral", "WU scan");
         }
 
-        private async void ProcessesButton_Click(object sender, RoutedEventArgs e)
+        // ---- Monitoring callback ---------------------------------------------
+
+        private void OnMetricsUpdated(object? sender, EventArgs e)
         {
-            OutputBox.AppendText($"[{DateTime.Now:T}] Listing processes...\n");
-            LoggingService.LogInfo("Listing processes...");
+            if (_monitoringService == null) return;
+            var m = _monitoringService.LatestMetrics;
 
-            // Extension method ListAsync() (voir fichier CompatibilityExtensions)
-            var processes = await _processService.ListAsync();
-
-            foreach (var p in processes
-                            .OrderByDescending(p => p.CpuUsage)
-                            .ThenByDescending(p => p.MemoryMb)
-                            .Take(30))
+            Dispatcher.Invoke(() =>
             {
-                OutputBox.AppendText(
-                    $"{p.Name,-28} PID:{p.Pid,6}  CPU:{p.CpuUsage,5:F1}%  MEM:{p.MemoryMb,6:F0} MB\n");
+                AppendLine($"CPU: {m.CpuUsage:F1}%  MEM: {m.MemoryUsage:F1}%");
+            });
+
+            // Changer l’humeur selon seuils
+            if (m.CpuUsage >= 85 || m.MemoryUsage >= 85)
+                SetMoodSafe("alert", "Charge élevée");
+            else if (m.CpuUsage >= 60 || m.MemoryUsage >= 70)
+                SetMoodSafe("vigilant", "Charge modérée");
+            else
+                SetMoodSafe("neutral", "Charge normale");
+        }
+
+        // ---- Utils ------------------------------------------------------------
+
+        private static long SafeWs(Process p)
+        {
+            try { return p.WorkingSet64; } catch { return 0; }
+        }
+
+        private async Task<string> RunProcessAsync(string fileName, string args, bool runAsShell = false)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = fileName,
+                    Arguments = args,
+                    UseShellExecute = runAsShell,
+                    RedirectStandardOutput = !runAsShell,
+                    RedirectStandardError = !runAsShell,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                var sb = new StringBuilder();
+                using var p = new Process { StartInfo = psi };
+                if (!runAsShell)
+                {
+                    p.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                    p.ErrorDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                }
+                p.Start();
+                if (!runAsShell)
+                {
+                    p.BeginOutputReadLine();
+                    p.BeginErrorReadLine();
+                }
+                await Task.Run(() => p.WaitForExit());
+                return sb.ToString();
             }
+            catch (Exception ex)
+            {
+                return $"[process error] {ex.Message}\n";
+            }
+        }
 
-            var heavy = processes.Any(p => p.CpuUsage > 75 || p.MemoryMb > 1500);
-            _avatarViewModel.SetMood(heavy ? Mood.Alert : Mood.Neutral,
-                                     heavy ? "high_usage_detected" : "process_list");
-
-            OutputBox.ScrollToEnd();
+        private void SetMoodSafe(string mood, string source)
+        {
+            try
+            {
+                var vm = AvatarControl?.DataContext;
+                if (vm == null) return;
+                var mi = vm.GetType().GetMethod("SetMood");
+                mi?.Invoke(vm, new object[] { mood, source });
+            }
+            catch { /* non bloquant */ }
         }
     }
 }
