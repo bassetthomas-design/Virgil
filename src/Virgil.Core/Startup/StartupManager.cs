@@ -8,10 +8,10 @@ namespace Virgil.Core
 {
     /// <summary>
     /// Lit les vraies entrées de démarrage Windows :
-    /// - Registre HKCU/HKLM: Run & RunOnce (en 32 et 64 bits)
+    /// - Registre HKCU/HKLM : Run & RunOnce (vues x64 et x86)
     /// - Dossiers Startup (utilisateur & commun)
     ///
-    /// Compile partout (CI Linux ok), mais ne collecte réellement que sous Windows.
+    /// Compile partout (CI Linux OK) : la collecte ne s'exécute que sous Windows.
     /// </summary>
     public class StartupManager
     {
@@ -19,7 +19,8 @@ namespace Virgil.Core
         {
             var results = new List<StartupItem>();
 
-            if (!OperatingSystem.IsWindows())
+            // Check compatible avec toutes versions .NET / runners CI
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT)
                 return results; // pas de collecte hors Windows
 
             try
@@ -48,7 +49,7 @@ namespace Virgil.Core
             }
             catch
             {
-                // On reste silencieux ici (l’UI continue de fonctionner). Les erreurs pourront être loguées ailleurs.
+                // On reste silencieux pour ne pas casser l'UI (les erreurs pourront être loguées ailleurs)
             }
 
             // Déduplication simple + tri lisible
@@ -76,9 +77,9 @@ namespace Virgil.Core
 
                 foreach (var name in key.GetValueNames())
                 {
-                    // Valeur = commande lancée au démarrage (string ou REG_EXPAND_SZ)
+                    // On expose l’existence de l’entrée (Enabled = true par défaut).
+                    // (Le parsing de la commande/chemin pourra être ajouté plus tard.)
                     string location = $"{hiveLabel}\\{subkey} ({(view == RegistryView.Registry64 ? "x64" : "x86")})";
-                    // Ici on ne parse pas la commande (chemin/args). On expose l’existence (Enabled=true).
                     yield return new StartupItem(
                         Name: name,
                         Location: location,
@@ -103,7 +104,6 @@ namespace Virgil.Core
 
             foreach (var file in files)
             {
-                // .lnk, .exe, scripts, etc. — on affiche le nom et le chemin.
                 string name = Path.GetFileNameWithoutExtension(file);
                 yield return new StartupItem(
                     Name: string.IsNullOrWhiteSpace(name) ? Path.GetFileName(file) : name,
