@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Linq;            // <-- AJOUTER
 using Virgil.Core;
 using Virgil.App.Controls;
 
