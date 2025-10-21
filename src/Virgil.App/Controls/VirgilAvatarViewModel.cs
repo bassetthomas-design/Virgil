@@ -1,3 +1,5 @@
+#nullable enable
+
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Virgil.Core;
