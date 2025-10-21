@@ -19,14 +19,13 @@ namespace Virgil.Core
         {
             var results = new List<StartupItem>();
 
-            // Check compatible avec toutes versions .NET / runners CI
+            // Compatible avec tous les runners : on ne collecte que sur Windows
             if (Environment.OSVersion.Platform != PlatformID.Win32NT)
-                return results; // pas de collecte hors Windows
+                return results;
 
             try
             {
                 // ----- Registre -----
-                // HKCU/HKLM, vues 64 & 32 bits pour ne rien rater
                 var runKeys = new[]
                 {
                     ("HKCU", RegistryHive.CurrentUser,  @"Software\Microsoft\Windows\CurrentVersion\Run"),
@@ -49,10 +48,10 @@ namespace Virgil.Core
             }
             catch
             {
-                // On reste silencieux pour ne pas casser l'UI (les erreurs pourront être loguées ailleurs)
+                // laisser silencieux pour ne pas casser l'UI (loggable ailleurs)
             }
 
-            // Déduplication simple + tri lisible
+            // Déduplication + tri
             return results
                 .GroupBy(i => (i.Name, i.Location, i.Enabled))
                 .Select(g => g.First())
@@ -77,8 +76,6 @@ namespace Virgil.Core
 
                 foreach (var name in key.GetValueNames())
                 {
-                    // On expose l’existence de l’entrée (Enabled = true par défaut).
-                    // (Le parsing de la commande/chemin pourra être ajouté plus tard.)
                     string location = $"{hiveLabel}\\{subkey} ({(view == RegistryView.Registry64 ? "x64" : "x86")})";
                     yield return new StartupItem(
                         Name: name,
@@ -89,7 +86,7 @@ namespace Virgil.Core
             }
             catch
             {
-                yield break; // clé non accessible / droits insuffisants
+                yield break; // pas accessible / pas de droits
             }
         }
 
