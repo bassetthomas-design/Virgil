@@ -18,8 +18,8 @@
         <!-- Header -->
         <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,12">
             <TextBlock Text="Virgil — Tableau de bord" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" Spacing="8">
-                <controls:VirgilAvatar x:Name="AvatarControl" Width="48" Height="48" />
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                <controls:VirgilAvatar x:Name="AvatarControl" Width="48" Height="48" Margin="8,0,0,0"/>
             </StackPanel>
         </DockPanel>
 
@@ -32,16 +32,16 @@
 
             <!-- Actions -->
             <Border Grid.Column="0" Padding="12" CornerRadius="10" Background="#0F000000">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Actions rapides" FontWeight="Bold" FontSize="16" Margin="0,0,0,6"/>
-                    <Button Content="Scan &amp; Clean" Click="CleanButton_Click" />
-                    <Button Content="Check Updates (apps/jeux)" Click="UpdateButton_Click" />
-                    <Button x:Name="DriverButton" Content="Check Driver Updates (pilotes)" Click="DriverButton_Click"/>
-                    <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click"/>
-                    <Separator/>
-                    <Button x:Name="StartupButton" Content="Basculer: Lancer Virgil au démarrage" Click="StartupButton_Click"/>
-                    <Button x:Name="ProcessesButton" Content="Lister processus (top RAM)" Click="ProcessesButton_Click"/>
-                    <Separator/>
+                <StackPanel>
+                    <TextBlock Text="Actions rapides" FontWeight="Bold" FontSize="16" Margin="0,0,0,10"/>
+                    <Button Content="Scan &amp; Clean" Click="CleanButton_Click" Margin="0,0,0,8"/>
+                    <Button Content="Check Updates (apps/jeux)" Click="UpdateButton_Click" Margin="0,0,0,8"/>
+                    <Button x:Name="DriverButton" Content="Check Driver Updates (pilotes)" Click="DriverButton_Click" Margin="0,0,0,8"/>
+                    <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click" Margin="0,0,0,8"/>
+                    <Separator Margin="0,6,0,6"/>
+                    <Button x:Name="StartupButton" Content="Basculer: Lancer Virgil au démarrage" Click="StartupButton_Click" Margin="0,0,0,8"/>
+                    <Button x:Name="ProcessesButton" Content="Lister processus (top RAM)" Click="ProcessesButton_Click" Margin="0,0,0,8"/>
+                    <Separator Margin="0,6,0,6"/>
                     <Button x:Name="WindowsUpdateButton" Content="Windows Update (scan)" Click="WindowsUpdateButton_Click"/>
                 </StackPanel>
             </Border>
