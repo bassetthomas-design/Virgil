@@ -2,7 +2,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Linq;
+using System.Linq; // requis pour OrderBy/ThenBy/Any/Take
 using Virgil.Core;
 using Virgil.App.Controls;
 
@@ -60,9 +60,6 @@ namespace Virgil.App
             LoggingService.LogInfo("Application started.");
         }
 
-        /// <summary>
-        /// Handles the click event for the Scan &amp; Clean button.
-        /// </summary>
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Scanning temporary files...\n");
@@ -77,9 +74,6 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Handles the click event for the Check Updates button.
-        /// </summary>
         private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Checking for updates via winget...\n");
@@ -91,9 +85,6 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Handles the click event for the Start/Stop Monitoring button.
-        /// </summary>
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
             _isMonitoring = !_isMonitoring;
@@ -112,7 +103,8 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        private void OnMetricsUpdated(object? sender, EventArgs e)
+        // NOTE: enlever le '?' ici pour éviter l'erreur nullable en CI
+        private void OnMetricsUpdated(object sender, EventArgs e)
         {
             var metrics = _monitoringService.LatestMetrics;
             Dispatcher.Invoke(() =>
@@ -205,7 +197,8 @@ namespace Virgil.App
             OutputBox.AppendText($"[{DateTime.Now:T}] Listing startup items...\n");
             LoggingService.LogInfo("Listing startup items...");
 
-            var items = _startupManager.ListItems(); // IEnumerable<StartupItem>
+            // Extension method ListItems() (voir fichier CompatibilityExtensions)
+            var items = _startupManager.ListItems();
             foreach (var it in items)
             {
                 OutputBox.AppendText($"{it.Name}  [{it.Location}]  {(it.Enabled ? "Enabled" : "Disabled")}\n");
@@ -220,7 +213,8 @@ namespace Virgil.App
             OutputBox.AppendText($"[{DateTime.Now:T}] Listing processes...\n");
             LoggingService.LogInfo("Listing processes...");
 
-            var processes = await _processService.ListAsync(); // IReadOnlyList<ProcInfo>
+            // Extension method ListAsync() (voir fichier CompatibilityExtensions)
+            var processes = await _processService.ListAsync();
 
             foreach (var p in processes
                             .OrderByDescending(p => p.CpuUsage)
