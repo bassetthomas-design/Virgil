@@ -22,11 +22,12 @@ jobs:
       - name: Build (Release)
         run: dotnet build --configuration Release --no-restore
 
-      - name: Publish (win-x64)
-        run: dotnet publish -c Release -r win-x64 --self-contained false -o publish-output
+      # ✅ Publier le projet WPF uniquement
+      - name: Publish Virgil.App (win-x64)
+        run: dotnet publish src/Virgil.App/Virgil.App.csproj -c Release -r win-x64 --self-contained false -o publish-output
 
       - name: Archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: published-app
+          name: virgil-app-win-x64
           path: publish-output
