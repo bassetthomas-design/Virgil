@@ -2,7 +2,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Linq;            // <-- AJOUTER
+using System.Linq;
 using Virgil.Core;
 using Virgil.App.Controls;
 
@@ -61,8 +61,7 @@ namespace Virgil.App
         }
 
         /// <summary>
-        /// Handles the click event for the Scan &amp; Clean button. Scans the
-        /// temporary folder for accumulated files and removes them.
+        /// Handles the click event for the Scan &amp; Clean button.
         /// </summary>
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
@@ -74,15 +73,12 @@ namespace Virgil.App
             _cleaningService.CleanTempFiles();
             OutputBox.AppendText($"[{DateTime.Now:T}] Temporary files cleaned.\n\n");
             LoggingService.LogInfo($"Temporary files cleaned ({sizeMb:F1} MB).");
-            // Update mood and dialogue
             _avatarViewModel.SetMood(Mood.Proud, "clean_success");
             OutputBox.ScrollToEnd();
         }
 
         /// <summary>
-        /// Handles the click event for the Check Updates button. Invokes
-        /// winget to upgrade all installed packages and streams the
-        /// collected output to the UI when complete.
+        /// Handles the click event for the Check Updates button.
         /// </summary>
         private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
@@ -97,7 +93,6 @@ namespace Virgil.App
 
         /// <summary>
         /// Handles the click event for the Start/Stop Monitoring button.
-        /// Starts or stops the periodic sampling of CPU and memory usage.
         /// </summary>
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
@@ -120,31 +115,20 @@ namespace Virgil.App
         private void OnMetricsUpdated(object? sender, EventArgs e)
         {
             var metrics = _monitoringService.LatestMetrics;
-            // Marshal back to the UI thread if necessary
             Dispatcher.Invoke(() =>
             {
                 OutputBox.AppendText($"CPU: {metrics.CpuUsage:F1}%  Memory: {metrics.MemoryUsage:F1}%  Disk: {metrics.DiskUsage:F1}%\n");
-                // Update mood based on resource usage
                 if (metrics.CpuUsage > 90 || metrics.MemoryUsage > 90 || metrics.DiskUsage > 90)
-                {
                     _moodService.CurrentMood = Mood.Alert;
-                }
                 else if (metrics.CpuUsage > 75 || metrics.MemoryUsage > 75 || metrics.DiskUsage > 75)
-                {
                     _moodService.CurrentMood = Mood.Vigilant;
-                }
                 else
-                {
                     _moodService.CurrentMood = Mood.Neutral;
-                }
+
                 OutputBox.ScrollToEnd();
             });
         }
 
-        /// <summary>
-        /// Handles the click event for the Update Apps button. Updates all installed
-        /// applications and games via the ApplicationUpdateService.
-        /// </summary>
         private async void AppUpdateButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Updating applications...\n");
@@ -156,10 +140,6 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Handles the click event for the Update Drivers button. Updates system
-        /// drivers via the DriverUpdateService.
-        /// </summary>
         private async void DriverUpdateButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Updating drivers...\n");
@@ -171,10 +151,6 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Handles the click event for the Clean Browsers button. Cleans
-        /// caches for supported browsers.
-        /// </summary>
         private void BrowserCleanButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Cleaning browser caches...\n");
@@ -186,10 +162,6 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Handles the click event for the Update Windows button. Runs the
-        /// Windows Update sequence via WindowsUpdateService.
-        /// </summary>
         private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Updating Windows...\n");
@@ -201,10 +173,6 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Handles the click event for the Manage Services button. Lists
-        /// all Windows services and their statuses.
-        /// </summary>
         private void ServicesButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Listing services...\n");
@@ -219,10 +187,6 @@ namespace Virgil.App
             OutputBox.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Handles the click event for the Run Maintenance button. Executes
-        /// the full maintenance routine defined in MaintenancePresetsService.
-        /// </summary>
         private async void MaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
             OutputBox.AppendText($"[{DateTime.Now:T}] Running full maintenance...\n");
@@ -233,41 +197,45 @@ namespace Virgil.App
             _avatarViewModel.SetMood(Mood.Proud, "maintenance_complete");
             OutputBox.ScrollToEnd();
         }
+
+        // === Added Handlers ===
+
+        private void StartupButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Listing startup items...\n");
+            LoggingService.LogInfo("Listing startup items...");
+
+            var items = _startupManager.ListItems(); // IEnumerable<StartupItem>
+            foreach (var it in items)
+            {
+                OutputBox.AppendText($"{it.Name}  [{it.Location}]  {(it.Enabled ? "Enabled" : "Disabled")}\n");
+            }
+
+            _avatarViewModel.SetMood(Mood.Neutral, "startup_list");
+            OutputBox.ScrollToEnd();
+        }
+
+        private async void ProcessesButton_Click(object sender, RoutedEventArgs e)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] Listing processes...\n");
+            LoggingService.LogInfo("Listing processes...");
+
+            var processes = await _processService.ListAsync(); // IReadOnlyList<ProcInfo>
+
+            foreach (var p in processes
+                            .OrderByDescending(p => p.CpuUsage)
+                            .ThenByDescending(p => p.MemoryMb)
+                            .Take(30))
+            {
+                OutputBox.AppendText(
+                    $"{p.Name,-28} PID:{p.Pid,6}  CPU:{p.CpuUsage,5:F1}%  MEM:{p.MemoryMb,6:F0} MB\n");
+            }
+
+            var heavy = processes.Any(p => p.CpuUsage > 75 || p.MemoryMb > 1500);
+            _avatarViewModel.SetMood(heavy ? Mood.Alert : Mood.Neutral,
+                                     heavy ? "high_usage_detected" : "process_list");
+
+            OutputBox.ScrollToEnd();
+        }
     }
-private void StartupButton_Click(object sender, RoutedEventArgs e)
-{
-    OutputBox.AppendText($"[{DateTime.Now:T}] Listing startup items...\n");
-    LoggingService.Info("Listing startup items...");
-
-    var items = _startupManager.ListItems(); // IEnumerable<StartupItem>
-    foreach (var it in items)
-    {
-        OutputBox.AppendText($"{it.Name}  [{it.Location}]  {(it.Enabled ? "Enabled" : "Disabled")}\n");
-    }
-
-    _avatarViewModel.SetMood(Mood.Neutral, "startup_list");
-    OutputBox.ScrollToEnd();
-}
-
-private async void ProcessesButton_Click(object sender, RoutedEventArgs e)
-{
-    OutputBox.AppendText($"[{DateTime.Now:T}] Listing processes...\n");
-    LoggingService.Info("Listing processes...");
-
-    var processes = await _processService.ListAsync(); // IReadOnlyList<ProcInfo>
-
-    foreach (var p in processes
-                    .OrderByDescending(p => p.CpuUsage)
-                    .ThenByDescending(p => p.MemoryMb)
-                    .Take(30))
-    {
-        OutputBox.AppendText(
-            $"{p.Name,-28} PID:{p.Pid,6}  CPU:{p.CpuUsage,5:F1}%  MEM:{p.MemoryMb,6:F0} MB\n");
-    }
-
-    var heavy = processes.Any(p => p.CpuUsage > 75 || p.MemoryMb > 1500);
-    _avatarViewModel.SetMood(heavy ? Mood.Alert : Mood.Neutral,
-                             heavy ? "high_usage_detected" : "process_list");
-
-    OutputBox.ScrollToEnd();
 }
