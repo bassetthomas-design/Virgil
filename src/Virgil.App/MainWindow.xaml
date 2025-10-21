@@ -3,51 +3,63 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Virgil.App"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         mc:Ignorable="d"
-        Title="Virgil Dashboard" Height="600" Width="800">
-    <Grid Margin="10">
+        Title="Virgil" Height="650" Width="960"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Title -->
-        <TextBlock Grid.Row="0"
-                   Text="Virgil Dashboard"
-                   FontSize="24"
-                   FontWeight="Bold"
-                   HorizontalAlignment="Center"
-                   Margin="0,0,0,10"/>
+        <!-- Header -->
+        <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,12">
+            <TextBlock Text="Virgil — Tableau de bord" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" Spacing="8">
+                <controls:VirgilAvatar x:Name="AvatarControl" Width="48" Height="48" />
+            </StackPanel>
+        </DockPanel>
 
-        <!-- Buttons -->
-        <WrapPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,10">
-            <Button x:Name="CleanButton" Content="Scan &amp; Clean" Width="120" Height="40" Margin="5" Click="CleanButton_Click"/>
-            <Button x:Name="AppUpdateButton" Content="Update Apps" Width="120" Height="40" Margin="5" Click="AppUpdateButton_Click"/>
-            <Button x:Name="DriverUpdateButton" Content="Update Drivers" Width="120" Height="40" Margin="5" Click="DriverUpdateButton_Click"/>
-            <Button x:Name="BrowserCleanButton" Content="Clean Browsers" Width="120" Height="40" Margin="5" Click="BrowserCleanButton_Click"/>
-            <Button x:Name="WindowsUpdateButton" Content="Update Windows" Width="120" Height="40" Margin="5" Click="WindowsUpdateButton_Click"/>
-            <Button x:Name="StartupButton" Content="Startup Programs" Width="120" Height="40" Margin="5" Click="StartupButton_Click"/>
-            <Button x:Name="ProcessesButton" Content="Processes" Width="120" Height="40" Margin="5" Click="ProcessesButton_Click"/>
-            <Button x:Name="ServicesButton" Content="Services" Width="120" Height="40" Margin="5" Click="ServicesButton_Click"/>
-            <Button x:Name="MaintenanceButton" Content="Run Maintenance" Width="120" Height="40" Margin="5" Click="MaintenanceButton_Click"/>
-            <Button x:Name="MonitorButton" Content="Start Monitoring" Width="120" Height="40" Margin="5" Click="MonitorButton_Click"/>
-        </WrapPanel>
+        <!-- Body -->
+        <Grid Grid.Row="1" ColumnSpacing="12" RowSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- Logs -->
-        <TextBox x:Name="OutputBox"
-                 Grid.Row="2"
-                 IsReadOnly="True"
-                 VerticalScrollBarVisibility="Auto"
-                 TextWrapping="Wrap"
-                 Margin="0,0,0,10"/>
+            <!-- Actions -->
+            <Border Grid.Column="0" Padding="12" CornerRadius="10" Background="#0F000000">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Actions rapides" FontWeight="Bold" FontSize="16" Margin="0,0,0,6"/>
+                    <Button Content="Scan &amp; Clean" Click="CleanButton_Click" />
+                    <Button Content="Check Updates (apps/jeux)" Click="UpdateButton_Click" />
+                    <Button x:Name="DriverButton" Content="Check Driver Updates (pilotes)" Click="DriverButton_Click"/>
+                    <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click"/>
+                    <Separator/>
+                    <Button x:Name="StartupButton" Content="Basculer: Lancer Virgil au démarrage" Click="StartupButton_Click"/>
+                    <Button x:Name="ProcessesButton" Content="Lister processus (top RAM)" Click="ProcessesButton_Click"/>
+                    <Separator/>
+                    <Button x:Name="WindowsUpdateButton" Content="Windows Update (scan)" Click="WindowsUpdateButton_Click"/>
+                </StackPanel>
+            </Border>
 
-        <!-- Avatar -->
-        <controls:VirgilAvatar x:Name="AvatarControl"
-                               Grid.Row="3"
-                               HorizontalAlignment="Center"
-                               Margin="0,10,0,0"/>
+            <!-- Output -->
+            <Border Grid.Column="1" Padding="12" CornerRadius="10" Background="#09000000">
+                <Grid>
+                    <TextBox x:Name="OutputBox"
+                             FontFamily="Consolas"
+                             FontSize="13"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"
+                             IsReadOnly="True"/>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>
