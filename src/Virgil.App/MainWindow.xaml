@@ -3,7 +3,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Virgil.App"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         mc:Ignorable="d"
         Title="Virgil" Height="650" Width="960"
@@ -32,24 +31,41 @@
 
             <!-- Actions -->
             <Border Grid.Column="0" Padding="12" CornerRadius="10" Background="#0F000000" Margin="0,0,12,0">
-                <StackPanel>
-                    <TextBlock Text="Actions rapides" FontWeight="Bold" FontSize="16" Margin="0,0,0,10"/>
-                    <Button Content="Scan &amp; Clean" Click="CleanButton_Click" Margin="0,0,0,8"/>
-                    <Button x:Name="CleanBrowsersButton" Content="Clean Browsers (caches)" Click="CleanBrowsersButton_Click" Margin="0,0,0,8"/>
-                    <Button Content="Check Updates (apps/jeux)" Click="UpdateButton_Click" Margin="0,0,0,8"/>
-                    <Button x:Name="DriverButton" Content="Check Driver Updates (pilotes)" Click="DriverButton_Click" Margin="0,0,0,8"/>
-                    <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click" Margin="0,0,0,8"/>
-                    <Separator Margin="0,6,0,6"/>
-                    <Button x:Name="StartupButton" Content="Basculer: Lancer Virgil au démarrage" Click="StartupButton_Click" Margin="0,0,0,8"/>
-                    <Button x:Name="ProcessesButton" Content="Lister processus (top RAM)" Click="ProcessesButton_Click" Margin="0,0,0,8"/>
-<StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-  <TextBox x:Name="KillPidBox" Width="120" ToolTip="PID à tuer" Margin="0,0,8,0"/>
-  <Button Content="Kill PID" Click="KillPidButton_Click"/>
-</StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Actions rapides" FontWeight="Bold" FontSize="16" Margin="0,0,0,10"/>
 
-                    <Separator Margin="0,6,0,6"/>
-                    <Button x:Name="WindowsUpdateButton" Content="Windows Update (scan)" Click="WindowsUpdateButton_Click"/>
-                </StackPanel>
+                        <!-- Maintenance -->
+                        <Button Content="Scan &amp; Clean (Temp)" Click="CleanButton_Click" Margin="0,0,0,8"/>
+                        <Button x:Name="CleanBrowsersButton" Content="Clean Browsers (caches)" Click="CleanBrowsersButton_Click" Margin="0,0,0,8"/>
+
+                        <!-- Mises à jour -->
+                        <Button Content="Check Updates (apps/jeux via winget)" Click="UpdateButton_Click" Margin="0,0,0,8"/>
+                        <Button x:Name="DriverButton" Content="Check Driver Updates (winget)" Click="DriverButton_Click" Margin="0,0,0,8"/>
+
+                        <!-- Surveillance -->
+                        <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click" Margin="0,0,0,8"/>
+
+                        <Separator Margin="0,8,0,8"/>
+
+                        <!-- Démarrage & Processus -->
+                        <Button x:Name="StartupButton" Content="Basculer: Lancer Virgil au démarrage" Click="StartupButton_Click" Margin="0,0,0,8"/>
+                        <Button x:Name="ProcessesButton" Content="Lister processus (top RAM)" Click="ProcessesButton_Click" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <TextBox x:Name="KillPidBox" Width="120" ToolTip="PID à tuer" Margin="0,0,8,0"/>
+                            <Button Content="Kill PID" Click="KillPidButton_Click"/>
+                        </StackPanel>
+
+                        <Separator Margin="0,8,0,8"/>
+
+                        <!-- Windows Update -->
+                        <TextBlock Text="Windows Update" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <Button x:Name="WindowsUpdateButton" Content="WU: Scan" Click="WindowsUpdateButton_Click" Margin="0,0,0,6"/>
+                        <Button Content="WU: Download" Click="WindowsUpdateDownloadButton_Click" Margin="0,0,0,6"/>
+                        <Button Content="WU: Install" Click="WindowsUpdateInstallButton_Click" Margin="0,0,0,6"/>
+                        <Button Content="WU: Restart (si requis)" Click="WindowsUpdateRestartButton_Click" Margin="0,0,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <!-- Output -->
