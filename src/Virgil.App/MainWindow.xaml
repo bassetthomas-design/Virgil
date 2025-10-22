@@ -82,13 +82,13 @@
                  TextWrapping="NoWrap" />
 
         <!-- Bandeau utilitaires -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right" Spacing="6">
-            <Button Content="Copier journal" Click="CopyLogButton_Click" Padding="10,6"/>
-            <Button Content="Exporter journal" Click="ExportLogButton_Click" Padding="10,6"/>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
+            <Button Content="Copier journal" Click="CopyLogButton_Click" Padding="10,6" Margin="0,0,6,0"/>
+            <Button Content="Exporter journal" Click="ExportLogButton_Click" Padding="10,6" Margin="0,0,12,0"/>
             <Separator Width="12" />
-            <Button Content="Ouvrir : Gestionnaire périph." Click="OpenDeviceManagerButton_Click" Padding="10,6"/>
-            <Button Content="Ouvrir : Nettoyage disque" Click="OpenDiskCleanupButton_Click" Padding="10,6"/>
-            <Button Content="Ouvrir : Services" Click="OpenServicesConsoleButton_Click" Padding="10,6"/>
+            <Button Content="Ouvrir : Gestionnaire périph." Click="OpenDeviceManagerButton_Click" Padding="10,6" Margin="0,0,6,0"/>
+            <Button Content="Ouvrir : Nettoyage disque" Click="OpenDiskCleanupButton_Click" Padding="10,6" Margin="0,0,6,0"/>
+            <Button Content="Ouvrir : Services" Click="OpenServicesConsoleButton_Click" Padding="10,6" Margin="0,0,12,0"/>
             <Separator Width="12" />
             <Button Content="Flush DNS" Click="FlushDnsButton_Click" Padding="10,6"/>
         </StackPanel>
