@@ -42,6 +42,11 @@
                     <Separator Margin="0,6,0,6"/>
                     <Button x:Name="StartupButton" Content="Basculer: Lancer Virgil au démarrage" Click="StartupButton_Click" Margin="0,0,0,8"/>
                     <Button x:Name="ProcessesButton" Content="Lister processus (top RAM)" Click="ProcessesButton_Click" Margin="0,0,0,8"/>
+<StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+  <TextBox x:Name="KillPidBox" Width="120" ToolTip="PID à tuer" Margin="0,0,8,0"/>
+  <Button Content="Kill PID" Click="KillPidButton_Click"/>
+</StackPanel>
+
                     <Separator Margin="0,6,0,6"/>
                     <Button x:Name="WindowsUpdateButton" Content="Windows Update (scan)" Click="WindowsUpdateButton_Click"/>
                 </StackPanel>
