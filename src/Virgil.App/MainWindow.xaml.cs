@@ -9,15 +9,15 @@ using System.Windows;
 using Microsoft.Win32;
 using Serilog;
 using Serilog.Events;
-using Virgil.Core;
-using Virgil.Core.Services;
+using Virgil.Core; // pour MonitoringService (basique)
+using CoreServices = Virgil.Core.Services; // <<< alias vers les services avancés
 
 namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
         private readonly Virgil.Core.MonitoringService? _monitoringService;
-        private readonly ConfigService _config;
+        private readonly CoreServices.ConfigService _config;
         private bool _isMonitoring;
 
         public MainWindow()
@@ -25,8 +25,8 @@ namespace Virgil.App
             InitializeComponent();
 
             // Services de base
-            _config = new ConfigService();
-            LoggingService.Init(LogEventLevel.Information);
+            _config = new CoreServices.ConfigService();
+            CoreServices.LoggingService.Init(LogEventLevel.Information);
 
             try
             {
@@ -100,7 +100,7 @@ namespace Virgil.App
             try
             {
                 AppendLine("Maintenance rapide en cours…");
-                var svc = new MaintenancePresetsService();
+                var svc = new CoreServices.MaintenancePresetsService();
                 var report = await svc.QuickCleanAsync(forceBrowser: false);
                 Append(report);
                 AppendLine("Maintenance rapide terminée.");
@@ -118,7 +118,7 @@ namespace Virgil.App
             try
             {
                 AppendLine("Maintenance complète en cours (clean + maj + WU)…");
-                var svc = new MaintenancePresetsService();
+                var svc = new CoreServices.MaintenancePresetsService();
                 var report = await svc.FullMaintenanceAsync(forceBrowser: false, windowsRestart: false);
                 Append(report);
                 AppendLine("Maintenance complète terminée.");
@@ -159,13 +159,13 @@ namespace Virgil.App
                 }
                 AppendLine($"Temp détecté ~{found / (1024.0 * 1024):F1} MB — supprimé {deleted} fichiers.");
                 SetMoodSafe("proud", "Clean temp");
-                LoggingService.SafeInfo("Temp cleaned {Deleted} files (~{MB} MB)", deleted, found / (1024.0 * 1024));
+                CoreServices.LoggingService.SafeInfo("Temp cleaned {Deleted} files (~{MB} MB)", deleted, found / (1024.0 * 1024));
             }
             catch (Exception ex)
             {
                 AppendLine($"Erreur de nettoyage: {ex.Message}");
                 SetMoodSafe("alert", "Clean temp error");
-                LoggingService.SafeError(ex, "Clean temp error");
+                CoreServices.LoggingService.SafeError(ex, "Clean temp error");
             }
         }
 
@@ -173,23 +173,23 @@ namespace Virgil.App
         {
             try
             {
-                var svc = new BrowserCleaningService();
+                var svc = new CoreServices.BrowserCleaningService();
                 if (svc.IsAnyBrowserRunning())
                 {
                     AppendLine("Un navigateur est en cours d’exécution. Fermez-le(s) pour un nettoyage complet.");
                     return;
                 }
-                var rep = svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = false });
+                var rep = svc.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false });
                 AppendLine($"Caches navigateurs détectés: ~{rep.BytesFound / (1024.0 * 1024):F1} MB");
                 AppendLine($"Caches navigateurs supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
                 SetMoodSafe(rep.BytesDeleted > 0 ? "proud" : "neutral", "Clean browsers");
-                LoggingService.SafeInfo("Browser caches cleaned (~{MB} MB)", rep.BytesDeleted / (1024.0 * 1024));
+                CoreServices.LoggingService.SafeInfo("Browser caches cleaned (~{MB} MB)", rep.BytesDeleted / (1024.0 * 1024));
             }
             catch (Exception ex)
             {
                 AppendLine($"Erreur nettoyage navigateurs: {ex.Message}");
                 SetMoodSafe("alert", "Clean browsers error");
-                LoggingService.SafeError(ex, "Clean browsers error");
+                CoreServices.LoggingService.SafeError(ex, "Clean browsers error");
             }
         }
 
@@ -197,7 +197,7 @@ namespace Virgil.App
         {
             try
             {
-                var svc = new ExtendedCleaningService();
+                var svc = new CoreServices.ExtendedCleaningService();
                 var rep = svc.AnalyzeAndClean();
                 AppendLine($"Nettoyage étendu: détecté ~{rep.BytesFound / (1024.0 * 1024):F1} MB — supprimé ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
                 SetMoodSafe(rep.BytesDeleted > 0 ? "proud" : "neutral", "Clean extended");
@@ -252,7 +252,7 @@ namespace Virgil.App
         {
             try
             {
-                using var adv = new AdvancedMonitoringService();
+                using var adv = new CoreServices.AdvancedMonitoringService();
                 var s = adv.Read();
                 AppendLine($"Températures → CPU: {(s.CpuTempC?.ToString("F0") ?? "?")}°C | GPU: {(s.GpuTempC?.ToString("F0") ?? "?")}°C | Disque: {(s.DiskTempC?.ToString("F0") ?? "?")}°C");
                 SetMoodSafe( DecideMoodFromTemps(s), "Temps read" );
@@ -264,7 +264,7 @@ namespace Virgil.App
             }
         }
 
-        private string DecideMoodFromTemps(Virgil.Core.Services.HardwareSnapshot s)
+        private string DecideMoodFromTemps(CoreServices.HardwareSnapshot s)
         {
             var cfg = _config.Current;
             if ((s.CpuTempC.HasValue && s.CpuTempC.Value >= cfg.CpuTempAlert) ||
@@ -414,7 +414,7 @@ namespace Virgil.App
         {
             try
             {
-                var sm = new ServiceManager();
+                var sm = new CoreServices.ServiceManager();
                 var list = sm.ListAll().Take(30).ToList(); // limiter l’affichage
                 AppendLine("Services (30 premiers triés par nom) :");
                 foreach (var s in list)
@@ -432,7 +432,7 @@ namespace Virgil.App
             {
                 var name = SvcNameBox.Text?.Trim();
                 if (string.IsNullOrEmpty(name)) { AppendLine("Nom de service manquant."); return; }
-                var sm = new ServiceManager();
+                var sm = new CoreServices.ServiceManager();
                 var ok = sm.Restart(name);
                 AppendLine(ok ? $"Service {name} redémarré." : $"Échec restart {name}.");
             }
@@ -445,7 +445,7 @@ namespace Virgil.App
             {
                 var name = SvcNameBox.Text?.Trim();
                 if (string.IsNullOrEmpty(name)) { AppendLine("Nom de service manquant."); return; }
-                var sm = new ServiceManager();
+                var sm = new CoreServices.ServiceManager();
                 var ok = sm.Start(name);
                 AppendLine(ok ? $"Service {name} démarré." : $"Échec start {name}.");
             }
@@ -458,7 +458,7 @@ namespace Virgil.App
             {
                 var name = SvcNameBox.Text?.Trim();
                 if (string.IsNullOrEmpty(name)) { AppendLine("Nom de service manquant."); return; }
-                var sm = new ServiceManager();
+                var sm = new CoreServices.ServiceManager();
                 var ok = sm.Stop(name);
                 AppendLine(ok ? $"Service {name} arrêté." : $"Échec stop {name}.");
             }
