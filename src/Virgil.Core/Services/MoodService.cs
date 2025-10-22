@@ -1,28 +1,54 @@
-using System.Windows.Media;
-
 namespace Virgil.Core.Services
 {
     /// <summary>
-    /// Cartographie des humeurs -> couleurs. Simple et locale.
+    /// Couleur simple (pas de dépendance WPF).
+    /// </summary>
+    public readonly struct Rgb
+    {
+        public readonly byte R;
+        public readonly byte G;
+        public readonly byte B;
+
+        public Rgb(byte r, byte g, byte b)
+        {
+            R = r; G = g; B = b;
+        }
+    }
+
+    /// <summary>
+    /// Map d’humeurs -> couleurs + phrase par défaut.
+    /// (Pas de référence à System.Windows.* ici.)
     /// </summary>
     public sealed class MoodService
     {
-        public Color ResolveColor(string moodKey)
+        public Rgb ResolveColor(string? moodKey)
         {
             if (string.IsNullOrWhiteSpace(moodKey)) return Neutral;
+
             switch (moodKey.Trim().ToLowerInvariant())
             {
                 case "neutral":
-                case "ok":        return Neutral;
+                case "ok":
+                    return Neutral;
+
                 case "vigilant":
-                case "warn":      return Vigilant;
+                case "warn":
+                    return Vigilant;
+
                 case "alert":
-                case "hot":       return Alert;
+                case "hot":
+                    return Alert;
+
                 case "rest":
-                case "resting":   return Resting;
+                case "resting":
+                    return Resting;
+
                 case "proud":
-                case "success":   return Proud;
-                default:          return Neutral;
+                case "success":
+                    return Proud;
+
+                default:
+                    return Neutral;
             }
         }
 
@@ -38,11 +64,11 @@ namespace Virgil.Core.Services
             }
         }
 
-        // Palette
-        private static Color Neutral  => Color.FromRgb(0x40, 0xA0, 0xFF); // bleu clair
-        private static Color Vigilant => Color.FromRgb(0xFF, 0xB0, 0x2D); // orange
-        private static Color Alert    => Color.FromRgb(0xFF, 0x45, 0x45); // rouge
-        private static Color Resting  => Color.FromRgb(0x3C, 0xE0, 0xD0); // cyan doux
-        private static Color Proud    => Color.FromRgb(0x32, 0xD0, 0x5F); // vert
+        // Palette (RGB)
+        private static Rgb Neutral  => new(0x40, 0xA0, 0xFF); // bleu clair
+        private static Rgb Vigilant => new(0xFF, 0xB0, 0x2D); // orange
+        private static Rgb Alert    => new(0xFF, 0x45, 0x45); // rouge
+        private static Rgb Resting  => new(0x3C, 0xE0, 0xD0); // cyan doux
+        private static Rgb Proud    => new(0x32, 0xD0, 0x5F); // vert
     }
 }
