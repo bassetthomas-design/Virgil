@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms; // NotifyIcon
 using System.Drawing;       // SystemIcons
-using System.Windows;       // Application, Dispatcher
 
 namespace Virgil.App.Tray
 {
@@ -33,7 +32,7 @@ namespace Virgil.App.Tray
             menu.Items.Add("Maintenance rapide", null, async (_, __) => await CallHandlerAsync("QuickMaintenanceButton_Click"));
             menu.Items.Add("MAJ apps/jeux (winget)", null, async (_, __) => await CallHandlerAsync("UpdateButton_Click"));
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Quitter", null, (_, __) => Application.Current?.Shutdown());
+            menu.Items.Add("Quitter", null, (_, __) => System.Windows.Application.Current?.Shutdown());
 
             _notify.ContextMenuStrip = menu;
             _notify.DoubleClick += (_, __) => ShowMainWindow();
@@ -45,21 +44,21 @@ namespace Virgil.App.Tray
 
             win.Dispatcher.Invoke(() =>
             {
-                if (win.WindowState == WindowState.Minimized)
-                    win.WindowState = WindowState.Normal;
+                if (win.WindowState == System.Windows.WindowState.Minimized)
+                    win.WindowState = System.Windows.WindowState.Normal;
 
                 if (!win.IsVisible)
                     win.Show();
 
                 win.Activate();
-                win.Topmost = true;  // bring to front
+                win.Topmost = true;
                 win.Topmost = false;
                 win.Focus();
             });
         }
 
         /// <summary>
-        /// Appelle un handler privé/protected de MainWindow par réflexion (ex: "QuickMaintenanceButton_Click").
+        /// Appelle un handler (ex: "QuickMaintenanceButton_Click") de MainWindow par réflexion.
         /// </summary>
         private async Task CallHandlerAsync(string handlerName)
         {
@@ -72,12 +71,10 @@ namespace Virgil.App.Tray
                     var mi = typeof(MainWindow).GetMethod(handlerName, BindingFlags.Instance | BindingFlags.NonPublic);
                     if (mi != null)
                     {
-                        // sender=null, RoutedEventArgs par défaut
                         mi.Invoke(win, new object?[] { null, new System.Windows.RoutedEventArgs() });
                     }
                     else
                     {
-                        // Fallback: montre la fenêtre si le handler n'existe pas
                         ShowMainWindow();
                     }
                 }
