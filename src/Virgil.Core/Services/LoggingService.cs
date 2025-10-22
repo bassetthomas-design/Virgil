@@ -1,51 +1,40 @@
 using System;
 using Serilog;
 using Serilog.Events;
-using Virgil.Core.Config;
 
 namespace Virgil.Core.Services
 {
     public static class LoggingService
     {
-        private static bool _inited;
+        private static bool _initialized;
 
-        public static void Init(LogEventLevel minLevel = LogEventLevel.Information)
+        public static void Init(LogEventLevel level = LogEventLevel.Information)
         {
-            if (_inited) return;
+            if (_initialized) return;
 
-            var logPathPattern = AppPaths.LogFile; // e.g. ...\virgil-.log
             Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Is(minLevel)
+                .MinimumLevel.Is(level)
                 .WriteTo.File(
-                    logPathPattern,
+                    path: "Logs\\virgil-.log",
                     rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 7,
-                    shared: true,
-                    fileSizeLimitBytes: 10_000_000,
-                    rollOnFileSizeLimit: true)
+                    retainedFileCountLimit: 10,
+                    shared: true)
                 .CreateLogger();
 
-            _inited = true;
-            Log.Information("Serilog initialized (level {Level})", minLevel);
+            _initialized = true;
+            SafeInfo("Serilog initialized.");
         }
 
-        public static void SetLevel(LogEventLevel level)
+        public static void SafeInfo(string template, params object[] args)
         {
-            // Serilog ne permet pas de changer dynamiquement sans relancer le logger;
-            // par simplicité on réinitialise.
-            Log.CloseAndFlush();
-            _inited = false;
-            Init(level);
+            if (!_initialized) return;
+            try { Log.Information(template, args); } catch { /* ignore */ }
         }
 
-        public static void SafeInfo(string msg, params object[] args)
+        public static void SafeError(Exception ex, string template, params object[] args)
         {
-            try { Log.Information(msg, args); } catch { }
-        }
-
-        public static void SafeError(Exception ex, string msg, params object[] args)
-        {
-            try { Log.Error(ex, msg, args); } catch { }
+            if (!_initialized) return;
+            try { Log.Error(ex, template, args); } catch { /* ignore */ }
         }
     }
 }
