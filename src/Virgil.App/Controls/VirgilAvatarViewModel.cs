@@ -1,66 +1,86 @@
 #nullable enable
-
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
-using Virgil.Core;
+using System.Text.Json;
+using System.Windows.Media;
+using Virgil.Core.Services;
 
 namespace Virgil.App.Controls
 {
     /// <summary>
-    /// ViewModel for the Virgil avatar. Exposes the current mood color and message to the UI.
+    /// VM très léger : gère couleur (humeur) + petite ligne de texte.
     /// </summary>
-    public class VirgilAvatarViewModel : INotifyPropertyChanged
+    public sealed class VirgilAvatarViewModel : INotifyPropertyChanged
     {
-        private readonly MoodService _moodService;
-        private readonly DialogService _dialogService;
-        private string _message = string.Empty;
+        private readonly MoodService _moods = new();
+        private readonly Dictionary<string, string[]> _lines = LoadDialogues();
+        private readonly Random _rng = new();
 
-        public VirgilAvatarViewModel(MoodService moodService, DialogService dialogService)
-        {
-            _moodService = moodService;
-            _dialogService = dialogService;
-            _moodService.MoodChanged += (s, e) =>
-            {
-                OnPropertyChanged(nameof(MoodColor));
-            };
-        }
+        private string _currentLine = "Salut !";
+        public string CurrentLine { get => _currentLine; private set { _currentLine = value; OnPropertyChanged(); } }
 
-        /// <summary>
-        /// Gets the hexadecimal colour associated with the current mood.
-        /// </summary>
-        public string MoodColor => _moodService.GetMoodColor();
-
-        /// <summary>
-        /// Gets or sets the current avatar message.
-        /// </summary>
-        public string Message
-        {
-            get => _message;
-            set
-            {
-                if (_message != value)
-                {
-                    _message = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        /// <summary>
-        /// Sets the mood and picks a random dialogue from the specified category.
-        /// </summary>
-        public void SetMood(Mood mood, string dialogCategory)
-        {
-            _moodService.CurrentMood = mood;
-            Message = _dialogService.GetRandomMessage(dialogCategory);
-            OnPropertyChanged(nameof(MoodColor));
-        }
+        private SolidColorBrush _coreBrush = new(Color.FromRgb(0x40, 0xA0, 0xFF));
+        public SolidColorBrush CoreBrush { get => _coreBrush; private set { _coreBrush = value; OnPropertyChanged(); } }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        public void SetMood(string moodKey, string context = "")
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            var color = _moods.ResolveColor(moodKey);
+            CoreBrush = new SolidColorBrush(color);
+
+            // Ligne contextuelle si dispo
+            var key = NormalizeKey(context);
+            if (_lines.TryGetValue(key, out var arr) && arr.Length > 0)
+                CurrentLine = arr[_rng.Next(arr.Length)];
+            else
+                CurrentLine = _moods.DefaultLine(moodKey);
         }
+
+        private static string NormalizeKey(string s)
+            => string.IsNullOrWhiteSpace(s) ? "General" : s.Trim().ToLowerInvariant();
+
+        private static Dictionary<string, string[]> LoadDialogues()
+        {
+            try
+            {
+                var baseDir = AppContext.BaseDirectory;
+                // Le fichier est copié dans la sortie par le .csproj du Core (CopyToOutputDirectory)
+                var path = Path.Combine(baseDir, "virgil-dialogues.json");
+                if (File.Exists(path))
+                {
+                    var json = File.ReadAllText(path);
+                    var dict = JsonSerializer.Deserialize<Dictionary<string, string[]>>(json);
+                    return dict ?? new();
+                }
+            }
+            catch { }
+            // fallback minimal
+            return new Dictionary<string, string[]>
+            {
+                ["general"] = new[]
+                {
+                    "Tout roule.",
+                    "Toujours là ✨",
+                    "On surveille en silence.",
+                },
+                ["startup"] = new[]
+                {
+                    "Rebonjour 👋",
+                    "Virgil en place.",
+                },
+                ["full maintenance"] = new[]
+                {
+                    "Ça nettoie, ça met à jour…",
+                    "Opération grand ménage 🧹",
+                }
+            };
+        }
+
+        private void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
