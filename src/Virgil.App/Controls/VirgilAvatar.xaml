@@ -16,30 +16,28 @@
             </Ellipse.Fill>
         </Ellipse>
 
-        <!-- noyau (couleur bindée par le ViewModel) -->
+        <!-- noyau : scale lié au ProgressScale du ViewModel -->
         <Ellipse x:Name="Core" Width="42" Height="42" Fill="{Binding CoreBrush}">
             <Ellipse.RenderTransform>
-                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                <ScaleTransform ScaleX="{Binding ProgressScale}" ScaleY="{Binding ProgressScale}"/>
             </Ellipse.RenderTransform>
+            <Ellipse.RenderTransformOrigin>0.5,0.5</Ellipse.RenderTransformOrigin>
         </Ellipse>
 
-        <!-- petite bulle texte -->
+        <!-- bulle -->
         <Border Background="#CC111111" CornerRadius="8" Padding="6,3"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-4,-4">
             <TextBlock Text="{Binding CurrentLine}" Foreground="#EDEDED" FontSize="11"/>
         </Border>
 
-        <!-- animations -->
+        <!-- respiration subtile du halo -->
         <Grid.Triggers>
             <EventTrigger RoutedEvent="Loaded">
                 <BeginStoryboard>
                     <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                        <DoubleAnimation Storyboard.TargetName="Core"
-                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
-                                         From="1.0" To="1.08" Duration="0:0:1.8"/>
-                        <DoubleAnimation Storyboard.TargetName="Core"
-                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
-                                         From="1.0" To="1.08" Duration="0:0:1.8"/>
+                        <DoubleAnimation Storyboard.TargetName="Halo"
+                                         Storyboard.TargetProperty="Opacity"
+                                         From="0.85" To="0.65" Duration="0:0:2.2"/>
                     </Storyboard>
                 </BeginStoryboard>
             </EventTrigger>
