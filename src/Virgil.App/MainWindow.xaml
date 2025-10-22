@@ -35,6 +35,7 @@
                 <StackPanel>
                     <TextBlock Text="Actions rapides" FontWeight="Bold" FontSize="16" Margin="0,0,0,10"/>
                     <Button Content="Scan &amp; Clean" Click="CleanButton_Click" Margin="0,0,0,8"/>
+                    <Button x:Name="CleanBrowsersButton" Content="Clean Browsers (caches)" Click="CleanBrowsersButton_Click" Margin="0,0,0,8"/>
                     <Button Content="Check Updates (apps/jeux)" Click="UpdateButton_Click" Margin="0,0,0,8"/>
                     <Button x:Name="DriverButton" Content="Check Driver Updates (pilotes)" Click="DriverButton_Click" Margin="0,0,0,8"/>
                     <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click" Margin="0,0,0,8"/>
