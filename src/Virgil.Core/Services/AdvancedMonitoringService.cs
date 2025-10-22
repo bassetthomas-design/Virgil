@@ -1,82 +1,109 @@
 using System;
-using System.Collections.Generic;
-using LibreHardwareMonitor.Hardware;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Text;
 
 namespace Virgil.Core.Services
 {
-    public sealed class HardwareSnapshot
+    /// <summary>
+    /// Lecture ponctuelle de métriques "avancées" côté matériel.
+    /// - CPU temp: tentative via WMI (MSAcpi_ThermalZoneTemperature) → souvent null sur PC modernes
+    /// - GPU temp: tentative via nvidia-smi si présent (NVIDIA). Sinon null.
+    /// - Disk temp: non fiable sans smartctl → null par défaut (peut être ajouté plus tard).
+    /// Ne garde pas d'état ; crée une instance, appelle Read(), puis Dispose().
+    /// </summary>
+    public sealed class AdvancedMonitoringService : IDisposable
     {
-        public double? CpuTempC { get; set; }
-        public double? GpuTempC { get; set; }
-        public double? DiskTempC { get; set; }
-        public Dictionary<string, double?> Extra { get; } = new();
-    }
-
-    public sealed class AdvancedMonitoringService : IVisitor, IDisposable
-    {
-        private readonly Computer _pc;
-
-        public AdvancedMonitoringService()
-        {
-            _pc = new Computer
-            {
-                IsCpuEnabled = true,
-                IsGpuEnabled = true,
-                IsStorageEnabled = true,
-                IsMotherboardEnabled = false,
-                IsControllerEnabled = false,
-                IsNetworkEnabled = false,
-                IsMemoryEnabled = false
-            };
-            _pc.Open();
-        }
-
         public HardwareSnapshot Read()
         {
-            var snap = new HardwareSnapshot();
-
-            _pc.Accept(this); // Update sensors
-
-            foreach (var hw in _pc.Hardware)
+            var snap = new HardwareSnapshot
             {
-                TryRead(hw, snap);
-                foreach (var sub in hw.SubHardware)
-                    TryRead(sub, snap);
-            }
-
+                CpuTempC = TryReadCpuTempC(),
+                GpuTempC = TryReadGpuTempC(),
+                DiskTempC = null // TODO: intégrer smartctl/LibreHardwareMonitor plus tard
+            };
             return snap;
         }
 
-        private static void TryRead(IHardware hw, HardwareSnapshot snap)
+        private float? TryReadCpuTempC()
         {
-            hw.Update();
-            foreach (var s in hw.Sensors)
+            try
             {
-                if (s.SensorType == SensorType.Temperature)
+                // WMI MSAcpi_ThermalZoneTemperature → Kelvin * 10 (souvent non renseigné)
+                var output = RunProcessCapture("wmic",
+                    @"/namespace:\\root\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature /value");
+                // Exemple: CurrentTemperature=3050  (=> 305.0 Kelvin -> 31.85°C)
+                if (string.IsNullOrWhiteSpace(output)) return null;
+                foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    var name = (s.Name ?? "").ToLowerInvariant();
-                    var value = s.Value;
-
-                    if (value.HasValue)
+                    var idx = line.IndexOf("CurrentTemperature=", StringComparison.OrdinalIgnoreCase);
+                    if (idx >= 0)
                     {
-                        if (name.Contains("cpu") && snap.CpuTempC is null)
-                            snap.CpuTempC = value.Value;
-                        else if ((name.Contains("gpu") || hw.HardwareType == HardwareType.GpuNvidia || hw.HardwareType == HardwareType.GpuAmd || hw.HardwareType == HardwareType.GpuIntel) && snap.GpuTempC is null)
-                            snap.GpuTempC = value.Value;
-                        else if ((name.Contains("ssd") || name.Contains("hdd") || name.Contains("drive") || hw.HardwareType == HardwareType.Storage) && snap.DiskTempC is null)
-                            snap.DiskTempC = value.Value;
-                        else
-                            snap.Extra[s.Identifier.ToString()] = value.Value;
+                        var raw = line.Substring(idx + "CurrentTemperature=".Length).Trim();
+                        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tenthKelvin))
+                        {
+                            var kelvin = tenthKelvin / 10.0f;
+                            var c = kelvin - 273.15f;
+                            if (c > -100 && c < 150) return c;
+                        }
                     }
                 }
+                return null;
+            }
+            catch { return null; }
+        }
+
+        private float? TryReadGpuTempC()
+        {
+            try
+            {
+                // NVIDIA: nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits
+                var nvsmi = "nvidia-smi";
+                var output = RunProcessCapture(nvsmi,
+                    "--query-gpu=temperature.gpu --format=csv,noheader,nounits");
+                if (string.IsNullOrWhiteSpace(output)) return null;
+
+                var line = output.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)[0].Trim();
+                if (float.TryParse(line, NumberStyles.Float, CultureInfo.InvariantCulture, out var temp))
+                {
+                    if (temp > -50 && temp < 150) return temp;
+                }
+                return null;
+            }
+            catch { return null; }
+        }
+
+        private static string RunProcessCapture(string fileName, string args)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = fileName,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                var sb = new StringBuilder();
+                using var p = new Process { StartInfo = psi };
+                p.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                p.ErrorDataReceived  += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                p.Start();
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+                p.WaitForExit();
+                return sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                return $"[proc error] {ex.Message}";
             }
         }
 
-        public void VisitComputer(IComputer computer) { }
-        public void VisitHardware(IHardware hardware) { hardware.Update(); }
-        public void VisitSensor(ISensor sensor) { }
-        public void VisitParameter(IParameter parameter) { }
-
-        public void Dispose() { try { _pc.Close(); } catch { } }
+        public void Dispose() { /* rien à disposer pour l’instant */ }
     }
 }
