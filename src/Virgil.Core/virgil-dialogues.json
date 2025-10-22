@@ -1,50 +1,83 @@
 {
+  "general": [
+    "Toujours là ✨",
+    "Tout roule.",
+    "On surveille…"
+  ],
+
   "startup": [
-    "Bonjour ! Comment puis‑je vous aider aujourd'hui ?",
-    "Heureux de vous revoir. Prêt pour un nettoyage ou une mise à jour ?",
-    "Salut ! Je suis prêt à surveiller votre système."
+    "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
+    "Heureux de vous revoir. Prêt pour un nettoyage ou une mise à jour ?",
+    "Salut ! Je suis prêt à surveiller votre système.",
+    "Virgil en place. Système prêt."
   ],
-  "alert_temp": [
-    "Attention, la température du système est élevée !",
-    "C'est chaud ici, pensez à vérifier les ventilateurs.",
-    "Votre GPU monte en température, soyez prudent."
-  ],
-  "clean_success": [
-    "Nettoyage terminé avec succès.",
-    "C'est propre ! Votre système respire mieux.",
-    "Les fichiers temporaires ont été effacés."
-  ],
-  "update_success": [
-    "Mises à jour effectuées. Tout est à jour.",
-    "Vos applications et jeux sont maintenant à jour.",
-    "Les dernières versions sont installées."
-  ],
-  "driver_update_success": [
-    "Les pilotes ont été mis à jour.",
-    "Les mises à jour des pilotes sont terminées.",
-    "Tous les pilotes disponibles ont été installés."
-  ],
-  "browser_clean_success": [
-    "Les caches des navigateurs ont été nettoyés.",
-    "Les navigateurs sont maintenant propres.",
-    "C'est fait ! Les fichiers temporaires des navigateurs ont été supprimés."
-  ],
-  "windows_update_success": [
-    "Windows est à jour.",
-    "Les mises à jour système ont été installées.",
-    "Le système d'exploitation a été mis à jour."
+
+  "quick maintenance": [
+    "Nettoyage express !",
+    "Coup de balai rapide 🧹",
+    "Maintenance rapide en cours…"
   ],
   "maintenance_complete": [
     "Maintenance complète terminée.",
     "Toutes les tâches d’entretien ont été exécutées avec succès.",
     "Votre PC est maintenant optimisé et à jour."
   ],
-  "startup_list": [
-    "Voici les programmes qui se lancent au démarrage.",
-    "Liste des éléments de démarrage affichée.",
-    "Analyse des programmes de démarrage terminée."
+  "full maintenance": [
+    "Ça nettoie et ça met à jour…",
+    "Opération grand ménage 🧼",
+    "Maintenance complète en cours…"
   ],
-  "process_list": [
+
+  "clean_success": [
+    "Nettoyage terminé avec succès.",
+    "C'est propre ! Votre système respire mieux.",
+    "Les fichiers temporaires ont été effacés."
+  ],
+  "clean browsers": [
+    "On vide les caches…",
+    "Au revoir cookies (non essentiels) 🍪",
+    "Nettoyage des navigateurs en cours…"
+  ],
+  "browser_clean_success": [
+    "Les caches des navigateurs ont été nettoyés.",
+    "Les navigateurs sont maintenant propres.",
+    "C'est fait ! Les fichiers temporaires des navigateurs ont été supprimés."
+  ],
+  "clean extended": [
+    "On rase les vieux caches et logs.",
+    "Ça fait de la place !",
+    "Nettoyage étendu en cours…"
+  ],
+
+  "maj apps": [
+    "Vérification des mises à jour apps/jeux…",
+    "On actualise tout ça.",
+    "Mises à jour des applications en cours…"
+  ],
+  "update_success": [
+    "Mises à jour effectuées. Tout est à jour.",
+    "Vos applications et jeux sont maintenant à jour.",
+    "Les dernières versions sont installées."
+  ],
+
+  "maj pilotes": [
+    "Pilotes à jour = perfs stables.",
+    "Petit check-up des drivers.",
+    "Recherche de mises à jour pilotes…"
+  ],
+  "driver_update_success": [
+    "Les pilotes ont été mis à jour.",
+    "Les mises à jour des pilotes sont terminées.",
+    "Tous les pilotes disponibles ont été installés."
+  ],
+
+  "windows_update_success": [
+    "Windows est à jour.",
+    "Les mises à jour système ont été installées.",
+    "Le système d'exploitation a été mis à jour."
+  ],
+
+  "process list": [
     "Voici les processus en cours d'exécution.",
     "Liste des processus générée.",
     "Analyse des processus terminée."
@@ -53,5 +86,37 @@
     "Voici la liste des services.",
     "Liste des services affichée.",
     "Analyse des services terminée."
+  ],
+
+  "temps read": [
+    "Je lis les capteurs…",
+    "Thermiques en vue 🌡️",
+    "Lecture des températures…"
+  ],
+  "alert_temp": [
+    "Attention, la température du système est élevée !",
+    "C'est chaud ici, pensez à vérifier les ventilateurs.",
+    "Votre GPU monte en température, soyez prudent."
+  ],
+  "charge normale": [
+    "Rien à signaler ✅",
+    "Tranquille.",
+    "Charge normale."
+  ],
+  "charge modérée": [
+    "Charge raisonnable.",
+    "Rien d’inquiétant.",
+    "Je garde un œil 👀"
+  ],
+  "charge élevée": [
+    "Grosse activité, je surveille !",
+    "On calme un peu ? 😅",
+    "Charge élevée détectée."
+  ],
+
+  "startup_list": [
+    "Voici les programmes qui se lancent au démarrage.",
+    "Liste des éléments de démarrage affichée.",
+    "Analyse des programmes de démarrage terminée."
   ]
 }
