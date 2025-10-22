@@ -1,87 +1,98 @@
-#nullable enable
-using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 
 namespace Virgil.App.Controls
 {
     public class VirgilAvatarViewModel : INotifyPropertyChanged
     {
-        private string _message = "Prêt.";
-        private System.Windows.Media.Brush _glowBrush =
-            new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x4B, 0x9C, 0xFF)); // bleu neutre
-        private double _progress = 0.0;
-        private bool _isIndeterminate;
-
         public event PropertyChangedEventHandler? PropertyChanged;
+        void OnPropertyChanged([CallerMemberName] string? n = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
 
-        public string Message
-        {
-            get => _message;
-            private set { _message = value; OnPropertyChanged(); }
-        }
+        // Couleurs / glow
+        public Brush FaceBrush { get => _faceBrush; set { _faceBrush = value; OnPropertyChanged(); } }
+        public Brush EyeBrush  { get => _eyeBrush;  set { _eyeBrush = value;  OnPropertyChanged(); } }
+        public Color GlowColor { get => _glowColor; set { _glowColor = value; OnPropertyChanged(); } }
+        public double GlowOpacity { get => _glowOpacity; set { _glowOpacity = value; OnPropertyChanged(); } }
 
-        public System.Windows.Media.Brush GlowBrush
-        {
-            get => _glowBrush;
-            private set { _glowBrush = value; OnPropertyChanged(); }
-        }
+        private Brush _faceBrush = new SolidColorBrush(Color.FromRgb(98,125,78)); // vert logo
+        private Brush _eyeBrush  = Brushes.White;
+        private Color _glowColor = Color.FromRgb(39,215,255);
+        private double _glowOpacity = 0.40;
 
-        public double Progress
-        {
-            get => _progress;
-            private set { _progress = Math.Clamp(value, 0, 100); OnPropertyChanged(); }
-        }
+        // géométrie yeux amande
+        public double EyeScale { get => _eyeScale; set { _eyeScale = value; OnPropertyChanged(); } }
+        public double EyeTilt { get => _eyeTilt; set { _eyeTilt = value; OnPropertyChanged(); } }
+        public double EyeSeparation { get => _eyeSeparation; set { _eyeSeparation = value; OnPropertyChanged(); } }
+        public double EyeY { get => _eyeY; set { _eyeY = value; OnPropertyChanged(); } }
 
-        public bool IsIndeterminate
-        {
-            get => _isIndeterminate;
-            private set { _isIndeterminate = value; OnPropertyChanged(); }
-        }
+        private double _eyeScale = 1.0;
+        private double _eyeTilt = 12;
+        private double _eyeSeparation = 34;
+        private double _eyeY = 0;
 
-        // --- API appelée par MainWindow ---
+        // drapeaux d’éléments spéciaux
+        public bool UseRoundEyes { get => _round; set { _round = value; OnPropertyChanged(); } }
+        public bool ShowTear     { get => _tear;  set { _tear = value;  OnPropertyChanged(); } }
+        public bool ShowHearts   { get => _hearts;set { _hearts = value;OnPropertyChanged(); } }
+        public bool ShowCat      { get => _cat;   set { _cat = value;   OnPropertyChanged(); } }
+        public bool ShowDevil    { get => _devil; set { _devil = value; OnPropertyChanged(); } }
 
-        public void SetMessage(string? message)
-        {
-            if (!string.IsNullOrWhiteSpace(message))
-                Message = message!;
-        }
+        private bool _round, _tear, _hearts, _cat, _devil;
+
+        public string CurrentMood { get; private set; } = "neutral";
 
         public void SetMood(string mood)
         {
-            switch ((mood ?? "neutral").ToLowerInvariant())
+            CurrentMood = (mood ?? "neutral").ToLowerInvariant();
+
+            // réinitialise addons
+            UseRoundEyes = ShowTear = ShowHearts = ShowCat = ShowDevil = false;
+            FaceBrush = new SolidColorBrush(Color.FromRgb(98,125,78)); // vert par défaut
+            EyeBrush = Brushes.White;
+
+            switch (CurrentMood)
             {
+                case "happy":
+                    EyeScale = 1.10; EyeTilt = 6; EyeSeparation = 36; EyeY = 2;
+                    GlowColor = Color.FromRgb(80,220,120); GlowOpacity = 0.5;
+                    break;
                 case "proud":
-                    GlowBrush = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(0x3C, 0xC1, 0x4B)); // vert
+                    EyeScale = 1.05; EyeTilt = 10; EyeSeparation = 35; EyeY = 0;
+                    GlowColor = Color.FromRgb(39,215,255); GlowOpacity = 0.55;
                     break;
                 case "vigilant":
-                    GlowBrush = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(0xFF, 0xA6, 0x2B)); // orange
+                    EyeScale = 0.95; EyeTilt = 18; EyeSeparation = 36; EyeY = -1;
+                    GlowColor = Color.FromRgb(255,210,60); GlowOpacity = 0.6;
                     break;
                 case "alert":
-                    GlowBrush = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(0xFF, 0x4B, 0x4B)); // rouge
+                    EyeScale = 0.92; EyeTilt = 22; EyeSeparation = 36; EyeY = -2;
+                    GlowColor = Color.FromRgb(255,80,80);  GlowOpacity = 0.7;
                     break;
-                case "resting":
-                    GlowBrush = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(0x6E, 0xD3, 0xFF)); // cyan doux
+                case "sleepy":
+                    UseRoundEyes = true; GlowColor = Color.FromRgb(120,160,255); GlowOpacity = 0.45;
                     break;
-                default:
-                    GlowBrush = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(0x4B, 0x9C, 0xFF)); // neutre
+                case "sad":
+                    UseRoundEyes = true; ShowTear = true; GlowColor = Color.FromRgb(120,160,255); GlowOpacity = 0.55;
+                    break;
+                case "love":
+                    UseRoundEyes = true; ShowHearts = true; GlowColor = Color.FromRgb(255,120,200); GlowOpacity = 0.7;
+                    break;
+                case "cat":
+                    UseRoundEyes = true; ShowCat = true; GlowColor = Color.FromRgb(255,200,120); GlowOpacity = 0.65;
+                    break;
+                case "devil":
+                    EyeScale = 0.95; EyeTilt = 20; EyeSeparation = 34; EyeY = -1;
+                    ShowDevil = true; GlowColor = Color.FromRgb(255,80,80); GlowOpacity = 0.8;
+                    FaceBrush = new SolidColorBrush(Color.FromRgb(190,40,40)); // face rouge
+                    break;
+                default: // neutral
+                    EyeScale = 1.0; EyeTilt = 12; EyeSeparation = 34; EyeY = 0;
+                    GlowColor = Color.FromRgb(39,215,255); GlowOpacity = 0.40;
                     break;
             }
-        }
 
-        public void SetProgress(double percent, bool indeterminate)
-        {
-            IsIndeterminate = indeterminate;
-            Progress = percent;
+            OnPropertyChanged(nameof(CurrentMood));
         }
-
-        private void OnPropertyChanged([CallerMemberName] string? name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
