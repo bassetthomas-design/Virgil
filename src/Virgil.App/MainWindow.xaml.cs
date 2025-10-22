@@ -5,20 +5,23 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;              // ✅ garder ce namespace WPF
-// ❌ ne PAS écrire: using System.Windows.Clipboard;
+using System.Windows;                  // WPF
 using Serilog.Events;
+using Virgil.App.Controls;             // VirgilAvatarViewModel
 using Virgil.Core;
 using CoreServices = Virgil.Core.Services;
-
 
 namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
+        // --- Services & état ---
         private readonly MonitoringService? _monitoringService;
         private readonly CoreServices.ConfigService _config;
         private bool _isMonitoring;
+
+        // --- Avatar ViewModel (liaison directe, sans réflexion) ---
+        private readonly VirgilAvatarViewModel _avatarViewModel = new();
 
         public MainWindow()
         {
@@ -27,6 +30,7 @@ namespace Virgil.App
             _config = new CoreServices.ConfigService();
             CoreServices.LoggingService.Init(LogEventLevel.Information);
 
+            // Monitoring (peut échouer sur certaines machines -> best-effort)
             try
             {
                 _monitoringService = new MonitoringService();
@@ -34,63 +38,100 @@ namespace Virgil.App
             }
             catch { _monitoringService = null; }
 
-            // Avatar
+            // Avatar : data-binding + message d’accueil
             try
             {
-                var vmType = Type.GetType("Virgil.App.Controls.VirgilAvatarViewModel, Virgil.App");
-                if (vmType != null && AvatarControl != null)
-                {
-                    var vm = Activator.CreateInstance(vmType);
-                    AvatarControl.DataContext = vm;
-                    Say("Prêt.", mood: "neutral", context: "startup");
-                }
+                AvatarControl.DataContext = _avatarViewModel;
+                _avatarViewModel.SetMood("neutral", "startup");
+                AppendLine("Prêt.");
             }
             catch { }
         }
 
-        // ===== Helpers
-        private void Append(string text) { OutputBox.AppendText(text); OutputBox.ScrollToEnd(); }
-        private void AppendLine(string line) { OutputBox.AppendText($"[{DateTime.Now:T}] {line}\n"); OutputBox.ScrollToEnd(); }
+        // =========================================================================
+        // Helpers UI : journal, parole, progression
+        // =========================================================================
 
+        private void Append(string text)
+        {
+            OutputBox.AppendText(text);
+            OutputBox.ScrollToEnd();
+        }
+
+        private void AppendLine(string line)
+        {
+            OutputBox.AppendText($"[{DateTime.Now:T}] {line}\n");
+            OutputBox.ScrollToEnd();
+        }
+
+        /// <summary>Fait "parler" Virgil (bulle) + écrit dans le log + met le statut court.</summary>
+        private void Say(string text, string mood = "neutral", string context = "general")
+        {
+            try { _avatarViewModel.SetMood(mood, context); } catch { /* best effort UI */ }
+            AppendLine(text);
+            StatusText.Text = text;
+        }
+
+        /// <summary>Fait pulser l’orbe selon la progression 0..100.</summary>
+        private void SetAvatarProgress(double percent)
+        {
+            try { _avatarViewModel.SetProgress(percent); } catch { }
+        }
+
+        /// <summary>Progression bornée + statut + humeur (proud à 100%).</summary>
         private void Progress(double percent, string status)
         {
-            if (percent < 0) percent = 0; if (percent > 100) percent = 100;
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
+
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = percent;
             StatusText.Text = status;
-            Say(status, percent switch { < 10 => "vigilant", < 90 => "vigilant", _ => "proud" }, "general");
+
+            // Avatar : pulse + humeur
+            SetAvatarProgress(percent);
+            var mood = percent >= 100 ? "proud" : "vigilant";
+            try { _avatarViewModel.SetMood(mood, "general"); } catch { }
+
+            AppendLine($"[Progress] {percent:0}% — {status}");
         }
+
+        /// <summary>Phase indéterminée (spinner) + avatar au milieu.</summary>
         private void ProgressIndeterminate(string status)
         {
             TaskProgress.IsIndeterminate = true;
             StatusText.Text = status;
-            Say(status, "vigilant", "general");
+
+            SetAvatarProgress(50);
+            try { _avatarViewModel.SetMood("vigilant", "general"); } catch { }
+
+            AppendLine($"[Progress…] {status}");
         }
+
         private void ProgressDone(string status = "Terminé.")
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 100;
             StatusText.Text = status;
-            Say(status, "proud", "general");
+
+            SetAvatarProgress(100);
+            try { _avatarViewModel.SetMood("proud", "general"); } catch { }
+
+            AppendLine(status);
         }
+
         private void ProgressReset()
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 0;
             StatusText.Text = "Prêt.";
-        }
-        private void Say(string text, string mood = "neutral", string context = "general")
-        {
-            try
-            {
-                var vm = AvatarControl?.DataContext;
-                vm?.GetType().GetMethod("SetMood")?.Invoke(vm, new object[] { mood, context });
-            }
-            catch { }
-            AppendLine(text);
+            try { _avatarViewModel.SetMood("neutral", "general"); } catch { }
         }
 
-        // ===== Maintenance
+        // =========================================================================
+        // Maintenance
+        // =========================================================================
+
         private async void QuickMaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -102,13 +143,17 @@ namespace Virgil.App
                 await Task.Run(CleanTempWithProgressInternal);
 
                 Progress(50, "Navigateurs (caches)…");
-                var browsers = new BrowserCleaningService();
-                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
+                var browsers = new CoreServices.BrowserCleaningService();
+                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
                 AppendLine($"[Browsers] {rep}");
 
                 ProgressDone("Maintenance rapide : terminé.");
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur maintenance rapide: {ex.Message}", "alert"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"Erreur maintenance rapide: {ex.Message}", "alert");
+            }
         }
 
         private async void FullMaintenanceButton_Click(object sender, RoutedEventArgs e)
@@ -120,38 +165,54 @@ namespace Virgil.App
                 Progress(10, "Nettoyage TEMP…");
                 await Task.Run(CleanTempWithProgressInternal);
 
-                Progress(30, "Navigateurs (caches) …");
-                var browsers = new BrowserCleaningService();
-                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
+                Progress(30, "Navigateurs (caches)…");
+                var browsers = new CoreServices.BrowserCleaningService();
+                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
                 AppendLine($"[Browsers] {rep}");
 
                 Progress(50, "Nettoyage étendu…");
-                var ext = new ExtendedCleaningService();
+                var ext = new CoreServices.ExtendedCleaningService();
                 var exRep = await Task.Run(() => ext.AnalyzeAndClean());
                 AppendLine($"[Extended] ~{exRep.BytesFound / (1024.0 * 1024):F1} MB → ~{exRep.BytesDeleted / (1024.0 * 1024):F1} MB");
 
-                ProgressIndeterminate("MAJ apps/jeux (winget) …");
-                var app = new ApplicationUpdateService();
+                ProgressIndeterminate("MAJ apps/jeux (winget)…");
+                var app = new CoreServices.ApplicationUpdateService();
                 var wingetOut = await WingetWithRoughProgress(app);
                 if (!string.IsNullOrWhiteSpace(wingetOut)) Append(wingetOut);
 
-                ProgressIndeterminate("Windows Update (scan/download/install) …");
-                var wu = new WindowsUpdateService();
-                AppendLine("[WU] Scan…"); await wu.StartScanAsync();
+                ProgressIndeterminate("Windows Update (scan/download/install)…");
+                var wu = new CoreServices.WindowsUpdateService();
+                AppendLine("[WU] Scan…");     await wu.StartScanAsync();
                 Progress(86, "WU: Download…"); await wu.StartDownloadAsync();
-                Progress(93, "WU: Install…"); var install = await wu.StartInstallAsync();
+                Progress(93, "WU: Install…");  var install = await wu.StartInstallAsync();
                 if (!string.IsNullOrWhiteSpace(install)) Append(install);
 
                 ProgressDone("Maintenance complète : terminé.");
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur maintenance complète: {ex.Message}", "alert"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"Erreur maintenance complète: {ex.Message}", "alert");
+            }
         }
 
-        // ===== Nettoyage TEMP (progression réelle)
+        // =========================================================================
+        // Nettoyage TEMP (progression réelle)
+        // =========================================================================
+
         private async void CleanButton_Click(object sender, RoutedEventArgs e)
         {
-            try { Progress(0, "Nettoyage TEMP…"); await Task.Run(CleanTempWithProgressInternal); ProgressDone("Nettoyage TEMP terminé."); }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur de nettoyage: {ex.Message}", "alert"); }
+            try
+            {
+                Progress(0, "Nettoyage TEMP…");
+                await Task.Run(CleanTempWithProgressInternal);
+                ProgressDone("Nettoyage TEMP terminé.");
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"Erreur de nettoyage: {ex.Message}", "alert");
+            }
         }
 
         private void CleanTempWithProgressInternal()
@@ -188,7 +249,7 @@ namespace Virgil.App
                     deleted++;
                     bytesDeleted += len;
                 }
-                catch { /* ignore locked */ }
+                catch { /* locked -> ignore */ }
 
                 done++;
                 var p = Math.Floor(done / total * 100);
@@ -214,19 +275,26 @@ namespace Virgil.App
             });
         }
 
-        // ===== Nettoyages complémentaires
+        // =========================================================================
+        // Nettoyages complémentaires
+        // =========================================================================
+
         private async void CleanBrowsersButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 Progress(0, "Navigateurs: scan…");
-                var svc = new BrowserCleaningService();
-                var rep = await Task.Run(() => svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
+                var svc = new CoreServices.BrowserCleaningService();
+                var rep = await Task.Run(() => svc.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
                 Progress(100, "Navigateurs: terminé.");
                 AppendLine($"Caches navigateurs détectés: ~{rep.BytesFound / (1024.0 * 1024):F1} MB → supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
-                Say("Caches navigateurs nettoyés.", "proud", "clean browsers");
+                Say("Caches navigateurs nettoyés.", "proud", "browser_clean_success");
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur nettoyage navigateurs: {ex.Message}", "alert"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"Erreur nettoyage navigateurs: {ex.Message}", "alert");
+            }
         }
 
         private async void CleanExtendedButton_Click(object sender, RoutedEventArgs e)
@@ -234,30 +302,41 @@ namespace Virgil.App
             try
             {
                 Progress(0, "Nettoyage étendu…");
-                var ext = new ExtendedCleaningService();
+                var ext = new CoreServices.ExtendedCleaningService();
                 var rep = await Task.Run(() => ext.AnalyzeAndClean());
                 Progress(100, "Nettoyage étendu terminé.");
                 AppendLine($"Étendu: ~{rep.BytesFound / (1024.0 * 1024):F1} MB → ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
                 Say("Nettoyage étendu : ok.", "proud", "clean extended");
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur Clean Extended: {ex.Message}", "alert"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"Erreur Clean Extended: {ex.Message}", "alert");
+            }
         }
 
-        // ===== Mises à jour
+        // =========================================================================
+        // Mises à jour
+        // =========================================================================
+
         private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 ProgressIndeterminate("MAJ apps/jeux (winget)…");
-                var app = new ApplicationUpdateService();
+                var app = new CoreServices.ApplicationUpdateService();
                 var txt = await WingetWithRoughProgress(app);
                 if (!string.IsNullOrWhiteSpace(txt)) Append(txt);
                 ProgressDone("MAJ apps/jeux terminées.");
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur MAJ apps: {ex.Message}", "alert", "maj apps"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"Erreur MAJ apps: {ex.Message}", "alert", "maj apps");
+            }
         }
 
-        private async Task<string> WingetWithRoughProgress(ApplicationUpdateService app)
+        private async Task<string> WingetWithRoughProgress(CoreServices.ApplicationUpdateService app)
         {
             Progress(5, "Winget: inventaire…"); await Task.Delay(250);
             var output = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
@@ -270,38 +349,91 @@ namespace Virgil.App
         {
             try
             {
-                ProgressIndeterminate("MAJ pilotes (best-effort) …");
-                var drv = new DriverUpdateService();
+                ProgressIndeterminate("MAJ pilotes (best-effort)…");
+                var drv = new CoreServices.DriverUpdateService();
                 var output = await drv.UpgradeDriversAsync();
                 if (!string.IsNullOrWhiteSpace(output)) Append(output);
                 ProgressDone("Pilotes : vérification terminée.");
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur pilotes: {ex.Message}", "alert", "maj pilotes"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"Erreur pilotes: {ex.Message}", "alert", "maj pilotes");
+            }
         }
 
-        // ===== Windows Update (UsoClient)
+        // =========================================================================
+        // Windows Update (UsoClient)
+        // =========================================================================
+
         private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
         {
-            try { Progress(10, "WU: Scan…"); var s = await new WindowsUpdateService().StartScanAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Scan demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Scan: {ex.Message}", "alert"); }
-        }
-        private async void WindowsUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { Progress(10, "WU: Download…"); var s = await new WindowsUpdateService().StartDownloadAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Download demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Download: {ex.Message}", "alert"); }
-        }
-        private async void WindowsUpdateInstallButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { Progress(10, "WU: Install…"); var s = await new WindowsUpdateService().StartInstallAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Install demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Install: {ex.Message}", "alert"); }
-        }
-        private async void WindowsUpdateRestartButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { Progress(10, "WU: Restart…"); var s = await new WindowsUpdateService().RestartDeviceAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Restart demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Restart: {ex.Message}", "alert"); }
+            try
+            {
+                Progress(10, "WU: Scan…");
+                var s = await new CoreServices.WindowsUpdateService().StartScanAsync();
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Scan demandé.");
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"WU Scan: {ex.Message}", "alert");
+            }
         }
 
-        // ===== Monitoring
+        private async void WindowsUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Progress(10, "WU: Download…");
+                var s = await new CoreServices.WindowsUpdateService().StartDownloadAsync();
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Download demandé.");
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"WU Download: {ex.Message}", "alert");
+            }
+        }
+
+        private async void WindowsUpdateInstallButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Progress(10, "WU: Install…");
+                var s = await new CoreServices.WindowsUpdateService().StartInstallAsync();
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Install demandé.");
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"WU Install: {ex.Message}", "alert");
+            }
+        }
+
+        private async void WindowsUpdateRestartButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Progress(10, "WU: Restart…");
+                var s = await new CoreServices.WindowsUpdateService().RestartDeviceAsync();
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Restart demandé.");
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"WU Restart: {ex.Message}", "alert");
+            }
+        }
+
+        // =========================================================================
+        // Monitoring
+        // =========================================================================
+
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
             _isMonitoring = !_isMonitoring;
@@ -318,17 +450,25 @@ namespace Virgil.App
                 Say("Monitoring arrêté.", "neutral");
             }
         }
+
         private void ReadTempsButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 using var adv = new CoreServices.AdvancedMonitoringService();
                 var s = adv.Read();
-                Say($"Températures → CPU: {(s.CpuTempC?.ToString("F0") ?? "?")}°C | GPU: {(s.GpuTempC?.ToString("F0") ?? "?")}°C | Disque: {(s.DiskTempC?.ToString("F0") ?? "?")}°C",
-                    DecideMoodFromTemps(s), "temps read");
+                Say(
+                    $"Températures → CPU: {(s.CpuTempC?.ToString("F0") ?? "?")}°C | GPU: {(s.GpuTempC?.ToString("F0") ?? "?")}°C | Disque: {(s.DiskTempC?.ToString("F0") ?? "?")}°C",
+                    DecideMoodFromTemps(s),
+                    "temps read"
+                );
             }
-            catch (Exception ex) { Say($"Erreur lecture températures: {ex.Message}", "alert"); }
+            catch (Exception ex)
+            {
+                Say($"Erreur lecture températures: {ex.Message}", "alert");
+            }
         }
+
         private string DecideMoodFromTemps(CoreServices.HardwareSnapshot s)
         {
             var c = _config.Current;
@@ -341,7 +481,29 @@ namespace Virgil.App
             return "neutral";
         }
 
-        // ===== Processus
+        private void OnMetricsUpdated(object? sender, EventArgs e)
+        {
+            if (_monitoringService == null) return;
+            var m = _monitoringService.LatestMetrics;
+
+            Dispatcher.Invoke(() =>
+            {
+                AppendLine($"CPU: {m.CpuUsage:F1}%  MEM: {m.MemoryUsage:F1}%");
+
+                var c = _config.Current;
+                if (m.CpuUsage >= c.CpuAlert || m.MemoryUsage >= c.MemAlert)
+                    Say("Charge élevée.", "alert", "charge élevée");
+                else if (m.CpuUsage >= c.CpuWarn || m.MemoryUsage >= c.MemWarn)
+                    Say("Charge modérée.", "vigilant", "charge modérée");
+                else
+                    Say("Charge normale.", "neutral", "charge normale");
+            });
+        }
+
+        // =========================================================================
+        // Processus
+        // =========================================================================
+
         private void ProcessesButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -358,6 +520,7 @@ namespace Virgil.App
             }
             catch (Exception ex) { Say($"Erreur liste des processus: {ex.Message}", "alert"); }
         }
+
         private void KillPidButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -369,7 +532,10 @@ namespace Virgil.App
             catch (Exception ex) { Say($"Erreur kill: {ex.Message}", "alert"); }
         }
 
-        // ===== Services
+        // =========================================================================
+        // Services
+        // =========================================================================
+
         private void ListServicesButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -381,6 +547,7 @@ namespace Virgil.App
             }
             catch (Exception ex) { Say($"Erreur list services: {ex.Message}", "alert"); }
         }
+
         private void RestartServiceButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -393,6 +560,7 @@ namespace Virgil.App
             }
             catch (Exception ex) { Say($"Erreur restart: {ex.Message}", "alert"); }
         }
+
         private void StartServiceButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -405,6 +573,7 @@ namespace Virgil.App
             }
             catch (Exception ex) { Say($"Erreur start: {ex.Message}", "alert"); }
         }
+
         private void StopServiceButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -418,12 +587,16 @@ namespace Virgil.App
             catch (Exception ex) { Say($"Erreur stop: {ex.Message}", "alert"); }
         }
 
-        // ===== Outils & Journal
+        // =========================================================================
+        // Outils & Journal
+        // =========================================================================
+
         private void CopyLogButton_Click(object sender, RoutedEventArgs e)
         {
             try { System.Windows.Clipboard.SetText(OutputBox.Text); Say("Journal copié.", "proud"); }
             catch (Exception ex) { Say($"Clipboard : {ex.Message}", "alert"); }
         }
+
         private void ExportLogButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -437,18 +610,11 @@ namespace Virgil.App
             }
             catch (Exception ex) { Say($"Export journal : {ex.Message}", "alert"); }
         }
-        private void OpenDeviceManagerButton_Click(object sender, RoutedEventArgs e)
-        {
-            TryStart("devmgmt.msc", useShell: true, "devmgmt");
-        }
-        private void OpenDiskCleanupButton_Click(object sender, RoutedEventArgs e)
-        {
-            TryStart("cleanmgr.exe", useShell: true, "Disk Cleanup");
-        }
-        private void OpenServicesConsoleButton_Click(object sender, RoutedEventArgs e)
-        {
-            TryStart("services.msc", useShell: true, "services");
-        }
+
+        private void OpenDeviceManagerButton_Click(object sender, RoutedEventArgs e) => TryStart("devmgmt.msc", useShell: true, "devmgmt");
+        private void OpenDiskCleanupButton_Click(object sender, RoutedEventArgs e)   => TryStart("cleanmgr.exe", useShell: true, "Disk Cleanup");
+        private void OpenServicesConsoleButton_Click(object sender, RoutedEventArgs e)=> TryStart("services.msc", useShell: true, "services");
+
         private async void FlushDnsButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -474,6 +640,7 @@ namespace Virgil.App
             }
             catch (Exception ex) { ProgressReset(); Say($"Flush DNS : {ex.Message}", "alert"); }
         }
+
         private void TryStart(string fileName, bool useShell, string label)
         {
             try
@@ -483,19 +650,6 @@ namespace Virgil.App
                 Say($"Ouverture : {label}", "neutral");
             }
             catch (Exception ex) { Say($"Impossible d’ouvrir {label} : {ex.Message}", "alert"); }
-        }
-
-        // ===== Monitoring callback
-        private void OnMetricsUpdated(object? sender, EventArgs e)
-        {
-            if (_monitoringService == null) return;
-            var m = _monitoringService.LatestMetrics;
-            Dispatcher.Invoke(() => AppendLine($"CPU: {m.CpuUsage:F1}%  MEM: {m.MemoryUsage:F1}%"));
-
-            var c = _config.Current;
-            if (m.CpuUsage >= c.CpuAlert || m.MemoryUsage >= c.MemAlert)      Say("Charge élevée.", "alert", "charge élevée");
-            else if (m.CpuUsage >= c.CpuWarn || m.MemoryUsage >= c.MemWarn)   Say("Charge modérée.", "vigilant", "charge modérée");
-            else                                                              Say("Charge normale.", "neutral", "charge normale");
         }
     }
 }
