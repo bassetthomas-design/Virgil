@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Win32;
+using Virgil.Core;
+
 
 namespace Virgil.App
 {
