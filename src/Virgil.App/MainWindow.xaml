@@ -1,96 +1,152 @@
 <Window x:Class="Virgil.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:Virgil.App.Controls"
-        Title="Virgil — tableau de bord" Height="760" Width="1100"
-        WindowStartupLocation="CenterScreen">
-    <Grid Margin="14">
+        Title="Virgil" Height="720" Width="1080" WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="180"/>
         </Grid.RowDefinitions>
 
-        <!-- En-tête -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,10">
-            <TextBlock Text="Virgil" FontSize="22" FontWeight="Bold" />
-            <Border CornerRadius="16" Background="#111" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Foreground="#8bd" Text="build ready" />
-            </Border>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
-                <controls:VirgilAvatar x:Name="AvatarControl" Width="64" Height="64" Margin="8,0,0,0"/>
+        <!-- Header -->
+        <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,8">
+            <TextBlock Text="Virgil — Assistant Système" FontSize="20" FontWeight="Bold" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="CancelButton" Content="Annuler" Margin="8,0,0,0" Padding="10,6"
+                        Click="CancelButton_Click"/>
             </StackPanel>
         </DockPanel>
 
-        <!-- Boutons -->
-        <WrapPanel Grid.Row="1" Margin="0,0,0,10">
-            <!-- Maintenance -->
-            <Button Content="Maintenance rapide" Click="QuickMaintenanceButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="Maintenance complète" Click="FullMaintenanceButton_Click" Margin="0,0,12,6" Padding="10,6"/>
-
-            <!-- Nettoyage -->
-            <Button Content="Nettoyer TEMP" Click="CleanButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="Nettoyer navigateurs (caches)" Click="CleanBrowsersButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="Nettoyage étendu" Click="CleanExtendedButton_Click" Margin="0,0,12,6" Padding="10,6"/>
-
-            <!-- Mises à jour -->
-            <Button Content="MAJ apps/jeux (winget)" Click="UpdateButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="MAJ pilotes (best-effort)" Click="DriverButton_Click" Margin="0,0,12,6" Padding="10,6"/>
-
-            <!-- Windows Update -->
-            <Button Content="WU : Scan" Click="WindowsUpdateButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="WU : Download" Click="WindowsUpdateDownloadButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="WU : Install" Click="WindowsUpdateInstallButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="WU : Restart" Click="WindowsUpdateRestartButton_Click" Margin="0,0,12,6" Padding="10,6"/>
-
-            <!-- Monitoring -->
-            <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="Lire températures" Click="ReadTempsButton_Click" Margin="0,0,12,6" Padding="10,6"/>
-
-            <!-- Processus -->
-            <Button Content="Top processus (RAM)" Click="ProcessesButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <TextBox x:Name="KillPidBox" Width="120" Margin="0,0,6,6" ToolTip="PID à terminer"/>
-            <Button Content="Kill PID" Click="KillPidButton_Click" Margin="0,0,12,6" Padding="10,6"/>
-
-            <!-- Services -->
-            <Button Content="Services : lister" Click="ListServicesButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <TextBox x:Name="SvcNameBox" Width="240" Margin="0,0,6,6" ToolTip="Nom du service (ex : wuauserv)"/>
-            <Button Content="Start" Click="StartServiceButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="Stop" Click="StopServiceButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-            <Button Content="Restart" Click="RestartServiceButton_Click" Margin="0,0,6,6" Padding="10,6"/>
-        </WrapPanel>
-
-        <!-- Progress + état -->
-        <Grid Grid.Row="2" Margin="0,0,0,10">
+        <!-- Corps -->
+        <Grid Grid.Row="1" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="220"/>
             </Grid.ColumnDefinitions>
 
-            <ProgressBar x:Name="TaskProgress" Height="16" Minimum="0" Maximum="100" Value="0" />
-            <TextBlock x:Name="StatusText" Grid.Column="1" Margin="10,0,0,0"
-                       VerticalAlignment="Center" Text="Prêt." Foreground="#6EE" FontFamily="Consolas" />
+            <!-- Colonne gauche : actions -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- Monitoring -->
+                    <GroupBox Header="Surveillance">
+                        <StackPanel>
+                            <WrapPanel>
+                                <Button Content="Start/Stop Monitoring" Margin="0,0,8,8" Padding="10,6"
+                                        x:Name="MonitorButton" Click="MonitorButton_Click"/>
+                                <Button Content="Lire températures" Margin="0,0,8,8" Padding="10,6"
+                                        Click="ReadTempsButton_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Nettoyage -->
+                    <GroupBox Header="Nettoyage" Margin="0,8,0,0">
+                        <StackPanel>
+                            <WrapPanel>
+                                <Button Content="Nettoyage TEMP" Margin="0,0,8,8" Padding="10,6"
+                                        Click="CleanButton_Click"/>
+                                <Button Content="Caches Navigateurs" Margin="0,0,8,8" Padding="10,6"
+                                        Click="CleanBrowsersButton_Click"/>
+                                <Button Content="Nettoyage Étendu" Margin="0,0,8,8" Padding="10,6"
+                                        Click="CleanExtendedButton_Click"/>
+                                <Button Content="Maintenance rapide" Margin="0,0,8,8" Padding="10,6"
+                                        Click="QuickMaintenanceButton_Click"/>
+                                <Button Content="Maintenance complète" Margin="0,0,8,8" Padding="10,6"
+                                        Click="FullMaintenanceButton_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Mises à jour -->
+                    <GroupBox Header="Mises à jour" Margin="0,8,0,0">
+                        <StackPanel>
+                            <WrapPanel>
+                                <Button Content="MAJ Apps/Jeux (winget)" Margin="0,0,8,8" Padding="10,6"
+                                        Click="UpdateButton_Click"/>
+                                <Button Content="WU: Scan" Margin="0,0,8,8" Padding="10,6"
+                                        Click="WindowsUpdateButton_Click"/>
+                                <Button Content="WU: Download" Margin="0,0,8,8" Padding="10,6"
+                                        Click="WindowsUpdateDownloadButton_Click"/>
+                                <Button Content="WU: Install" Margin="0,0,8,8" Padding="10,6"
+                                        Click="WindowsUpdateInstallButton_Click"/>
+                                <Button Content="WU: Restart" Margin="0,0,8,8" Padding="10,6"
+                                        Click="WindowsUpdateRestartButton_Click"/>
+                                <Button Content="Pilotes (best-effort)" Margin="0,0,8,8" Padding="10,6"
+                                        Click="DriverButton_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Processus / Services -->
+                    <GroupBox Header="Processus & Services" Margin="0,8,0,0">
+                        <StackPanel>
+                            <WrapPanel>
+                                <Button Content="Top Processus" Margin="0,0,8,8" Padding="10,6"
+                                        Click="ProcessesButton_Click"/>
+                                <TextBox x:Name="KillPidBox" Width="120" Margin="0,0,8,8"
+                                         ToolTip="PID à tuer"/>
+                                <Button Content="Tuer PID" Margin="0,0,8,8" Padding="10,6"
+                                        Click="KillPidButton_Click"/>
+                            </WrapPanel>
+                            <WrapPanel>
+                                <TextBox x:Name="SvcNameBox" Width="220" Margin="0,0,8,8"
+                                         ToolTip="Nom du service"/>
+                                <Button Content="Lister Services" Margin="0,0,8,8" Padding="10,6"
+                                        Click="ListServicesButton_Click"/>
+                                <Button Content="Start" Margin="0,0,8,8" Padding="10,6"
+                                        Click="StartServiceButton_Click"/>
+                                <Button Content="Stop" Margin="0,0,8,8" Padding="10,6"
+                                        Click="StopServiceButton_Click"/>
+                                <Button Content="Restart" Margin="0,0,8,8" Padding="10,6"
+                                        Click="RestartServiceButton_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Outils -->
+                    <GroupBox Header="Outils système" Margin="0,8,0,0">
+                        <StackPanel>
+                            <WrapPanel>
+                                <Button Content="Gestionnaire de périphériques" Margin="0,0,8,8" Padding="10,6"
+                                        Click="OpenDeviceManagerButton_Click"/>
+                                <Button Content="Nettoyage de disque" Margin="0,0,8,8" Padding="10,6"
+                                        Click="OpenDiskCleanupButton_Click"/>
+                                <Button Content="Console des services" Margin="0,0,8,8" Padding="10,6"
+                                        Click="OpenServicesConsoleButton_Click"/>
+                                <Button Content="Flush DNS" Margin="0,0,8,8" Padding="10,6"
+                                        Click="FlushDnsButton_Click"/>
+                            </WrapPanel>
+                            <WrapPanel>
+                                <Button Content="Copier le journal" Margin="0,0,8,8" Padding="10,6"
+                                        Click="CopyLogButton_Click"/>
+                                <Button Content="Exporter le journal" Margin="0,0,8,8" Padding="10,6"
+                                        Click="ExportLogButton_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </GroupBox>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Colonne droite : avatar + statut -->
+            <StackPanel Grid.Column="1">
+                <GroupBox Header="Virgil">
+                    <local:VirgilAvatar x:Name="AvatarControl" Width="220" Height="220"/>
+                </GroupBox>
+
+                <GroupBox Header="État">
+                    <StackPanel>
+                        <ProgressBar x:Name="TaskProgress" Height="16" Minimum="0" Maximum="100" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="StatusText" Text="Prêt."/>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
         </Grid>
 
-        <!-- Sortie -->
-        <TextBox x:Name="OutputBox" Grid.Row="3"
-                 FontFamily="Consolas" FontSize="13"
-                 AcceptsReturn="True" IsReadOnly="True"
-                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                 TextWrapping="NoWrap" />
-
-        <!-- Bandeau utilitaires -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
-            <Button Content="Copier journal" Click="CopyLogButton_Click" Padding="10,6" Margin="0,0,6,0"/>
-            <Button Content="Exporter journal" Click="ExportLogButton_Click" Padding="10,6" Margin="0,0,12,0"/>
-            <Separator Width="12" />
-            <Button Content="Ouvrir : Gestionnaire périph." Click="OpenDeviceManagerButton_Click" Padding="10,6" Margin="0,0,6,0"/>
-            <Button Content="Ouvrir : Nettoyage disque" Click="OpenDiskCleanupButton_Click" Padding="10,6" Margin="0,0,6,0"/>
-            <Button Content="Ouvrir : Services" Click="OpenServicesConsoleButton_Click" Padding="10,6" Margin="0,0,12,0"/>
-            <Separator Width="12" />
-            <Button Content="Flush DNS" Click="FlushDnsButton_Click" Padding="10,6"/>
-        </StackPanel>
+        <!-- Journal -->
+        <GroupBox Grid.Row="2" Header="Journal">
+            <TextBox x:Name="OutputBox" FontFamily="Consolas" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                     TextWrapping="Wrap" IsReadOnly="True"/>
+        </GroupBox>
     </Grid>
 </Window>
