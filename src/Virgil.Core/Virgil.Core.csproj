@@ -9,13 +9,15 @@
 
   <ItemGroup>
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.10" />
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.10" />
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.4" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
   </ItemGroup>
 
+  <!-- Dialogues JSON, si tu le gardes ici -->
   <ItemGroup>
-    <Content Include="virgil-dialogues.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <None Include="virgil-dialogues.json" CopyToOutputDirectory="Always" Condition="Exists('virgil-dialogues.json')" />
   </ItemGroup>
 
 </Project>
