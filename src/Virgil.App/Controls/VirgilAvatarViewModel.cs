@@ -11,7 +11,7 @@ using Virgil.Core.Services;
 namespace Virgil.App.Controls
 {
     /// <summary>
-    /// VM très léger : gère couleur (humeur) + petite ligne de texte.
+    /// VM : gère la phrase courante et la couleur selon l’humeur.
     /// </summary>
     public sealed class VirgilAvatarViewModel : INotifyPropertyChanged
     {
@@ -20,19 +20,28 @@ namespace Virgil.App.Controls
         private readonly Random _rng = new();
 
         private string _currentLine = "Salut !";
-        public string CurrentLine { get => _currentLine; private set { _currentLine = value; OnPropertyChanged(); } }
+        public string CurrentLine
+        {
+            get => _currentLine;
+            private set { _currentLine = value; OnPropertyChanged(); }
+        }
 
         private SolidColorBrush _coreBrush = new(Color.FromRgb(0x40, 0xA0, 0xFF));
-        public SolidColorBrush CoreBrush { get => _coreBrush; private set { _coreBrush = value; OnPropertyChanged(); } }
+        public SolidColorBrush CoreBrush
+        {
+            get => _coreBrush;
+            private set { _coreBrush = value; OnPropertyChanged(); }
+        }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public void SetMood(string moodKey, string context = "")
         {
-            var color = _moods.ResolveColor(moodKey);
-            CoreBrush = new SolidColorBrush(color);
+            // Resolve RGB from Core (no WPF there), convert to WPF Color here
+            var rgb = _moods.ResolveColor(moodKey);
+            CoreBrush = new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B));
 
-            // Ligne contextuelle si dispo
+            // Pick a contextual line
             var key = NormalizeKey(context);
             if (_lines.TryGetValue(key, out var arr) && arr.Length > 0)
                 CurrentLine = arr[_rng.Next(arr.Length)];
@@ -41,14 +50,13 @@ namespace Virgil.App.Controls
         }
 
         private static string NormalizeKey(string s)
-            => string.IsNullOrWhiteSpace(s) ? "General" : s.Trim().ToLowerInvariant();
+            => string.IsNullOrWhiteSpace(s) ? "general" : s.Trim().ToLowerInvariant();
 
         private static Dictionary<string, string[]> LoadDialogues()
         {
             try
             {
                 var baseDir = AppContext.BaseDirectory;
-                // Le fichier est copié dans la sortie par le .csproj du Core (CopyToOutputDirectory)
                 var path = Path.Combine(baseDir, "virgil-dialogues.json");
                 if (File.Exists(path))
                 {
@@ -57,25 +65,16 @@ namespace Virgil.App.Controls
                     return dict ?? new();
                 }
             }
-            catch { }
-            // fallback minimal
+            catch { /* ignore */ }
+
+            // Fallback minimal si le JSON n'est pas trouvé
             return new Dictionary<string, string[]>
             {
                 ["general"] = new[]
                 {
                     "Tout roule.",
                     "Toujours là ✨",
-                    "On surveille en silence.",
-                },
-                ["startup"] = new[]
-                {
-                    "Rebonjour 👋",
-                    "Virgil en place.",
-                },
-                ["full maintenance"] = new[]
-                {
-                    "Ça nettoie, ça met à jour…",
-                    "Opération grand ménage 🧹",
+                    "On surveille en silence."
                 }
             };
         }
