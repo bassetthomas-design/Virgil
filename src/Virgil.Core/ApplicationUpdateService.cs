@@ -6,39 +6,43 @@ using System.Threading.Tasks;
 namespace Virgil.Core
 {
     /// <summary>
-    /// Provides methods to update all installed applications and games using the Windows Package Manager (winget).
+    /// Pilotage des mises à jour d'apps/jeux via winget.
     /// </summary>
-    public class ApplicationUpdateService
+    public sealed class ApplicationUpdateService
     {
-        public async Task<string> UpdateAllApplicationsAsync()
+        public async Task<string> UpgradeAllAsync(bool includeUnknown = true, bool silent = true)
         {
-            var output = new StringBuilder();
+            var sb = new StringBuilder();
+            string args = "upgrade --all";
+            if (includeUnknown) args += " --include-unknown";
+            if (silent) args += " --silent";
+
             try
             {
                 var psi = new ProcessStartInfo
                 {
                     FileName = "winget",
-                    Arguments = "upgrade --all --include-unknown --silent",
+                    Arguments = args,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
                 };
-
-                using var process = new Process { StartInfo = psi };
-                process.OutputDataReceived += (s, e) => { if (e.Data != null) output.AppendLine(e.Data); };
-                process.ErrorDataReceived += (s, e) => { if (e.Data != null) output.AppendLine(e.Data); };
-
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-                await process.WaitForExitAsync().ConfigureAwait(false);
+                using var p = new Process { StartInfo = psi };
+                p.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                p.ErrorDataReceived  += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                p.Start();
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+                await Task.Run(() => p.WaitForExit());
             }
             catch (Exception ex)
             {
-                output.AppendLine($"Error running winget: {ex.Message}");
+                sb.AppendLine($"[winget error] {ex.Message}");
             }
-            return output.ToString();
+
+            return sb.ToString();
         }
     }
 }
