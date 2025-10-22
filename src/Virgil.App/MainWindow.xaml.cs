@@ -283,6 +283,35 @@ namespace Virgil.App
                 return $"[process error] {ex.Message}\n";
             }
         }
+        private void CleanBrowsersButton_Click(object sender, RoutedEventArgs e)
+{
+    try
+    {
+        var svc = new BrowserCleaningService();
+        if (svc.IsAnyBrowserRunning())
+        {
+            AppendLine("Un navigateur est en cours d’exécution. Fermez-le(s) pour un nettoyage complet (ou forcer).");
+            // Exemple: pour forcer malgré tout:
+            // var repForced = svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = true });
+            // AppendLine($"[FORCE] Caches supprimés: ~{repForced.BytesDeleted / (1024.0*1024):F1} MB");
+            return;
+        }
+
+        var rep = svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = false });
+        AppendLine($"Caches détectés: ~{rep.BytesFound / (1024.0 * 1024):F1} MB");
+        AppendLine($"Caches supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
+        if (rep.TouchedPaths.Count > 0)
+            AppendLine($"Chemins affectés: {rep.TouchedPaths.Count} (voir logs détaillés si besoin).");
+
+        SetMoodSafe(rep.BytesDeleted > 0 ? "proud" : "neutral", "Clean browsers");
+    }
+    catch (Exception ex)
+    {
+        AppendLine($"Erreur nettoyage navigateurs: {ex.Message}");
+        SetMoodSafe("alert", "Clean browsers error");
+    }
+}
+
 
         private void SetMoodSafe(string mood, string source)
         {
