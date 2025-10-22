@@ -16,16 +16,16 @@
             </Ellipse.Fill>
         </Ellipse>
 
-        <!-- noyau -->
-        <Ellipse x:Name="Core" Width="42" Height="42">
-            <Ellipse.Fill>
-                <SolidColorBrush x:Name="CoreBrush" Color="#40A0FF"/>
-            </Ellipse.Fill>
+        <!-- noyau (couleur bindée par le ViewModel) -->
+        <Ellipse x:Name="Core" Width="42" Height="42" Fill="{Binding CoreBrush}">
+            <Ellipse.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Ellipse.RenderTransform>
         </Ellipse>
 
-        <!-- petite bulle texte (facultative) -->
+        <!-- petite bulle texte -->
         <Border Background="#CC111111" CornerRadius="8" Padding="6,3"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0, -4,-4">
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-4,-4">
             <TextBlock Text="{Binding CurrentLine}" Foreground="#EDEDED" FontSize="11"/>
         </Border>
 
@@ -35,15 +35,14 @@
                 <BeginStoryboard>
                     <Storyboard RepeatBehavior="Forever" AutoReverse="True">
                         <DoubleAnimation Storyboard.TargetName="Core"
-                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
+                                         From="1.0" To="1.08" Duration="0:0:1.8"/>
+                        <DoubleAnimation Storyboard.TargetName="Core"
+                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
                                          From="1.0" To="1.08" Duration="0:0:1.8"/>
                     </Storyboard>
                 </BeginStoryboard>
             </EventTrigger>
         </Grid.Triggers>
-        <Ellipse.RenderTransform>
-            <ScaleTransform ScaleX="1" ScaleY="1"/>
-        </Ellipse.RenderTransform>
-        <ContentPresenter/>
     </Grid>
 </UserControl>
