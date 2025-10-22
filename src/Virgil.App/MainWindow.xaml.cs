@@ -9,8 +9,8 @@ using System.Windows;
 using Microsoft.Win32;
 using Serilog;
 using Serilog.Events;
-using Virgil.Core; // pour MonitoringService (basique)
-using CoreServices = Virgil.Core.Services; // <<< alias vers les services avancés
+using Virgil.Core; // MonitoringService + Presets + BrowserCleaning vivent ici
+using CoreServices = Virgil.Core.Services; // Alias: ConfigService, LoggingService, AdvancedMonitoringService, ServiceManager
 
 namespace Virgil.App
 {
@@ -100,7 +100,7 @@ namespace Virgil.App
             try
             {
                 AppendLine("Maintenance rapide en cours…");
-                var svc = new CoreServices.MaintenancePresetsService();
+                var svc = new Virgil.Core.MaintenancePresetsService();
                 var report = await svc.QuickCleanAsync(forceBrowser: false);
                 Append(report);
                 AppendLine("Maintenance rapide terminée.");
@@ -118,7 +118,7 @@ namespace Virgil.App
             try
             {
                 AppendLine("Maintenance complète en cours (clean + maj + WU)…");
-                var svc = new CoreServices.MaintenancePresetsService();
+                var svc = new Virgil.Core.MaintenancePresetsService();
                 var report = await svc.FullMaintenanceAsync(forceBrowser: false, windowsRestart: false);
                 Append(report);
                 AppendLine("Maintenance complète terminée.");
@@ -173,13 +173,13 @@ namespace Virgil.App
         {
             try
             {
-                var svc = new CoreServices.BrowserCleaningService();
+                var svc = new Virgil.Core.BrowserCleaningService();
                 if (svc.IsAnyBrowserRunning())
                 {
                     AppendLine("Un navigateur est en cours d’exécution. Fermez-le(s) pour un nettoyage complet.");
                     return;
                 }
-                var rep = svc.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false });
+                var rep = svc.AnalyzeAndClean(new Virgil.Core.BrowserCleaningOptions { Force = false });
                 AppendLine($"Caches navigateurs détectés: ~{rep.BytesFound / (1024.0 * 1024):F1} MB");
                 AppendLine($"Caches navigateurs supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
                 SetMoodSafe(rep.BytesDeleted > 0 ? "proud" : "neutral", "Clean browsers");
