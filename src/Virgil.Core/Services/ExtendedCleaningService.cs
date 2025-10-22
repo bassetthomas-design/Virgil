@@ -1,74 +1,123 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Virgil.Core.Services
 {
-    public sealed class ExtendedCleaningReport
-    {
-        public long BytesFound { get; set; }
-        public long BytesDeleted { get; set; }
-        public List<string> Paths { get; } = new();
-    }
-
+    /// <summary>
+    /// Nettoyage "étendu" : caches Windows courants, Adobe, DirectX shader cache, etc.
+    /// Retourne un rapport simple des octets détectés/supprimés.
+    /// </summary>
     public sealed class ExtendedCleaningService
     {
-        private static string Local => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        private static string Roaming => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        private static string ProgramData => Environment.ExpandEnvironmentVariables("%ProgramData%");
-
-        private static IEnumerable<string> Targets()
+        public ExtendedCleanReport AnalyzeAndClean()
         {
-            // Jeux / launchers
-            yield return Path.Combine(Local, "Steam\\htmlcache");
-            yield return Path.Combine(Local, "EpicGamesLauncher\\Saved\\Logs");
-            yield return Path.Combine(Roaming, "Epic\\EpicGamesLauncher\\Saved\\Logs");
-            yield return Path.Combine(Local, "NVIDIA\\GLCache");
-            yield return Path.Combine(Local, "D3DSCache");
-            yield return Path.Combine(Local, "Temp"); // redondant mais utile
+            long bytesFound = 0;
+            long bytesDeleted = 0;
+            int filesDeleted = 0;
 
-            // Adobe (cache)
-            yield return Path.Combine(Roaming, "Adobe\\Common");
-            yield return Path.Combine(Local, "Adobe\\Common");
-            yield return Path.Combine(Local, "Adobe\\CoreSync\\plugins");
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string roamingAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
 
-            // Windows Delivery Optimization cache
-            yield return Path.Combine(ProgramData, "Microsoft\\Windows\\DeliveryOptimization\\Cache");
-        }
-
-        public ExtendedCleaningReport AnalyzeAndClean()
-        {
-            var rep = new ExtendedCleaningReport();
-
-            foreach (var path in Targets())
+            // Dossiers cibles (tu pourras en ajouter facilement ici)
+            var targets = new[]
             {
-                if (!Directory.Exists(path)) continue;
-                rep.Paths.Add(path);
+                // DirectX Shader Cache
+                Path.Combine(localAppData, "D3DSCache"),
+
+                // Edge/Chrome/Brave/Vivaldi (caches génériques Chromium par défaut)
+                Path.Combine(localAppData, "Microsoft\\Edge\\User Data\\Default\\Cache"),
+                Path.Combine(localAppData, "Google\\Chrome\\User Data\\Default\\Cache"),
+                Path.Combine(localAppData, "BraveSoftware\\Brave-Browser\\User Data\\Default\\Cache"),
+                Path.Combine(localAppData, "Vivaldi\\User Data\\Default\\Cache"),
+
+                // Firefox
+                Path.Combine(roamingAppData, "Mozilla\\Firefox\\Profiles"),
+
+                // Adobe caches
+                Path.Combine(roamingAppData, "Adobe\\Common"),
+                Path.Combine(localAppData, "Adobe\\Common"),
+
+                // Windows temp (en complément du nettoyage de base)
+                Path.Combine(windowsDir, "Temp"),
+            }
+            .Distinct()
+            .ToArray();
+
+            // 1) Mesurer
+            foreach (var t in targets)
+            {
+                if (!Directory.Exists(t)) continue;
 
                 try
                 {
-                    foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                    foreach (var f in Directory.EnumerateFiles(t, "*", SearchOption.AllDirectories))
                     {
-                        try { rep.BytesFound += new FileInfo(f).Length; } catch { }
+                        try { bytesFound += new FileInfo(f).Length; } catch { /* ignore */ }
                     }
+                }
+                catch { /* ignore */ }
+            }
 
-                    try { Directory.Delete(path, true); rep.BytesDeleted += rep.BytesFound; }
-                    catch
+            // 2) Supprimer fichiers
+            foreach (var t in targets)
+            {
+                if (!Directory.Exists(t)) continue;
+
+                try
+                {
+                    foreach (var f in Directory.EnumerateFiles(t, "*", SearchOption.AllDirectories))
                     {
                         try
                         {
-                            foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-                            { try { File.Delete(f); } catch { } }
-                            foreach (var d in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories))
-                            { try { Directory.Delete(d, true); } catch { } }
+                            var fi = new FileInfo(f);
+                            long len = 0;
+                            if (fi.Exists)
+                            {
+                                len = fi.Length;
+                                File.SetAttributes(f, FileAttributes.Normal);
+                                fi.Delete();
+                                filesDeleted++;
+                                bytesDeleted += len;
+                            }
                         }
-                        catch { }
+                        catch { /* fichier verrouillé, ignorer */ }
                     }
                 }
-                catch { }
+                catch { /* ignore */ }
             }
 
-            return rep;
+            // 3) Supprimer dossiers vides (meilleur ordre : plus profonds d'abord)
+            foreach (var t in targets)
+            {
+                if (!Directory.Exists(t)) continue;
+
+                try
+                {
+                    var dirs = Directory.EnumerateDirectories(t, "*", SearchOption.AllDirectories)
+                                        .OrderByDescending(d => d.Length);
+                    foreach (var d in dirs)
+                    {
+                        try { Directory.Delete(d, true); } catch { /* ignore */ }
+                    }
+                }
+                catch { /* ignore */ }
+            }
+
+            return new ExtendedCleanReport
+            {
+                BytesFound = bytesFound,
+                BytesDeleted = bytesDeleted,
+                FilesDeleted = filesDeleted
+            };
         }
+    }
+
+    public sealed class ExtendedCleanReport
+    {
+        public long BytesFound { get; set; }
+        public long BytesDeleted { get; set; }
+        public int FilesDeleted { get; set; }
     }
 }
