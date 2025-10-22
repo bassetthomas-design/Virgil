@@ -7,34 +7,34 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Win32;
+using Serilog;
+using Serilog.Events;
+using Virgil.Core.Services;
 
 namespace Virgil.App
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
-        // Service de monitoring (depuis Virgil.Core si présent)
         private readonly Virgil.Core.MonitoringService? _monitoringService;
+        private readonly ConfigService _config;
         private bool _isMonitoring;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            // Monitoring (optionnel si le service existe)
+            // Services de base
+            _config = new ConfigService();
+            LoggingService.Init(LogEventLevel.Information);
+
             try
             {
                 _monitoringService = new Virgil.Core.MonitoringService();
                 _monitoringService.MetricsUpdated += OnMetricsUpdated;
             }
-            catch
-            {
-                _monitoringService = null;
-            }
+            catch { _monitoringService = null; }
 
-            // DataContext pour l’avatar si ViewModel présent (réflexion, non bloquant)
+            // Avatar VM si présent
             try
             {
                 var vmType = Type.GetType("Virgil.App.Controls.VirgilAvatarViewModel, Virgil.App");
@@ -49,18 +49,16 @@ namespace Virgil.App
             catch { /* ignore */ }
         }
 
-        // ------------------ Helpers UI ------------------
-
-        private void Append(string text)
+        // ---------- Helpers UI ----------
+        private void Append(string text) { OutputBox.AppendText(text); OutputBox.ScrollToEnd(); }
+        private void AppendLine(string line) { OutputBox.AppendText($"[{DateTime.Now:T}] {line}\n"); OutputBox.ScrollToEnd(); }
+        private void SetMoodSafe(string mood, string source)
         {
-            OutputBox.AppendText(text);
-            OutputBox.ScrollToEnd();
-        }
-
-        private void AppendLine(string line)
-        {
-            OutputBox.AppendText($"[{DateTime.Now:T}] {line}\n");
-            OutputBox.ScrollToEnd();
+            try
+            {
+                var vm = AvatarControl?.DataContext;
+                vm?.GetType().GetMethod("SetMood")?.Invoke(vm, new object[] { mood, source });
+            } catch { }
         }
 
         private async Task<string> RunProcessAsync(string fileName, string args, bool runAsShell = false)
@@ -82,14 +80,10 @@ namespace Virgil.App
                 if (!runAsShell)
                 {
                     p.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
-                    p.ErrorDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                    p.ErrorDataReceived +=  (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
                 }
                 p.Start();
-                if (!runAsShell)
-                {
-                    p.BeginOutputReadLine();
-                    p.BeginErrorReadLine();
-                }
+                if (!runAsShell) { p.BeginOutputReadLine(); p.BeginErrorReadLine(); }
                 await Task.Run(() => p.WaitForExit());
                 return sb.ToString();
             }
@@ -99,19 +93,7 @@ namespace Virgil.App
             }
         }
 
-        private void SetMoodSafe(string mood, string source)
-        {
-            try
-            {
-                var vm = AvatarControl?.DataContext;
-                if (vm == null) return;
-                vm.GetType().GetMethod("SetMood")?.Invoke(vm, new object[] { mood, source });
-            }
-            catch { /* ignore */ }
-        }
-
-        // ------------------ Actions Maintenance ------------------
-
+        // ---------- Nettoyage ----------
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -124,17 +106,12 @@ namespace Virgil.App
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
                 };
 
-                long totalBytes = 0;
+                long found = 0; int deleted = 0;
                 foreach (var t in targets.Where(Directory.Exists))
                 {
                     foreach (var f in Directory.EnumerateFiles(t, "*", SearchOption.AllDirectories))
-                    {
-                        try { totalBytes += new FileInfo(f).Length; } catch { }
-                    }
+                    { try { found += new FileInfo(f).Length; } catch { } }
                 }
-                AppendLine($"Trouvé ~{totalBytes / (1024.0 * 1024):F1} MB.");
-                int deleted = 0;
-
                 foreach (var t in targets.Where(Directory.Exists))
                 {
                     foreach (var f in Directory.EnumerateFiles(t, "*", SearchOption.AllDirectories))
@@ -142,13 +119,15 @@ namespace Virgil.App
                     foreach (var d in Directory.EnumerateDirectories(t, "*", SearchOption.AllDirectories))
                     { try { Directory.Delete(d, true); } catch { } }
                 }
-                AppendLine($"Nettoyage terminé. Fichiers supprimés: {deleted}.");
+                AppendLine($"Temp détecté ~{found / (1024.0 * 1024):F1} MB — supprimé {deleted} fichiers.");
                 SetMoodSafe("proud", "Clean temp");
+                LoggingService.SafeInfo("Temp cleaned {Deleted} files (~{MB} MB)", deleted, found / (1024.0 * 1024));
             }
             catch (Exception ex)
             {
                 AppendLine($"Erreur de nettoyage: {ex.Message}");
                 SetMoodSafe("alert", "Clean temp error");
+                LoggingService.SafeError(ex, "Clean temp error");
             }
         }
 
@@ -156,131 +135,43 @@ namespace Virgil.App
         {
             try
             {
-                // Nettoyage simple multi-navigateurs sans dépendre d'un service externe
-                string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-
-                string[] chromiumRoots =
-                {
-                    Path.Combine(local, "Google\\Chrome\\User Data"),
-                    Path.Combine(local, "Microsoft\\Edge\\User Data"),
-                    Path.Combine(local, "BraveSoftware\\Brave-Browser\\User Data"),
-                    Path.Combine(local, "Vivaldi\\User Data"),
-                    Path.Combine(local, "Opera Software\\Opera Stable"),
-                    Path.Combine(local, "Opera Software\\Opera GX Stable"),
-                    Path.Combine(local, "Chromium\\User Data"),
-                    Path.Combine(local, "Yandex\\YandexBrowser\\User Data")
-                };
-                string[] chromiumPatterns =
-                {
-                    "Cache","Code Cache","GPUCache","GrShaderCache","ShaderCache",
-                    "Media Cache","Session Storage","Service Worker\\CacheStorage",
-                    "IndexedDB","Local Storage"
-                };
-                string[] firefoxProfilesRoot = { Path.Combine(roaming, "Mozilla\\Firefox\\Profiles") };
-                string[] firefoxPatterns = { "cache2","startupCache","jumpListCache","shader-cache" };
-
-                // Vérifier si un navigateur tourne
-                string[] procNames = { "chrome","msedge","brave","vivaldi","opera","opera_gx","chromium","yandex","firefox","waterfox","librewolf" };
-                bool anyBrowser = Process.GetProcesses().Any(p =>
-                {
-                    try { return procNames.Contains(Path.GetFileNameWithoutExtension(p.ProcessName).ToLowerInvariant()); }
-                    catch { return false; }
-                });
-
-                if (anyBrowser)
+                var svc = new Virgil.Core.BrowserCleaningService();
+                if (svc.IsAnyBrowserRunning())
                 {
                     AppendLine("Un navigateur est en cours d’exécution. Fermez-le(s) pour un nettoyage complet.");
                     return;
                 }
-
-                long found = 0, deleted = 0;
-
-                // Chromium-like
-                foreach (var root in chromiumRoots.Where(Directory.Exists))
-                {
-                    // profils: Default, Profile X, root, etc.
-                    var candidates = Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly)
-                                              .Concat(new[] { root })
-                                              .Distinct();
-                    foreach (var prof in candidates)
-                    {
-                        foreach (var pat in chromiumPatterns)
-                        {
-                            var path = Path.Combine(prof, pat);
-                            if (!Directory.Exists(path)) continue;
-
-                            try
-                            {
-                                foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-                                { try { found += new FileInfo(f).Length; } catch { } }
-
-                                // suppression best-effort
-                                try { Directory.Delete(path, true); deleted += found; }
-                                catch
-                                {
-                                    try
-                                    {
-                                        foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-                                        { try { File.Delete(f); } catch { } }
-                                        foreach (var d in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories))
-                                        { try { Directory.Delete(d, true); } catch { } }
-                                        try { Directory.Delete(path, false); } catch { }
-                                    }
-                                    catch { }
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-                }
-
-                // Firefox/Gecko
-                foreach (var basePath in firefoxProfilesRoot.Where(Directory.Exists))
-                {
-                    var profiles = Directory.EnumerateDirectories(basePath, "*.default*", SearchOption.TopDirectoryOnly);
-                    foreach (var prof in profiles)
-                    {
-                        foreach (var pat in firefoxPatterns)
-                        {
-                            var path = Path.Combine(prof, pat);
-                            if (!Directory.Exists(path)) continue;
-
-                            try
-                            {
-                                foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-                                { try { found += new FileInfo(f).Length; } catch { } }
-
-                                try { Directory.Delete(path, true); deleted += found; }
-                                catch
-                                {
-                                    try
-                                    {
-                                        foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-                                        { try { File.Delete(f); } catch { } }
-                                        foreach (var d in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories))
-                                        { try { Directory.Delete(d, true); } catch { } }
-                                        try { Directory.Delete(path, false); } catch { }
-                                    }
-                                    catch { }
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-                }
-
-                AppendLine($"Caches navigateurs détectés: ~{found / (1024.0 * 1024):F1} MB");
-                AppendLine($"Caches navigateurs supprimés: ~{deleted / (1024.0 * 1024):F1} MB");
-                SetMoodSafe(deleted > 0 ? "proud" : "neutral", "Clean browsers");
+                var rep = svc.AnalyzeAndClean(new Virgil.Core.BrowserCleaningOptions { Force = false });
+                AppendLine($"Caches navigateurs détectés: ~{rep.BytesFound / (1024.0 * 1024):F1} MB");
+                AppendLine($"Caches navigateurs supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
+                SetMoodSafe(rep.BytesDeleted > 0 ? "proud" : "neutral", "Clean browsers");
+                LoggingService.SafeInfo("Browser caches cleaned (~{MB} MB)", rep.BytesDeleted / (1024.0 * 1024));
             }
             catch (Exception ex)
             {
                 AppendLine($"Erreur nettoyage navigateurs: {ex.Message}");
                 SetMoodSafe("alert", "Clean browsers error");
+                LoggingService.SafeError(ex, "Clean browsers error");
             }
         }
 
+        private void CleanExtendedButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var svc = new ExtendedCleaningService();
+                var rep = svc.AnalyzeAndClean();
+                AppendLine($"Nettoyage étendu: détecté ~{rep.BytesFound / (1024.0 * 1024):F1} MB — supprimé ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
+                SetMoodSafe(rep.BytesDeleted > 0 ? "proud" : "neutral", "Clean extended");
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur Clean Extended: {ex.Message}");
+                SetMoodSafe("alert", "Clean extended error");
+            }
+        }
+
+        // ---------- Mises à jour ----------
         private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
             AppendLine("Recherche des mises à jour (apps/jeux) via winget…");
@@ -299,6 +190,7 @@ namespace Virgil.App
             SetMoodSafe("neutral", "MAJ pilotes");
         }
 
+        // ---------- Monitoring ----------
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
             _isMonitoring = !_isMonitoring;
@@ -318,8 +210,35 @@ namespace Virgil.App
             }
         }
 
-        // ------------------ Démarrage & Processus ------------------
+        private void ReadTempsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                using var adv = new AdvancedMonitoringService();
+                var s = adv.Read();
+                AppendLine($"Températures → CPU: {(s.CpuTempC?.ToString("F0") ?? "?")}°C | GPU: {(s.GpuTempC?.ToString("F0") ?? "?")}°C | Disque: {(s.DiskTempC?.ToString("F0") ?? "?")}°C");
+                SetMoodSafe( DecideMoodFromTemps(s), "Temps read" );
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur lecture températures: {ex.Message}");
+                SetMoodSafe("alert", "Temps error");
+            }
+        }
 
+        private string DecideMoodFromTemps(Virgil.Core.Services.HardwareSnapshot s)
+        {
+            var cfg = _config.Current;
+            if ((s.CpuTempC.HasValue && s.CpuTempC.Value >= cfg.CpuTempAlert) ||
+                (s.GpuTempC.HasValue && s.GpuTempC.Value >= cfg.GpuTempAlert))
+                return "alert";
+            if ((s.CpuTempC.HasValue && s.CpuTempC.Value >= cfg.CpuTempWarn) ||
+                (s.GpuTempC.HasValue && s.GpuTempC.Value >= cfg.GpuTempWarn))
+                return "vigilant";
+            return "neutral";
+        }
+
+        // ---------- Démarrage & Processus ----------
         private void StartupButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -352,22 +271,17 @@ namespace Virgil.App
             try
             {
                 var procs = Process.GetProcesses()
-                                   .OrderByDescending(p =>
-                                   {
-                                       try { return p.WorkingSet64; } catch { return 0L; }
-                                   })
+                                   .OrderByDescending(p => { try { return p.WorkingSet64; } catch { return 0L; } })
                                    .Take(15)
                                    .ToList();
 
-                AppendLine("Top 15 processus par RAM (Working Set) :");
+                AppendLine("Top 15 processus par RAM :");
                 foreach (var p in procs)
                 {
-                    long ws = 0;
-                    try { ws = p.WorkingSet64; } catch { }
+                    long ws = 0; try { ws = p.WorkingSet64; } catch { }
                     AppendLine($"- {p.ProcessName} (PID {p.Id}) — {ws / (1024.0 * 1024):F1} MB");
                 }
-                AppendLine("Astuce: pour fermer un processus bloqué, utilisez le Gestionnaire des tâches ou le champ Kill PID.");
-                SetMoodSafe("vigilant", "Processus listés");
+                SetMoodSafe("vigilant", "Process list");
             }
             catch (Exception ex)
             {
@@ -385,17 +299,8 @@ namespace Virgil.App
                     AppendLine("PID invalide.");
                     return;
                 }
-                try
-                {
-                    Process.GetProcessById(pid).Kill(true);
-                    AppendLine($"Processus {pid} terminé.");
-                    SetMoodSafe("proud", "Kill OK");
-                }
-                catch
-                {
-                    AppendLine($"Impossible de terminer {pid} (droits/admin ?).");
-                    SetMoodSafe("alert", "Kill KO");
-                }
+                try { Process.GetProcessById(pid).Kill(true); AppendLine($"Processus {pid} terminé."); SetMoodSafe("proud", "Kill OK"); }
+                catch { AppendLine($"Impossible de terminer {pid} (droits/admin ?)."); SetMoodSafe("alert", "Kill KO"); }
             }
             catch (Exception ex)
             {
@@ -404,8 +309,7 @@ namespace Virgil.App
             }
         }
 
-        // ------------------ Windows Update (direct UsoClient) ------------------
-
+        // ---------- Windows Update (UsoClient) ----------
         private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
         {
             AppendLine("WU: Scan…");
@@ -413,7 +317,6 @@ namespace Virgil.App
             if (!string.IsNullOrWhiteSpace(s)) Append(s);
             AppendLine("WU: Scan demandé.");
         }
-
         private async void WindowsUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
         {
             AppendLine("WU: Download…");
@@ -421,7 +324,6 @@ namespace Virgil.App
             if (!string.IsNullOrWhiteSpace(s)) Append(s);
             AppendLine("WU: Download demandé.");
         }
-
         private async void WindowsUpdateInstallButton_Click(object sender, RoutedEventArgs e)
         {
             AppendLine("WU: Install…");
@@ -429,7 +331,6 @@ namespace Virgil.App
             if (!string.IsNullOrWhiteSpace(s)) Append(s);
             AppendLine("WU: Install demandé (peut être silencieux).");
         }
-
         private async void WindowsUpdateRestartButton_Click(object sender, RoutedEventArgs e)
         {
             AppendLine("WU: Restart (si requis)…");
@@ -440,7 +341,6 @@ namespace Virgil.App
 
         private static async Task<string> RunUsoAsync(string arg)
         {
-            // Chemin absolu préféré (évite PATH)
             string uso = Path.Combine(Environment.SystemDirectory, "UsoClient.exe");
             if (!File.Exists(uso)) uso = "UsoClient.exe";
             try
@@ -458,7 +358,7 @@ namespace Virgil.App
                 using var p = new Process { StartInfo = psi };
                 var sb = new StringBuilder();
                 p.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
-                p.ErrorDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                p.ErrorDataReceived  += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
                 p.Start();
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
@@ -471,8 +371,63 @@ namespace Virgil.App
             }
         }
 
-        // ------------------ Monitoring callback ------------------
+        // ---------- Services Windows ----------
+        private void ListServicesButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var sm = new ServiceManager();
+                var list = sm.ListAll().Take(30).ToList(); // limiter l’affichage
+                AppendLine("Services (30 premiers triés par nom) :");
+                foreach (var s in list)
+                    AppendLine($"- {s.DisplayName} ({s.Name}) — {s.Status}");
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur list services: {ex.Message}");
+            }
+        }
 
+        private void RestartServiceButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var name = SvcNameBox.Text?.Trim();
+                if (string.IsNullOrEmpty(name)) { AppendLine("Nom de service manquant."); return; }
+                var sm = new ServiceManager();
+                var ok = sm.Restart(name);
+                AppendLine(ok ? $"Service {name} redémarré." : $"Échec restart {name}.");
+            }
+            catch (Exception ex) { AppendLine($"Erreur restart: {ex.Message}"); }
+        }
+
+        private void StartServiceButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var name = SvcNameBox.Text?.Trim();
+                if (string.IsNullOrEmpty(name)) { AppendLine("Nom de service manquant."); return; }
+                var sm = new ServiceManager();
+                var ok = sm.Start(name);
+                AppendLine(ok ? $"Service {name} démarré." : $"Échec start {name}.");
+            }
+            catch (Exception ex) { AppendLine($"Erreur start: {ex.Message}"); }
+        }
+
+        private void StopServiceButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var name = SvcNameBox.Text?.Trim();
+                if (string.IsNullOrEmpty(name)) { AppendLine("Nom de service manquant."); return; }
+                var sm = new ServiceManager();
+                var ok = sm.Stop(name);
+                AppendLine(ok ? $"Service {name} arrêté." : $"Échec stop {name}.");
+            }
+            catch (Exception ex) { AppendLine($"Erreur stop: {ex.Message}"); }
+        }
+
+        // ---------- Monitoring callback ----------
         private void OnMetricsUpdated(object? sender, EventArgs e)
         {
             if (_monitoringService == null) return;
@@ -483,12 +438,27 @@ namespace Virgil.App
                 AppendLine($"CPU: {m.CpuUsage:F1}%  MEM: {m.MemoryUsage:F1}%");
             });
 
-            if (m.CpuUsage >= 85 || m.MemoryUsage >= 85)
-                SetMoodSafe("alert", "Charge élevée");
-            else if (m.CpuUsage >= 60 || m.MemoryUsage >= 70)
-                SetMoodSafe("vigilant", "Charge modérée");
-            else
-                SetMoodSafe("neutral", "Charge normale");
+            var cfg = _config.Current;
+            if (m.CpuUsage >= cfg.CpuAlert || m.MemoryUsage >= cfg.MemAlert)      SetMoodSafe("alert", "Charge élevée");
+            else if (m.CpuUsage >= cfg.CpuWarn || m.MemoryUsage >= cfg.MemWarn)   SetMoodSafe("vigilant", "Charge modérée");
+            else                                                                   SetMoodSafe("neutral", "Charge normale");
+        }
+
+        // ---------- Config ----------
+        private void ShowConfigButton_Click(object sender, RoutedEventArgs e)
+        {
+            var c = _config.Current;
+            AppendLine($"Config: CPU warn/alert {c.CpuWarn}/{c.CpuAlert} ; MEM warn/alert {c.MemWarn}/{c.MemAlert} ; CPU° {c.CpuTempWarn}/{c.CpuTempAlert} ; GPU° {c.GpuTempWarn}/{c.GpuTempAlert}");
+        }
+
+        private void SaveConfigButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _config.SaveUser();
+                AppendLine("Config utilisateur sauvegardée (%AppData%\\Virgil\\user.json).");
+            }
+            catch (Exception ex) { AppendLine($"Erreur save config: {ex.Message}"); }
         }
     }
 }
