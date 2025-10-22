@@ -2,14 +2,15 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows.Media; // WPF
 
 namespace Virgil.App.Controls
 {
     public class VirgilAvatarViewModel : INotifyPropertyChanged
     {
         private string _message = "Prêt.";
-        private Brush _glowBrush = new SolidColorBrush(Color.FromRgb(0x4B, 0x9C, 0xFF)); // bleu doux
+        private System.Windows.Media.Brush _glowBrush =
+            new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(0x4B, 0x9C, 0xFF)); // bleu neutre
         private double _progress = 0.0;
         private bool _isIndeterminate;
 
@@ -21,7 +22,7 @@ namespace Virgil.App.Controls
             private set { _message = value; OnPropertyChanged(); }
         }
 
-        public Brush GlowBrush
+        public System.Windows.Media.Brush GlowBrush
         {
             get => _glowBrush;
             private set { _glowBrush = value; OnPropertyChanged(); }
@@ -30,7 +31,7 @@ namespace Virgil.App.Controls
         public double Progress
         {
             get => _progress;
-            private set { _progress = value; OnPropertyChanged(); }
+            private set { _progress = Math.Clamp(value, 0, 100); OnPropertyChanged(); }
         }
 
         public bool IsIndeterminate
@@ -39,7 +40,7 @@ namespace Virgil.App.Controls
             private set { _isIndeterminate = value; OnPropertyChanged(); }
         }
 
-        // --- API simple appelée par MainWindow ---
+        // --- API appelée par MainWindow ---
 
         public void SetMessage(string? message)
         {
@@ -49,24 +50,37 @@ namespace Virgil.App.Controls
 
         public void SetMood(string mood)
         {
-            // mapping très simple -> couleur
             switch ((mood ?? "neutral").ToLowerInvariant())
             {
-                case "proud":      GlowBrush = new SolidColorBrush(Color.FromRgb(0x3C, 0xC1, 0x4B)); break; // vert
-                case "vigilant":   GlowBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xA6, 0x2B)); break; // orange
-                case "alert":      GlowBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x4B, 0x4B)); break; // rouge
-                case "resting":    GlowBrush = new SolidColorBrush(Color.FromRgb(0x6E, 0xD3, 0xFF)); break; // cyan doux
-                default:           GlowBrush = new SolidColorBrush(Color.FromRgb(0x4B, 0x9C, 0xFF)); break; // neutre
+                case "proud":
+                    GlowBrush = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(0x3C, 0xC1, 0x4B)); // vert
+                    break;
+                case "vigilant":
+                    GlowBrush = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(0xFF, 0xA6, 0x2B)); // orange
+                    break;
+                case "alert":
+                    GlowBrush = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(0xFF, 0x4B, 0x4B)); // rouge
+                    break;
+                case "resting":
+                    GlowBrush = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(0x6E, 0xD3, 0xFF)); // cyan doux
+                    break;
+                default:
+                    GlowBrush = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(0x4B, 0x9C, 0xFF)); // neutre
+                    break;
             }
         }
 
         public void SetProgress(double percent, bool indeterminate)
         {
             IsIndeterminate = indeterminate;
-            Progress = Math.Max(0, Math.Min(100, percent));
+            Progress = percent;
         }
 
-        // utilitaire INotifyPropertyChanged
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
