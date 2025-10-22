@@ -12,4 +12,21 @@
   <ItemGroup>
     <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
   </ItemGroup>
+
+  <!-- Si tu as déplacé le dialogues.json dans l'app -->
+  <!--
+  <ItemGroup>
+    <Content Include="Assets\virgil-dialogues.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  -->
+
+  <!-- Sinon copie depuis Core -->
+  <Target Name="CopyCoreDialogues" AfterTargets="Build">
+    <Copy SourceFiles="..\Virgil.Core\virgil-dialogues.json"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('..\Virgil.Core\virgil-dialogues.json')" />
+  </Target>
 </Project>
