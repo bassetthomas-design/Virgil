@@ -5,17 +5,14 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DesignHeight="160" d:DesignWidth="240">
+
     <Grid>
-        <!-- Orb -->
+        <!-- Orbe -->
         <Ellipse x:Name="Orb"
                  Width="56" Height="56"
                  HorizontalAlignment="Left"
-                 VerticalAlignment="Top">
-            <Ellipse.Fill>
-                <!-- Couleur pilotée par AvatarBrush -->
-                <SolidColorBrush Color="{Binding AvatarBrush.(SolidColorBrush.Color),
-                                                 RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-            </Ellipse.Fill>
+                 VerticalAlignment="Top"
+                 Fill="{Binding AvatarBrush}">
             <Ellipse.Effect>
                 <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.6"/>
             </Ellipse.Effect>
@@ -32,30 +29,30 @@
                    FontSize="13"
                    Foreground="#DDFFFFFF"/>
 
-        <!-- Progress -->
+        <!-- Progression -->
         <ProgressBar Minimum="0" Maximum="100"
                      Value="{Binding ProgressValue}"
                      IsIndeterminate="{Binding IsIndeterminate}"
                      Height="10"
-                     VerticalAlignment="Bottom"
-                     Margin="0,0,0,0"/>
-        
-        <!-- Animation “respiration” de l’orbe -->
-        <UserControl.Triggers>
-            <EventTrigger RoutedEvent="Loaded">
-                <BeginStoryboard>
-                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                        <DoubleAnimation Storyboard.TargetName="Pulse"
-                                         Storyboard.TargetProperty="ScaleX"
-                                         From="1.0" To="1.08"
-                                         Duration="0:0:1.8"/>
-                        <DoubleAnimation Storyboard.TargetName="Pulse"
-                                         Storyboard.TargetProperty="ScaleY"
-                                         From="1.0" To="1.08"
-                                         Duration="0:0:1.8"/>
-                    </Storyboard>
-                </BeginStoryboard>
-            </EventTrigger>
-        </UserControl.Triggers>
+                     VerticalAlignment="Bottom"/>
     </Grid>
+
+    <!-- ⚠️ Les triggers doivent être ici, au niveau du UserControl -->
+    <UserControl.Triggers>
+        <EventTrigger RoutedEvent="Loaded">
+            <BeginStoryboard>
+                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                    <DoubleAnimation Storyboard.TargetName="Pulse"
+                                     Storyboard.TargetProperty="ScaleX"
+                                     From="1.0" To="1.08"
+                                     Duration="0:0:1.8"/>
+                    <DoubleAnimation Storyboard.TargetName="Pulse"
+                                     Storyboard.TargetProperty="ScaleY"
+                                     From="1.0" To="1.08"
+                                     Duration="0:0:1.8"/>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </UserControl.Triggers>
+
 </UserControl>
