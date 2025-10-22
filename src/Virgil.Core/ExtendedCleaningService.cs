@@ -3,103 +3,95 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace Virgil.Core
+namespace Virgil.Core.Services
 {
-    public sealed class ExtendedCleaningReport
+    public class ExtendedCleaningResult
     {
         public long BytesFound { get; set; }
         public long BytesDeleted { get; set; }
         public int FilesDeleted { get; set; }
-        public List<string> PathsScanned { get; } = new();
-        public List<string> Errors { get; } = new();
+        public string Log { get; set; } = string.Empty;
     }
 
     /// <summary>
-    /// Nettoyage étendu: caches communs (Adobe, Unity, NVIDIA shaders, logs volumineux).
-    /// Sûr par défaut (fichiers temporaires / caches seulement).
+    /// Nettoyage étendu : caches Adobe/Unity/launchers, logs volumineux, etc.
+    /// Best-effort : ignore erreurs d’accès et dossiers introuvables.
     /// </summary>
-    public sealed class ExtendedCleaningService
+    public class ExtendedCleaningService
     {
-        public ExtendedCleaningReport AnalyzeAndClean()
+        public ExtendedCleaningResult AnalyzeAndClean()
         {
-            var rep = new ExtendedCleaningReport();
+            var log = new List<string>();
+            long found = 0, deleted = 0;
+            int filesDeleted = 0;
 
-            var lad = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var rad = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var com = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-
-            var targets = new[]
+            IEnumerable<string> Targets()
             {
-                Path.Combine(lad, "Adobe", "Acrobat", "DC", "Cache"),
-                Path.Combine(lad, "Adobe", "Lightroom", "Caches"),
-                Path.Combine(lad, "Unity","Cache"),
-                Path.Combine(lad, "NVIDIA", "ComputeCache"),
-                Path.Combine(lad, "NVIDIA", "DXCache"),
-                Path.Combine(lad, "NVIDIA Corporation", "NV_Cache"),
-                Path.Combine(lad, "Temp"),
-                Path.Combine(rad, "Temp"),
-                Path.Combine(com, "Microsoft", "Windows", "WER", "ReportQueue")
-            };
+                var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
 
-            foreach (var t in targets.Distinct().Where(Directory.Exists))
-                CleanFolder(t, rep);
+                // Adobe, Unity, Logs divers
+                yield return Path.Combine(local, "Adobe", "Common", "Media Cache Files");
+                yield return Path.Combine(roaming, "Adobe", "Common", "Media Cache Files");
+                yield return Path.Combine(roaming, "Unity", "Cache");
+                yield return Path.Combine(local, "Temp"); // déjà couvert ailleurs, mais inclus ici pour étendu
+                yield return Path.Combine(local, "CrashDumps");
 
-            return rep;
-        }
+                // Launchers
+                yield return Path.Combine(local, "Battle.net", "BrowserCache");
+                yield return Path.Combine(roaming, "Battle.net", "Cache");
+                yield return Path.Combine(local, "EpicGamesLauncher", "Saved", "Logs");
+                yield return Path.Combine(local, "Steam", "htmlcache");
+                yield return Path.Combine(local, "Steam", "logs");
 
-        private static void CleanFolder(string path, ExtendedCleaningReport rep)
-        {
-            try
+                // Logs Windows volumineux (attention : best-effort)
+                yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Logs");
+            }
+
+            var toDelete = new List<string>();
+
+            foreach (var root in Targets().Distinct())
             {
-                rep.PathsScanned.Add(path);
-
-                long bytesFound = 0;
+                if (!Directory.Exists(root)) continue;
                 try
                 {
-                    foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-                    {
-                        try { bytesFound += new FileInfo(f).Length; } catch { }
-                    }
-                } catch { }
-
-                long bytesDeleted = 0; int filesDeleted = 0;
-
-                try
-                {
-                    foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                    foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                     {
                         try
                         {
                             var fi = new FileInfo(f);
-                            var len = fi.Length;
-                            File.SetAttributes(f, FileAttributes.Normal);
-                            fi.Delete();
-                            filesDeleted++;
-                            bytesDeleted += len;
+                            found += fi.Length;
+                            toDelete.Add(fi.FullName);
                         }
                         catch { /* ignore */ }
                     }
                 }
-                catch { }
+                catch { /* ignore */ }
+            }
 
+            foreach (var f in toDelete.OrderByDescending(x => x.Length)) // supprime plus courts en dernier
+            {
                 try
                 {
-                    foreach (var d in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories)
-                                               .OrderByDescending(s => s.Length))
-                    {
-                        try { Directory.Delete(d, true); } catch { }
-                    }
+                    var fi = new FileInfo(f);
+                    var len = fi.Exists ? fi.Length : 0;
+                    File.SetAttributes(f, FileAttributes.Normal);
+                    fi.Delete();
+                    deleted += len;
+                    filesDeleted++;
                 }
-                catch { }
+                catch { /* lock ou droit */ }
+            }
 
-                rep.BytesFound += bytesFound;
-                rep.BytesDeleted += bytesDeleted;
-                rep.FilesDeleted += filesDeleted;
-            }
-            catch (Exception ex)
+            log.Add($"Extended cleaning: found ~{found / (1024.0 * 1024):F1} MB; deleted ~{deleted / (1024.0 * 1024):F1} MB; files {filesDeleted}");
+            return new ExtendedCleaningResult
             {
-                rep.Errors.Add($"{path}: {ex.Message}");
-            }
+                BytesFound = found,
+                BytesDeleted = deleted,
+                FilesDeleted = filesDeleted,
+                Log = string.Join(Environment.NewLine, log)
+            };
         }
     }
 }
