@@ -1,13 +1,12 @@
 #nullable enable
-using Virgil.App.Controls;   // pour VirgilAvatarViewModel (existant)
+using Virgil.App.Controls; // VirgilAvatarViewModel
 using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
+using System.Windows; // WPF
 using Serilog.Events;
 using Virgil.Core;
 using CoreServices = Virgil.Core.Services;
@@ -19,7 +18,6 @@ namespace Virgil.App
         private readonly MonitoringService? _monitoringService;
         private readonly CoreServices.ConfigService _config;
         private bool _isMonitoring;
-        private CancellationTokenSource? _cts;
 
         public MainWindow()
         {
@@ -38,15 +36,17 @@ namespace Virgil.App
             // Avatar
             try
             {
-                if (AvatarControl != null && AvatarControl.DataContext is VirgilAvatarViewModel vm)
+                if (AvatarControl?.DataContext is not VirgilAvatarViewModel)
                 {
-                    vm.SetMood("neutral", "startup");
+                    var vm = new VirgilAvatarViewModel();
+                    AvatarControl!.DataContext = vm;
                 }
+                Say("Prêt.", "neutral", "startup");
             }
             catch { }
         }
 
-        // ===== Helpers
+        /* ---------- Helpers ---------- */
         private void Append(string text) { OutputBox.AppendText(text); OutputBox.ScrollToEnd(); }
         private void AppendLine(string line) { OutputBox.AppendText($"[{DateTime.Now:T}] {line}\n"); OutputBox.ScrollToEnd(); }
 
@@ -56,160 +56,104 @@ namespace Virgil.App
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = percent;
             StatusText.Text = status;
-
-            if (AvatarControl?.DataContext is VirgilAvatarViewModel vm)
-                vm.SetProgress(percent / 100.0, status);
+            Say(status, percent switch { < 10 => "vigilant", < 90 => "vigilant", _ => "proud" }, "general");
         }
         private void ProgressIndeterminate(string status)
         {
             TaskProgress.IsIndeterminate = true;
             StatusText.Text = status;
-
-            if (AvatarControl?.DataContext is VirgilAvatarViewModel vm)
-                vm.SetProgress(-1, status); // -1 = indéterminé
+            Say(status, "vigilant", "general");
         }
         private void ProgressDone(string status = "Terminé.")
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 100;
             StatusText.Text = status;
-
-            if (AvatarControl?.DataContext is VirgilAvatarViewModel vm)
-            {
-                vm.SetProgress(1.0, status);
-                vm.SetMood("proud", "done");
-            }
-
-            AppendLine(status);
+            Say(status, "proud", "general");
         }
         private void ProgressReset()
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 0;
             StatusText.Text = "Prêt.";
-
-            if (AvatarControl?.DataContext is VirgilAvatarViewModel vm)
-            {
-                vm.SetProgress(0.0, "Prêt.");
-                vm.SetMood("neutral", "reset");
-            }
         }
         private void Say(string text, string mood = "neutral", string context = "general")
         {
-            if (AvatarControl?.DataContext is VirgilAvatarViewModel vm)
-                vm.SetMood(mood, context);
-
+            try
+            {
+                if (AvatarControl?.DataContext is VirgilAvatarViewModel vm)
+                    vm.SetMood(mood, context, text);
+            }
+            catch { }
             AppendLine(text);
         }
 
-        private bool IsCancelled(CancellationToken token)
-        {
-            if (!token.IsCancellationRequested) return false;
-            ProgressReset();
-            Say("Opération annulée.", "neutral", "cancel");
-            return true;
-        }
-
-        // ===== Bouton Annuler
-        private void CancelButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { _cts?.Cancel(); } catch { }
-        }
-
-        // ===== Maintenance
+        /* ---------- Maintenance ---------- */
         private async void QuickMaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
             try
             {
                 Progress(0, "Maintenance rapide…");
 
-                Progress(10, "TEMP : analyse/suppression…");
-                if (IsCancelled(token)) return;
-                await Task.Delay(100, token);
-                await Task.Run(CleanTempWithProgressInternal, token);
+                Progress(10, "Nettoyage TEMP…");
+                await Task.Delay(100);
+                await Task.Run(CleanTempWithProgressInternal);
 
-                Progress(50, "Navigateurs : caches…");
-                if (IsCancelled(token)) return;
+                Progress(50, "Navigateurs (caches)…");
                 var browsers = new CoreServices.BrowserCleaningService();
-                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }), token);
-                AppendLine($"[Browsers] {rep.BytesDeleted / (1024.0 * 1024):F1} MB supprimés");
-
-                // Apps
-                ProgressIndeterminate("MAJ apps/jeux (winget) …");
-                if (IsCancelled(token)) return;
-                var app = new CoreServices.ApplicationUpdateService();
-                var wingetOut = await Task.Run(() => app.UpgradeAllAsync(includeUnknown: true, silent: true), token);
-                Append(await wingetOut);
+                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
+                AppendLine($"[Browsers] {rep}");
 
                 ProgressDone("Maintenance rapide : terminé.");
             }
-            catch (OperationCanceledException) { /* handled by IsCancelled */ }
             catch (Exception ex) { ProgressReset(); Say($"Erreur maintenance rapide: {ex.Message}", "alert"); }
         }
 
         private async void FullMaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
             try
             {
                 Progress(0, "Maintenance complète : démarrage…");
 
-                Progress(10, "TEMP : analyse/suppression…");
-                if (IsCancelled(token)) return;
-                await Task.Run(CleanTempWithProgressInternal, token);
+                Progress(10, "Nettoyage TEMP…");
+                await Task.Run(CleanTempWithProgressInternal);
 
-                Progress(30, "Navigateurs : caches…");
-                if (IsCancelled(token)) return;
+                Progress(30, "Navigateurs (caches) …");
                 var browsers = new CoreServices.BrowserCleaningService();
-                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }), token);
-                AppendLine($"[Browsers] {rep.BytesDeleted / (1024.0 * 1024):F1} MB supprimés");
+                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
+                AppendLine($"[Browsers] {rep}");
 
                 Progress(50, "Nettoyage étendu…");
-                if (IsCancelled(token)) return;
                 var ext = new CoreServices.ExtendedCleaningService();
-                var exRep = await Task.Run(() => ext.AnalyzeAndClean(), token);
+                var exRep = await Task.Run(() => ext.AnalyzeAndClean());
                 AppendLine($"[Extended] ~{exRep.BytesFound / (1024.0 * 1024):F1} MB → ~{exRep.BytesDeleted / (1024.0 * 1024):F1} MB");
 
                 ProgressIndeterminate("MAJ apps/jeux (winget) …");
-                if (IsCancelled(token)) return;
                 var app = new CoreServices.ApplicationUpdateService();
-                var wingetOut = await Task.Run(() => app.UpgradeAllAsync(includeUnknown: true, silent: true), token);
-                Append(await wingetOut);
+                var wingetOut = await WingetWithRoughProgress(app);
+                if (!string.IsNullOrWhiteSpace(wingetOut)) Append(wingetOut);
 
-                Progress(86, "WU: Scan…");
-                if (IsCancelled(token)) return;
+                ProgressIndeterminate("Windows Update (scan/download/install) …");
                 var wu = new CoreServices.WindowsUpdateService();
-                Append(await wu.StartScanAsync());
-
-                Progress(93, "WU: Download/Install…");
-                if (IsCancelled(token)) return;
-                Append(await wu.StartDownloadAsync());
-                Append(await wu.StartInstallAsync());
+                AppendLine("[WU] Scan…");
+                var scan = wu.StartScanAsync();            // pas d'await (méthodes synchrones chez toi)
+                if (!string.IsNullOrWhiteSpace(scan)) Append(scan);
+                Progress(86, "WU: Download…");
+                var dl = wu.StartDownloadAsync();
+                if (!string.IsNullOrWhiteSpace(dl)) Append(dl);
+                Progress(93, "WU: Install…");
+                var install = wu.StartInstallAsync();
+                if (!string.IsNullOrWhiteSpace(install)) Append(install);
 
                 ProgressDone("Maintenance complète : terminé.");
             }
-            catch (OperationCanceledException) { /* handled by IsCancelled */ }
             catch (Exception ex) { ProgressReset(); Say($"Erreur maintenance complète: {ex.Message}", "alert"); }
         }
 
-        // ===== Nettoyage TEMP (progression réelle)
+        /* ---------- Nettoyage TEMP (progress réel) ---------- */
         private async void CleanButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
-            try
-            {
-                Progress(0, "Nettoyage TEMP…");
-                await Task.Run(CleanTempWithProgressInternal, token);
-                ProgressDone("Nettoyage TEMP terminé.");
-            }
-            catch (OperationCanceledException) { /* handled */ }
+            try { Progress(0, "Nettoyage TEMP…"); await Task.Run(CleanTempWithProgressInternal); ProgressDone("Nettoyage TEMP terminé."); }
             catch (Exception ex) { ProgressReset(); Say($"Erreur de nettoyage: {ex.Message}", "alert"); }
         }
 
@@ -254,123 +198,137 @@ namespace Virgil.App
                 Dispatcher.Invoke(() => Progress(p, $"Nettoyage TEMP… {p:0}%"));
             }
 
+            foreach (var t in targets)
+            {
+                try
+                {
+                    foreach (var d in Directory.EnumerateDirectories(t, "*", SearchOption.AllDirectories)
+                                               .OrderByDescending(s => s.Length))
+                    {
+                        try { Directory.Delete(d, true); } catch { }
+                    }
+                }
+                catch { }
+            }
+
             Dispatcher.Invoke(() =>
             {
                 AppendLine($"TEMP détecté ~{bytesFound / (1024.0 * 1024):F1} MB — supprimé ~{bytesDeleted / (1024.0 * 1024):F1} MB, {deleted} fichiers.");
             });
         }
 
-        // ===== Nettoyages complémentaires
+        /* ---------- Nettoyages complémentaires ---------- */
         private async void CleanBrowsersButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
             try
             {
                 Progress(0, "Navigateurs: scan…");
                 var svc = new CoreServices.BrowserCleaningService();
-                var rep = await Task.Run(() => svc.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }), token);
+                var rep = await Task.Run(() => svc.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
                 Progress(100, "Navigateurs: terminé.");
-                AppendLine($"Caches navigateurs supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
+                AppendLine($"Caches navigateurs détectés: ~{rep.BytesFound / (1024.0 * 1024):F1} MB → supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
                 Say("Caches navigateurs nettoyés.", "proud", "clean browsers");
             }
-            catch (OperationCanceledException) { /* handled */ }
             catch (Exception ex) { ProgressReset(); Say($"Erreur nettoyage navigateurs: {ex.Message}", "alert"); }
         }
 
         private async void CleanExtendedButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
             try
             {
                 Progress(0, "Nettoyage étendu…");
                 var ext = new CoreServices.ExtendedCleaningService();
-                var rep = await Task.Run(() => ext.AnalyzeAndClean(), token);
+                var rep = await Task.Run(() => ext.AnalyzeAndClean());
                 Progress(100, "Nettoyage étendu terminé.");
                 AppendLine($"Étendu: ~{rep.BytesFound / (1024.0 * 1024):F1} MB → ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
                 Say("Nettoyage étendu : ok.", "proud", "clean extended");
             }
-            catch (OperationCanceledException) { /* handled */ }
             catch (Exception ex) { ProgressReset(); Say($"Erreur Clean Extended: {ex.Message}", "alert"); }
         }
 
-        // ===== Mises à jour
+        /* ---------- Mises à jour ---------- */
         private async void UpdateButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
             try
             {
                 ProgressIndeterminate("MAJ apps/jeux (winget)…");
                 var app = new CoreServices.ApplicationUpdateService();
-                var txt = await Task.Run(() => app.UpgradeAllAsync(includeUnknown: true, silent: true), token);
-                Append(await txt);
+                var txt = await WingetWithRoughProgress(app);
+                if (!string.IsNullOrWhiteSpace(txt)) Append(txt);
                 ProgressDone("MAJ apps/jeux terminées.");
             }
-            catch (OperationCanceledException) { /* handled */ }
             catch (Exception ex) { ProgressReset(); Say($"Erreur MAJ apps: {ex.Message}", "alert", "maj apps"); }
+        }
+
+        private async Task<string> WingetWithRoughProgress(CoreServices.ApplicationUpdateService app)
+        {
+            Progress(5, "Winget: inventaire…"); await Task.Delay(250);
+            var output = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
+            Progress(65, "Winget: installation…"); await Task.Delay(200);
+            Progress(92, "Winget: finalisation…"); await Task.Delay(200);
+            return output;
         }
 
         private async void DriverButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
             try
             {
                 ProgressIndeterminate("MAJ pilotes (best-effort) …");
                 var drv = new CoreServices.DriverUpdateService();
-                var output = await Task.Run(() => drv.UpgradeDriversAsync(), token);
+                var output = await drv.UpgradeDriversAsync();
                 if (!string.IsNullOrWhiteSpace(output)) Append(output);
                 ProgressDone("Pilotes : vérification terminée.");
             }
-            catch (OperationCanceledException) { /* handled */ }
             catch (Exception ex) { ProgressReset(); Say($"Erreur pilotes: {ex.Message}", "alert", "maj pilotes"); }
         }
 
-        // ===== Windows Update (UsoClient)
-        private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
+        /* ---------- Windows Update (synchrones chez toi) ---------- */
+        private void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
-            try { Progress(10, "WU: Scan…"); var s = await Task.Run(() => new CoreServices.WindowsUpdateService().StartScanAsync(), token); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Scan demandé."); }
-            catch (OperationCanceledException) { /* handled */ }
+            try
+            {
+                Progress(10, "WU: Scan…");
+                var s = new CoreServices.WindowsUpdateService().StartScanAsync(); // string
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Scan demandé.");
+            }
             catch (Exception ex) { ProgressReset(); Say($"WU Scan: {ex.Message}", "alert"); }
         }
-        private async void WindowsUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
+        private void WindowsUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
-            try { Progress(10, "WU: Download…"); var s = await Task.Run(() => new CoreServices.WindowsUpdateService().StartDownloadAsync(), token); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Download demandé."); }
-            catch (OperationCanceledException) { /* handled */ }
+            try
+            {
+                Progress(10, "WU: Download…");
+                var s = new CoreServices.WindowsUpdateService().StartDownloadAsync(); // string
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Download demandé.");
+            }
             catch (Exception ex) { ProgressReset(); Say($"WU Download: {ex.Message}", "alert"); }
         }
-        private async void WindowsUpdateInstallButton_Click(object sender, RoutedEventArgs e)
+        private void WindowsUpdateInstallButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
-            try { Progress(10, "WU: Install…"); var s = await Task.Run(() => new CoreServices.WindowsUpdateService().StartInstallAsync(), token); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Install demandé."); }
-            catch (OperationCanceledException) { /* handled */ }
+            try
+            {
+                Progress(10, "WU: Install…");
+                var s = new CoreServices.WindowsUpdateService().StartInstallAsync(); // string
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Install demandé.");
+            }
             catch (Exception ex) { ProgressReset(); Say($"WU Install: {ex.Message}", "alert"); }
         }
-        private async void WindowsUpdateRestartButton_Click(object sender, RoutedEventArgs e)
+        private void WindowsUpdateRestartButton_Click(object sender, RoutedEventArgs e)
         {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
-            try { Progress(10, "WU: Restart…"); var s = await Task.Run(() => new CoreServices.WindowsUpdateService().RestartDeviceAsync(), token); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Restart demandé."); }
-            catch (OperationCanceledException) { /* handled */ }
+            try
+            {
+                Progress(10, "WU: Restart…");
+                var s = new CoreServices.WindowsUpdateService().RestartDeviceAsync(); // string
+                if (!string.IsNullOrWhiteSpace(s)) Append(s);
+                ProgressDone("WU: Restart demandé.");
+            }
             catch (Exception ex) { ProgressReset(); Say($"WU Restart: {ex.Message}", "alert"); }
         }
 
-        // ===== Monitoring
+        /* ---------- Monitoring ---------- */
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
             _isMonitoring = !_isMonitoring;
@@ -399,7 +357,6 @@ namespace Virgil.App
             }
             catch (Exception ex) { Say($"Erreur lecture températures: {ex.Message}", "alert"); }
         }
-
         private string DecideMoodFromTemps(CoreServices.HardwareSnapshot s)
         {
             var c = _config.Current;
@@ -412,7 +369,7 @@ namespace Virgil.App
             return "neutral";
         }
 
-        // ===== Processus
+        /* ---------- Processus ---------- */
         private void ProcessesButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -429,7 +386,6 @@ namespace Virgil.App
             }
             catch (Exception ex) { Say($"Erreur liste des processus: {ex.Message}", "alert"); }
         }
-
         private void KillPidButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -441,7 +397,7 @@ namespace Virgil.App
             catch (Exception ex) { Say($"Erreur kill: {ex.Message}", "alert"); }
         }
 
-        // ===== Services
+        /* ---------- Services ---------- */
         private void ListServicesButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -490,7 +446,66 @@ namespace Virgil.App
             catch (Exception ex) { Say($"Erreur stop: {ex.Message}", "alert"); }
         }
 
-        // ===== Monitoring callback
+        /* ---------- Outils & journal ---------- */
+        private void CopyLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            try { System.Windows.Clipboard.SetText(OutputBox.Text); Say("Journal copié.", "proud"); }
+            catch (Exception ex) { Say($"Clipboard : {ex.Message}", "alert"); }
+        }
+        private void ExportLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "logs");
+                Directory.CreateDirectory(dir);
+                var file = Path.Combine(dir, $"session-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+                File.WriteAllText(file, OutputBox.Text, Encoding.UTF8);
+                Say($"Journal exporté : {file}", "proud");
+                try { Process.Start("explorer.exe", $"/select,\"{file}\""); } catch { }
+            }
+            catch (Exception ex) { Say($"Export journal : {ex.Message}", "alert"); }
+        }
+        private void OpenDeviceManagerButton_Click(object sender, RoutedEventArgs e) => TryStart("devmgmt.msc", useShell: true, "devmgmt");
+        private void OpenDiskCleanupButton_Click(object sender, RoutedEventArgs e)   => TryStart("cleanmgr.exe", useShell: true, "Disk Cleanup");
+        private void OpenServicesConsoleButton_Click(object sender, RoutedEventArgs e)=> TryStart("services.msc", useShell: true, "services");
+
+        private async void FlushDnsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ProgressIndeterminate("Flush DNS…");
+                var psi = new ProcessStartInfo("ipconfig", "/flushdns")
+                {
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var p = Process.Start(psi);
+                if (p != null)
+                {
+                    var output = await p.StandardOutput.ReadToEndAsync();
+                    var err = await p.StandardError.ReadToEndAsync();
+                    await p.WaitForExitAsync();
+                    if (!string.IsNullOrWhiteSpace(output)) Append(output);
+                    if (!string.IsNullOrWhiteSpace(err)) Append(err);
+                }
+                ProgressDone("Flush DNS : ok.");
+            }
+            catch (Exception ex) { ProgressReset(); Say($"Flush DNS : {ex.Message}", "alert"); }
+        }
+        private void TryStart(string fileName, bool useShell, string label)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(fileName) { UseShellExecute = useShell };
+                Process.Start(psi);
+                Say($"Ouverture : {label}", "neutral");
+            }
+            catch (Exception ex) { Say($"Impossible d’ouvrir {label} : {ex.Message}", "alert"); }
+        }
+
+        /* ---------- Monitoring callback ---------- */
         private void OnMetricsUpdated(object? sender, EventArgs e)
         {
             if (_monitoringService == null) return;
