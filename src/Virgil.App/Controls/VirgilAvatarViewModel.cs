@@ -2,7 +2,8 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows.Media;
+// IMPORTANT : alias pour éviter tout conflit avec System.Drawing
+using Media = System.Windows.Media;
 
 namespace Virgil.App.Controls
 {
@@ -13,7 +14,7 @@ namespace Virgil.App.Controls
     {
         private string _mood = "neutral";
         private string _message = "Prêt.";
-        private Brush _avatarBrush = new SolidColorBrush(Color.FromRgb(0x4D, 0x9E, 0xFF)); // bleu léger
+        private Media.Brush _avatarBrush = new Media.SolidColorBrush(Media.Color.FromRgb(0x4D, 0x9E, 0xFF)); // bleu léger
         private double _progressValue = 0;
         private bool _isIndeterminate = false;
 
@@ -28,8 +29,7 @@ namespace Virgil.App.Controls
                 {
                     _mood = value;
                     OnPropertyChanged();
-                    // changer la couleur selon l’humeur
-                    AvatarBrush = new SolidColorBrush(GetColorForMood(value));
+                    AvatarBrush = new Media.SolidColorBrush(GetColorForMood(value));
                 }
             }
         }
@@ -48,7 +48,7 @@ namespace Virgil.App.Controls
         }
 
         /// <summary>Couleur/Brush de l’orbe.</summary>
-        public Brush AvatarBrush
+        public Media.Brush AvatarBrush
         {
             get => _avatarBrush;
             private set
@@ -104,8 +104,6 @@ namespace Virgil.App.Controls
         /// <summary>
         /// Met à jour la progression de l’avatar. Appelé par MainWindow.Progress/ProgressIndeterminate/ProgressDone.
         /// </summary>
-        /// <param name="percent">0–100 (sera clampé).</param>
-        /// <param name="status">Texte court d’état en cours (optionnel).</param>
         public void SetProgress(double percent, string? status = null)
         {
             if (percent < 0) percent = 0;
@@ -117,7 +115,6 @@ namespace Virgil.App.Controls
             if (!string.IsNullOrWhiteSpace(status))
                 Message = status;
 
-            // petit ajustement d’humeur selon l’avancement
             if (percent >= 99.9)      Mood = "proud";
             else if (percent >= 10.0) Mood = "vigilant";
             else                      Mood = "neutral";
@@ -142,13 +139,13 @@ namespace Virgil.App.Controls
             Mood = "neutral";
         }
 
-        private static Color GetColorForMood(string mood) => mood switch
+        private static Media.Color GetColorForMood(string mood) => mood switch
         {
-            "alert"    => Color.FromRgb(0xF4, 0x43, 0x36), // rouge
-            "vigilant" => Color.FromRgb(0xFF, 0xA0, 0x00), // orange
-            "proud"    => Color.FromRgb(0x4C, 0xAF, 0x50), // vert
-            "resting"  => Color.FromRgb(0x40, 0xE0, 0xD0), // cyan doux
-            _          => Color.FromRgb(0x4D, 0x9E, 0xFF), // bleu (neutral)
+            "alert"    => Media.Color.FromRgb(0xF4, 0x43, 0x36), // rouge
+            "vigilant" => Media.Color.FromRgb(0xFF, 0xA0, 0x00), // orange
+            "proud"    => Media.Color.FromRgb(0x4C, 0xAF, 0x50), // vert
+            "resting"  => Media.Color.FromRgb(0x40, 0xE0, 0xD0), // cyan doux
+            _          => Media.Color.FromRgb(0x4D, 0x9E, 0xFF), // bleu (neutral)
         };
 
         private void OnPropertyChanged([CallerMemberName] string? name = null)
