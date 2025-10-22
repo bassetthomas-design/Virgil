@@ -5,11 +5,12 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Clipboard;
+using System.Windows;              // ✅ garder ce namespace WPF
+// ❌ ne PAS écrire: using System.Windows.Clipboard;
 using Serilog.Events;
 using Virgil.Core;
 using CoreServices = Virgil.Core.Services;
+
 
 namespace Virgil.App
 {
