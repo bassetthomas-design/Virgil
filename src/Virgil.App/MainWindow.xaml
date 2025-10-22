@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         mc:Ignorable="d"
-        Title="Virgil" Height="650" Width="960"
+        Title="Virgil" Height="720" Width="1024"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
     <Grid Margin="16">
@@ -25,7 +25,7 @@
         <!-- Body -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="320"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -38,6 +38,7 @@
                         <!-- Maintenance -->
                         <Button Content="Scan &amp; Clean (Temp)" Click="CleanButton_Click" Margin="0,0,0,8"/>
                         <Button x:Name="CleanBrowsersButton" Content="Clean Browsers (caches)" Click="CleanBrowsersButton_Click" Margin="0,0,0,8"/>
+                        <Button Content="Clean Extended (Jeux/Adobe/NVIDIA…)" Click="CleanExtendedButton_Click" Margin="0,0,0,8"/>
 
                         <!-- Mises à jour -->
                         <Button Content="Check Updates (apps/jeux via winget)" Click="UpdateButton_Click" Margin="0,0,0,8"/>
@@ -45,6 +46,7 @@
 
                         <!-- Surveillance -->
                         <Button x:Name="MonitorButton" Content="Start Monitoring" Click="MonitorButton_Click" Margin="0,0,0,8"/>
+                        <Button Content="Lire températures (CPU/GPU/Disque)" Click="ReadTempsButton_Click" Margin="0,0,0,8"/>
 
                         <Separator Margin="0,8,0,8"/>
 
@@ -64,6 +66,25 @@
                         <Button Content="WU: Download" Click="WindowsUpdateDownloadButton_Click" Margin="0,0,0,6"/>
                         <Button Content="WU: Install" Click="WindowsUpdateInstallButton_Click" Margin="0,0,0,6"/>
                         <Button Content="WU: Restart (si requis)" Click="WindowsUpdateRestartButton_Click" Margin="0,0,0,0"/>
+
+                        <Separator Margin="0,8,0,8"/>
+
+                        <!-- Services Windows -->
+                        <TextBlock Text="Services Windows" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <Button Content="Lister services" Click="ListServicesButton_Click" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox x:Name="SvcNameBox" Width="180" ToolTip="Nom du service" Margin="0,0,8,0"/>
+                            <Button Content="Restart" Click="RestartServiceButton_Click" Margin="0,0,8,0"/>
+                            <Button Content="Start" Click="StartServiceButton_Click" Margin="0,0,8,0"/>
+                            <Button Content="Stop" Click="StopServiceButton_Click"/>
+                        </StackPanel>
+
+                        <Separator Margin="0,8,0,8"/>
+
+                        <!-- Config -->
+                        <TextBlock Text="Configuration" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <Button Content="Afficher config" Click="ShowConfigButton_Click" Margin="0,0,0,6"/>
+                        <Button Content="Sauver config (utilisateur)" Click="SaveConfigButton_Click" Margin="0,0,0,6"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
