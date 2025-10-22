@@ -1,27 +1,25 @@
 #nullable enable
 using System;
-using System.Windows;
 
 namespace Virgil.App
 {
-    public partial class App : Application
+    // ⚠️ Qualifie explicitement l’Application WPF pour éviter le conflit avec WinForms.Application
+    public partial class App : System.Windows.Application
     {
         private Tray.TrayIconService? _tray;
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override void OnStartup(System.Windows.StartupEventArgs e)
         {
             base.OnStartup(e);
 
-            // Crée la fenêtre principale
             var win = new MainWindow();
             win.Show();
 
-            // Tray (menu: Ouvrir, Maintenance rapide, MAJ apps/jeux, Quitter)
             _tray = new Tray.TrayIconService(win);
             _tray.Initialize();
         }
 
-        protected override void OnExit(ExitEventArgs e)
+        protected override void OnExit(System.Windows.ExitEventArgs e)
         {
             try { _tray?.Dispose(); } catch { /* ignore */ }
             base.OnExit(e);
