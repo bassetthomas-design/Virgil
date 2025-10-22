@@ -4,55 +4,132 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             d:DesignHeight="160" d:DesignWidth="240">
-
+             Width="210" Height="230" Background="Transparent">
     <Grid>
-        <!-- Orbe -->
-        <Ellipse x:Name="Orb"
-                 Width="56" Height="56"
-                 HorizontalAlignment="Left"
-                 VerticalAlignment="Top"
-                 Fill="{Binding AvatarBrush}">
-            <Ellipse.Effect>
-                <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.6"/>
-            </Ellipse.Effect>
-            <Ellipse.RenderTransform>
-                <ScaleTransform x:Name="Pulse" ScaleX="1.0" ScaleY="1.0"/>
-            </Ellipse.RenderTransform>
-        </Ellipse>
+        <!-- fond -->
+        <Border CornerRadius="14" Background="#101014"/>
 
-        <!-- Message -->
-        <TextBlock Text="{Binding Message}"
-                   Margin="72,0,8,28"
-                   VerticalAlignment="Top"
-                   TextWrapping="Wrap"
-                   FontSize="13"
-                   Foreground="#DDFFFFFF"/>
+        <!-- disque + glow -->
+        <Grid VerticalAlignment="Center" Margin="0,10,0,34">
+            <Ellipse Width="160" Height="160"
+                     Fill="{Binding FaceBrush}"
+                     Stroke="White" StrokeThickness="9">
+                <Ellipse.Effect>
+                    <DropShadowEffect BlurRadius="28" ShadowDepth="0"
+                                      Opacity="{Binding GlowOpacity}"
+                                      Color="{Binding GlowColor}"/>
+                </Ellipse.Effect>
+            </Ellipse>
 
-        <!-- Progression -->
-        <ProgressBar Minimum="0" Maximum="100"
-                     Value="{Binding ProgressValue}"
-                     IsIndeterminate="{Binding IsIndeterminate}"
-                     Height="10"
-                     VerticalAlignment="Bottom"/>
+            <!-- balayage holographique -->
+            <Rectangle Width="160" Height="160" IsHitTestVisible="False" Opacity="0.45">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#00FFFFFF" Offset="0.00"/>
+                        <GradientStop Color="#22FFFFFF" Offset="0.48"/>
+                        <GradientStop Color="#80FFFFFF" Offset="0.50"/>
+                        <GradientStop Color="#22FFFFFF" Offset="0.52"/>
+                        <GradientStop Color="#00FFFFFF" Offset="1.00"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+                <Rectangle.Triggers>
+                    <EventTrigger RoutedEvent="Loaded">
+                        <BeginStoryboard>
+                            <Storyboard RepeatBehavior="Forever">
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                 From="-170" To="170" Duration="0:0:3"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Rectangle.Triggers>
+                <Rectangle.RenderTransform>
+                    <TranslateTransform X="-170"/>
+                </Rectangle.RenderTransform>
+            </Rectangle>
+
+            <!-- yeux par défaut -->
+            <Path x:Name="LeftEye" Fill="{Binding EyeBrush}" Width="44" Height="30"
+                  Data="M 0,14 C 0,4 20,0 20,14 20,28 0,24 0,14 Z">
+                <Path.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="LE_S" ScaleX="1" ScaleY="1"/>
+                        <RotateTransform x:Name="LE_R" Angle="-12" CenterX="20" CenterY="14"/>
+                        <TranslateTransform x:Name="LE_T" X="-34" Y="0"/>
+                    </TransformGroup>
+                </Path.RenderTransform>
+            </Path>
+
+            <Path x:Name="RightEye" Fill="{Binding EyeBrush}" Width="44" Height="30"
+                  Data="M 0,14 C 0,4 20,0 20,14 20,28 0,24 0,14 Z">
+                <Path.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="RE_S" ScaleX="-1" ScaleY="1"/>
+                        <RotateTransform x:Name="RE_R" Angle="12" CenterX="20" CenterY="14"/>
+                        <TranslateTransform x:Name="RE_T" X="34" Y="0"/>
+                    </TransformGroup>
+                </Path.RenderTransform>
+            </Path>
+
+            <!-- variantes : yeux ronds (surpris/neutral doux) -->
+            <Grid x:Name="RoundEyes" Visibility="Collapsed" IsHitTestVisible="False">
+                <Ellipse Width="24" Height="24" Fill="{Binding EyeBrush}" Margin="0,0,62,0" HorizontalAlignment="Center"/>
+                <Ellipse Width="24" Height="24" Fill="{Binding EyeBrush}" Margin="62,0,0,0" HorizontalAlignment="Center"/>
+            </Grid>
+
+            <!-- larmichette (sad) -->
+            <Ellipse x:Name="Tear" Width="8" Height="12" Fill="#C0E8FF" Stroke="#80FFFFFF" StrokeThickness="1.2"
+                     RenderTransformOrigin="0.5,0.0" Visibility="Collapsed">
+                <Ellipse.RenderTransform>
+                    <TranslateTransform X="30" Y="16"/>
+                </Ellipse.RenderTransform>
+            </Ellipse>
+
+            <!-- cœurs (love) -->
+            <Grid x:Name="Hearts" Visibility="Collapsed" IsHitTestVisible="False">
+                <Path Fill="#FFFFFFFF" Data="M 10,0 C 12,-2 16,-2 18,0 C 22,4 18,10 10,16 C 2,10 -2,4 2,0 C 4,-2 8,-2 10,0 Z"
+                      RenderTransformOrigin="0.5,0.5">
+                    <Path.RenderTransform><TranslateTransform X="-30" Y="-4"/></Path.RenderTransform>
+                </Path>
+                <Path Fill="#FFFFFFFF" Data="M 10,0 C 12,-2 16,-2 18,0 C 22,4 18,10 10,16 C 2,10 -2,4 2,0 C 4,-2 8,-2 10,0 Z"
+                      RenderTransformOrigin="0.5,0.5">
+                    <Path.RenderTransform><TranslateTransform X="30" Y="-4"/></Path.RenderTransform>
+                </Path>
+            </Grid>
+
+            <!-- oreilles/whiskers (cat) -->
+            <Grid x:Name="CatAddons" Visibility="Collapsed" IsHitTestVisible="False">
+                <Polygon Fill="White" Points="-62,-40 -38,-24 -62,-12" />
+                <Polygon Fill="White" Points="62,-40 38,-24 62,-12" />
+                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
+                    <Rectangle.RenderTransform><TranslateTransform X="-70" Y="0"/></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
+                    <Rectangle.RenderTransform><TranslateTransform X="70" Y="0"/></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
+                    <Rectangle.RenderTransform><TranslateTransform X="-70" Y="16"/></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
+                    <Rectangle.RenderTransform><TranslateTransform X="70" Y="16"/></Rectangle.RenderTransform>
+                </Rectangle>
+            </Grid>
+
+            <!-- cornes (devil) -->
+            <Grid x:Name="DevilHorns" Visibility="Collapsed" IsHitTestVisible="False">
+                <Path Fill="#FFFFFF" Data="M 0,0 C 10,-22 36,-28 42,-10 L 18,0 Z">
+                    <Path.RenderTransform><TranslateTransform X="-54" Y="-56"/></Path.RenderTransform>
+                </Path>
+                <Path Fill="#FFFFFF" Data="M 0,0 C -10,-22 -36,-28 -42,-10 L -18,0 Z">
+                    <Path.RenderTransform><TranslateTransform X="54" Y="-56"/></Path.RenderTransform>
+                </Path>
+            </Grid>
+        </Grid>
+
+        <!-- barre de progression sous l’avatar -->
+        <ProgressBar x:Name="AvatarProgress" Height="8"
+                     Minimum="0" Maximum="100" Margin="12"
+                     VerticalAlignment="Bottom"
+                     Foreground="#27D7FF" Background="#1A2230"
+                     Visibility="Collapsed"/>
     </Grid>
-
-    <!-- ⚠️ Les triggers doivent être ici, au niveau du UserControl -->
-    <UserControl.Triggers>
-        <EventTrigger RoutedEvent="Loaded">
-            <BeginStoryboard>
-                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                    <DoubleAnimation Storyboard.TargetName="Pulse"
-                                     Storyboard.TargetProperty="ScaleX"
-                                     From="1.0" To="1.08"
-                                     Duration="0:0:1.8"/>
-                    <DoubleAnimation Storyboard.TargetName="Pulse"
-                                     Storyboard.TargetProperty="ScaleY"
-                                     From="1.0" To="1.08"
-                                     Duration="0:0:1.8"/>
-                </Storyboard>
-            </BeginStoryboard>
-        </EventTrigger>
-    </UserControl.Triggers>
-
 </UserControl>
