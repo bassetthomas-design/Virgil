@@ -3,7 +3,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Virgil.App"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         mc:Ignorable="d"
         Title="Virgil Assistant"
@@ -28,16 +27,14 @@
 
         <!-- Bande supérieure -->
         <Border Grid.Row="0" Background="#2D2D30" Padding="10">
-            <DockPanel LastChildFill="True">
-                <TextBlock Text="VIRGIL SYSTEM ASSISTANT"
-                           FontSize="22"
-                           FontWeight="Bold"
-                           Foreground="#00BFFF"
-                           VerticalAlignment="Center"/>
-            </DockPanel>
+            <TextBlock Text="VIRGIL SYSTEM ASSISTANT"
+                       FontSize="22"
+                       FontWeight="Bold"
+                       Foreground="#00BFFF"
+                       VerticalAlignment="Center"/>
         </Border>
 
-        <!-- Contenu principal -->
+        <!-- Contenu -->
         <Grid Grid.Row="1" Margin="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*"/>
@@ -45,7 +42,7 @@
                 <ColumnDefinition Width="2*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Zone de gauche -->
+            <!-- Colonne gauche -->
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <GroupBox Header="Maintenance" Foreground="White" Style="{StaticResource Padded}">
@@ -71,7 +68,10 @@
 
                     <GroupBox Header="Analyse système" Foreground="White" Style="{StaticResource Padded}">
                         <StackPanel>
-                            <Button Style="{StaticResource Padded}" Content="Démarrer / Arrêter Monitoring" Click="MonitorButton_Click"/>
+                            <Button x:Name="MonitorButton"
+                                    Style="{StaticResource Padded}"
+                                    Content="Démarrer / Arrêter Monitoring"
+                                    Click="MonitorButton_Click"/>
                             <Button Style="{StaticResource Padded}" Content="Lire Températures" Click="ReadTempsButton_Click"/>
                             <Button Style="{StaticResource Padded}" Content="Top Processus RAM" Click="ProcessesButton_Click"/>
                             <StackPanel Orientation="Horizontal">
@@ -93,7 +93,6 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <!-- ⚠️ & échappé -->
                     <GroupBox Header="Outils &amp; Journal" Foreground="White" Style="{StaticResource Padded}">
                         <StackPanel>
                             <Button Style="{StaticResource Padded}" Content="Copier journal" Click="CopyLogButton_Click"/>
@@ -107,7 +106,7 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Zone de droite -->
+            <!-- Colonne droite -->
             <StackPanel Grid.Column="2">
                 <controls:VirgilAvatar x:Name="AvatarControl"
                                        Width="320"
@@ -133,11 +132,8 @@
             </StackPanel>
         </Grid>
 
-        <!-- Bas de fenêtre -->
         <Border Grid.Row="2" Background="#2D2D30" Padding="8">
-            <DockPanel>
-                <TextBlock Text="© Virgil System Tools" Foreground="Gray" HorizontalAlignment="Center"/>
-            </DockPanel>
+            <TextBlock Text="© Virgil System Tools" Foreground="Gray" HorizontalAlignment="Center"/>
         </Border>
     </Grid>
 </Window>
