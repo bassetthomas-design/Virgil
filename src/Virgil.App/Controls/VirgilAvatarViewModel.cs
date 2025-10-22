@@ -10,9 +10,6 @@ using Virgil.Core.Services;
 
 namespace Virgil.App.Controls
 {
-    /// <summary>
-    /// VM : gère la phrase courante et la couleur selon l’humeur.
-    /// </summary>
     public sealed class VirgilAvatarViewModel : INotifyPropertyChanged
     {
         private readonly MoodService _moods = new();
@@ -33,20 +30,35 @@ namespace Virgil.App.Controls
             private set { _coreBrush = value; OnPropertyChanged(); }
         }
 
+        // 0..100 mapped to ~1.00..1.12 for a gentle pulse driven by progress
+        private double _progressScale = 1.0;
+        public double ProgressScale
+        {
+            get => _progressScale;
+            private set { _progressScale = value; OnPropertyChanged(); }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public void SetMood(string moodKey, string context = "")
         {
-            // Resolve RGB from Core (no WPF there), convert to WPF Color here
             var rgb = _moods.ResolveColor(moodKey);
             CoreBrush = new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B));
 
-            // Pick a contextual line
             var key = NormalizeKey(context);
             if (_lines.TryGetValue(key, out var arr) && arr.Length > 0)
                 CurrentLine = arr[_rng.Next(arr.Length)];
             else
                 CurrentLine = _moods.DefaultLine(moodKey);
+        }
+
+        public void SetProgress(double percent)
+        {
+            if (percent < 0) percent = 0; if (percent > 100) percent = 100;
+            // Ease-out mapping to 1.00 .. 1.12
+            var t = percent / 100.0;
+            var eased = 1.0 + 0.12 * (1 - Math.Pow(1 - t, 2)); // quad ease-out
+            ProgressScale = eased;
         }
 
         private static string NormalizeKey(string s)
@@ -66,16 +78,9 @@ namespace Virgil.App.Controls
                 }
             }
             catch { /* ignore */ }
-
-            // Fallback minimal si le JSON n'est pas trouvé
             return new Dictionary<string, string[]>
             {
-                ["general"] = new[]
-                {
-                    "Tout roule.",
-                    "Toujours là ✨",
-                    "On surveille en silence."
-                }
+                ["general"] = new[] { "Tout roule.", "Toujours là ✨" }
             };
         }
 
