@@ -147,6 +147,26 @@ namespace Virgil.App
         }
 
         // ---- Handlers AJOUTÉS (répara le commit vide) ------------------------
+private void KillPidButton_Click(object sender, RoutedEventArgs e)
+{
+    try
+    {
+        if (!int.TryParse(KillPidBox.Text, out var pid))
+        {
+            AppendLine("PID invalide.");
+            return;
+        }
+        var svc = new Virgil.Core.ProcessService();
+        var ok = svc.Kill(pid);
+        AppendLine(ok ? $"Processus {pid} terminé." : $"Impossible de terminer {pid}.");
+        SetMoodSafe(ok ? "proud" : "alert", ok ? "Kill OK" : "Kill KO");
+    }
+    catch (Exception ex)
+    {
+        AppendLine($"Erreur kill: {ex.Message}");
+        SetMoodSafe("alert", "Kill error");
+    }
+}
 
         private void StartupButton_Click(object sender, RoutedEventArgs e)
         {
