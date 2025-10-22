@@ -1,18 +1,49 @@
 <UserControl x:Class="Virgil.App.Controls.VirgilAvatar"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:Virgil.App.Controls">
+             Width="72" Height="72">
     <Grid>
-        <Ellipse Width="48" Height="48">
+        <!-- halo -->
+        <Ellipse x:Name="Halo" Width="72" Height="72">
+            <Ellipse.Effect>
+                <DropShadowEffect Color="#4FFFFFFF" BlurRadius="20" ShadowDepth="0" Opacity="0.8"/>
+            </Ellipse.Effect>
             <Ellipse.Fill>
-                <RadialGradientBrush GradientOrigin="0.3,0.3">
-                    <GradientStop Offset="0.0" Color="{Binding MoodColor, FallbackValue=#66A7D8FF}"/>
-                    <GradientStop Offset="1.0" Color="#00000000"/>
+                <RadialGradientBrush GradientOrigin="0.5,0.5" RadiusX="0.9" RadiusY="0.9">
+                    <GradientStop Offset="0.0" Color="#66FFFFFF" />
+                    <GradientStop Offset="1.0" Color="#0040A0FF" />
                 </RadialGradientBrush>
             </Ellipse.Fill>
-            <Ellipse.Effect>
-                <DropShadowEffect BlurRadius="20" Opacity="0.6"/>
-            </Ellipse.Effect>
         </Ellipse>
+
+        <!-- noyau -->
+        <Ellipse x:Name="Core" Width="42" Height="42">
+            <Ellipse.Fill>
+                <SolidColorBrush x:Name="CoreBrush" Color="#40A0FF"/>
+            </Ellipse.Fill>
+        </Ellipse>
+
+        <!-- petite bulle texte (facultative) -->
+        <Border Background="#CC111111" CornerRadius="8" Padding="6,3"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0, -4,-4">
+            <TextBlock Text="{Binding CurrentLine}" Foreground="#EDEDED" FontSize="11"/>
+        </Border>
+
+        <!-- animations -->
+        <Grid.Triggers>
+            <EventTrigger RoutedEvent="Loaded">
+                <BeginStoryboard>
+                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                        <DoubleAnimation Storyboard.TargetName="Core"
+                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                         From="1.0" To="1.08" Duration="0:0:1.8"/>
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Grid.Triggers>
+        <Ellipse.RenderTransform>
+            <ScaleTransform ScaleX="1" ScaleY="1"/>
+        </Ellipse.RenderTransform>
+        <ContentPresenter/>
     </Grid>
 </UserControl>
