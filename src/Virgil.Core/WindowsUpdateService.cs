@@ -1,82 +1,58 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Virgil.Core
+namespace Virgil.Core.Services
 {
-    public sealed class WindowsUpdateAggregateResult
+    /// <summary>
+    /// Enchaîne les commandes UsoClient (scan / download / install / restart).
+    /// Affiche des messages propres si droits insuffisants.
+    /// </summary>
+    public class WindowsUpdateService
     {
-        public string? Scan { get; set; }
-        public string? Download { get; set; }
-        public string? Install { get; set; }
-        public string? Restart { get; set; }
+        public async Task<string> StartScanAsync()     => await RunUsoAsync("StartScan");
+        public async Task<string> StartDownloadAsync() => await RunUsoAsync("StartDownload");
+        public async Task<string> StartInstallAsync()  => await RunUsoAsync("StartInstall");
+        public async Task<string> RestartDeviceAsync() => await RunUsoAsync("RestartDevice");
 
-        public override string ToString()
+        private static async Task<string> RunUsoAsync(string verb)
         {
             var sb = new StringBuilder();
-            if (!string.IsNullOrWhiteSpace(Scan)) sb.AppendLine("[Scan]").AppendLine(Scan);
-            if (!string.IsNullOrWhiteSpace(Download)) sb.AppendLine("[Download]").AppendLine(Download);
-            if (!string.IsNullOrWhiteSpace(Install)) sb.AppendLine("[Install]").AppendLine(Install);
-            if (!string.IsNullOrWhiteSpace(Restart)) sb.AppendLine("[Restart]").AppendLine(Restart);
-            return sb.ToString();
-        }
-    }
-
-    /// <summary>
-    /// Contrôle basique de Windows Update via UsoClient.exe
-    /// </summary>
-    public sealed class WindowsUpdateService
-    {
-        public async Task<string> StartScanAsync()      => await RunUsoAsync("StartScan");
-        public async Task<string> StartDownloadAsync()  => await RunUsoAsync("StartDownload");
-        public async Task<string> StartInstallAsync()   => await RunUsoAsync("StartInstall");
-        public async Task<string> RestartDeviceAsync()  => await RunUsoAsync("RestartDevice");
-
-        public async Task<WindowsUpdateAggregateResult> UpdateWindowsAsync(bool restartAfter = false)
-        {
-            var agg = new WindowsUpdateAggregateResult
-            {
-                Scan = await StartScanAsync(),
-                Download = await StartDownloadAsync(),
-                Install = await StartInstallAsync(),
-                Restart = restartAfter ? await RestartDeviceAsync() : null
-            };
-            return agg;
-        }
-
-        private static async Task<string> RunUsoAsync(string arg)
-        {
-            string uso = Path.Combine(Environment.SystemDirectory, "UsoClient.exe");
-            if (!File.Exists(uso)) uso = "UsoClient.exe";
-
             try
             {
                 var psi = new ProcessStartInfo
                 {
-                    FileName = uso,
-                    Arguments = arg,
+                    FileName = "UsoClient.exe",
+                    Arguments = verb,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true,
+                    RedirectStandardError  = true,
                     CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
+                    Verb = "runas" // si UAC possible, sinon ignoré
                 };
                 using var p = new Process { StartInfo = psi };
-                var sb = new StringBuilder();
-                p.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
-                p.ErrorDataReceived  += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
-                p.Start();
+                p.OutputDataReceived += (s, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                p.ErrorDataReceived  += (s, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                try
+                {
+                    p.Start();
+                }
+                catch (System.ComponentModel.Win32Exception w32) // UAC refusé / non admin
+                {
+                    sb.AppendLine($"[WU] Droit admin requis ou refusé: {w32.Message}");
+                    return sb.ToString();
+                }
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
-                await Task.Run(() => p.WaitForExit());
-                return sb.ToString();
+                await p.WaitForExitAsync().ConfigureAwait(false);
+                sb.AppendLine($"[WU] {verb} - ExitCode={p.ExitCode}");
             }
             catch (Exception ex)
             {
-                return $"[UsoClient error] {ex.Message}";
+                sb.AppendLine($"[WU] Erreur {verb}: {ex.Message}");
             }
+            return sb.ToString();
         }
     }
 }
