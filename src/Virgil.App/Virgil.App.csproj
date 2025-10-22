@@ -1,32 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>Virgil.App</RootNamespace>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <RootNamespace>Virgil.App</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
   </ItemGroup>
 
-  <!-- Si tu as déplacé le dialogues.json dans l'app -->
-  <!--
-  <ItemGroup>
-    <Content Include="Assets\virgil-dialogues.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-  -->
-
-  <!-- Sinon copie depuis Core -->
-  <Target Name="CopyCoreDialogues" AfterTargets="Build">
-    <Copy SourceFiles="..\Virgil.Core\virgil-dialogues.json"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true"
-          Condition="Exists('..\Virgil.Core\virgil-dialogues.json')" />
-  </Target>
 </Project>
