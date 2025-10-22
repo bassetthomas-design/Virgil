@@ -28,13 +28,15 @@
         </Grid.RowDefinitions>
 
         <!-- Bande supérieure -->
-        <DockPanel Grid.Row="0" LastChildFill="True" Background="#2D2D30" Padding="10">
-            <TextBlock Text="VIRGIL SYSTEM ASSISTANT"
-                       FontSize="22"
-                       FontWeight="Bold"
-                       Foreground="#00BFFF"
-                       VerticalAlignment="Center"/>
-        </DockPanel>
+        <Border Grid.Row="0" Background="#2D2D30" Padding="10">
+            <DockPanel LastChildFill="True">
+                <TextBlock Text="VIRGIL SYSTEM ASSISTANT"
+                           FontSize="22"
+                           FontWeight="Bold"
+                           Foreground="#00BFFF"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
 
         <!-- Contenu principal -->
         <Grid Grid.Row="1" Margin="10">
@@ -132,8 +134,10 @@
         </Grid>
 
         <!-- Bas de fenêtre -->
-        <DockPanel Grid.Row="2" Background="#2D2D30" Padding="8">
-            <TextBlock Text="© Virgil System Tools" Foreground="Gray" HorizontalAlignment="Center"/>
-        </DockPanel>
+        <Border Grid.Row="2" Background="#2D2D30" Padding="8">
+            <DockPanel>
+                <TextBlock Text="© Virgil System Tools" Foreground="Gray" HorizontalAlignment="Center"/>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>
