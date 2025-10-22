@@ -9,6 +9,7 @@ using System.Windows;
 using Microsoft.Win32;
 using Serilog;
 using Serilog.Events;
+using Virgil.Core;
 using Virgil.Core.Services;
 
 namespace Virgil.App
@@ -93,6 +94,43 @@ namespace Virgil.App
             }
         }
 
+        // ---------- Presets ----------
+        private async void QuickMaintenanceButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                AppendLine("Maintenance rapide en cours…");
+                var svc = new MaintenancePresetsService();
+                var report = await svc.QuickCleanAsync(forceBrowser: false);
+                Append(report);
+                AppendLine("Maintenance rapide terminée.");
+                SetMoodSafe("proud", "Quick maintenance");
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur maintenance rapide: {ex.Message}");
+                SetMoodSafe("alert", "Quick maintenance error");
+            }
+        }
+
+        private async void FullMaintenanceButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                AppendLine("Maintenance complète en cours (clean + maj + WU)…");
+                var svc = new MaintenancePresetsService();
+                var report = await svc.FullMaintenanceAsync(forceBrowser: false, windowsRestart: false);
+                Append(report);
+                AppendLine("Maintenance complète terminée.");
+                SetMoodSafe("proud", "Full maintenance");
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"Erreur maintenance complète: {ex.Message}");
+                SetMoodSafe("alert", "Full maintenance error");
+            }
+        }
+
         // ---------- Nettoyage ----------
         private void CleanButton_Click(object sender, RoutedEventArgs e)
         {
@@ -135,13 +173,13 @@ namespace Virgil.App
         {
             try
             {
-                var svc = new Virgil.Core.BrowserCleaningService();
+                var svc = new BrowserCleaningService();
                 if (svc.IsAnyBrowserRunning())
                 {
                     AppendLine("Un navigateur est en cours d’exécution. Fermez-le(s) pour un nettoyage complet.");
                     return;
                 }
-                var rep = svc.AnalyzeAndClean(new Virgil.Core.BrowserCleaningOptions { Force = false });
+                var rep = svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = false });
                 AppendLine($"Caches navigateurs détectés: ~{rep.BytesFound / (1024.0 * 1024):F1} MB");
                 AppendLine($"Caches navigateurs supprimés: ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
                 SetMoodSafe(rep.BytesDeleted > 0 ? "proud" : "neutral", "Clean browsers");
@@ -190,7 +228,7 @@ namespace Virgil.App
             SetMoodSafe("neutral", "MAJ pilotes");
         }
 
-        // ---------- Monitoring ----------
+        // ---------- Surveillance ----------
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
             _isMonitoring = !_isMonitoring;
