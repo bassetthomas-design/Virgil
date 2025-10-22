@@ -1,139 +1,131 @@
 <Window x:Class="Virgil.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
-        mc:Ignorable="d"
-        Title="Virgil Assistant"
-        Width="1200"
-        Height="800"
-        WindowStartupLocation="CenterScreen"
-        Background="#1E1E1E"
-        Foreground="White">
+        Title="Virgil" Height="680" Width="1100"
+        Background="#0E1014" WindowStartupLocation="CenterScreen">
 
-    <Window.Resources>
-        <Style x:Key="Padded" TargetType="FrameworkElement">
-            <Setter Property="Margin" Value="6"/>
-        </Style>
-    </Window.Resources>
-
-    <Grid>
+    <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="260"/>
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>   <!-- chat -->
+            <RowDefinition Height="*"/>      <!-- contenu -->
+            <RowDefinition Height="Auto"/>   <!-- status -->
         </Grid.RowDefinitions>
 
-        <!-- Bande supérieure -->
-        <Border Grid.Row="0" Background="#2D2D30" Padding="10">
-            <TextBlock Text="VIRGIL SYSTEM ASSISTANT"
-                       FontSize="22"
-                       FontWeight="Bold"
-                       Foreground="#00BFFF"
-                       VerticalAlignment="Center"/>
-        </Border>
+        <!-- Chat holographique -->
+        <controls:VirgilChatPanel x:Name="ChatPanel"
+                                  Grid.ColumnSpan="2"
+                                  Margin="0,0,0,10" />
 
-        <!-- Contenu -->
-        <Grid Grid.Row="1" Margin="10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*"/>
-                <ColumnDefinition Width="12"/>
-                <ColumnDefinition Width="2*"/>
-            </Grid.ColumnDefinitions>
+        <!-- Colonne gauche : Avatar -->
+        <StackPanel Grid.Row="1" Grid.Column="0" VerticalAlignment="Stretch">
+            <controls:VirgilAvatar x:Name="AvatarControl"
+                                   Width="220" Height="240"
+                                   Margin="0,0,0,12"/>
 
-            <!-- Colonne gauche -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+            <!-- Monitoring -->
+            <GroupBox Header="Monitoring" Foreground="#DDD" Margin="0,0,0,8">
                 <StackPanel>
-                    <GroupBox Header="Maintenance" Foreground="White" Style="{StaticResource Padded}">
-                        <StackPanel>
-                            <Button Style="{StaticResource Padded}" Content="Maintenance rapide" Click="QuickMaintenanceButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Maintenance complète" Click="FullMaintenanceButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Nettoyage TEMP" Click="CleanButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Nettoyage navigateurs" Click="CleanBrowsersButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Nettoyage étendu" Click="CleanExtendedButton_Click"/>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <GroupBox Header="Mises à jour" Foreground="White" Style="{StaticResource Padded}">
-                        <StackPanel>
-                            <Button Style="{StaticResource Padded}" Content="MAJ Apps / Jeux" Click="UpdateButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="MAJ Pilotes" Click="DriverButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Windows Update : Scan" Click="WindowsUpdateButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Windows Update : Download" Click="WindowsUpdateDownloadButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Windows Update : Install" Click="WindowsUpdateInstallButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Windows Update : Restart" Click="WindowsUpdateRestartButton_Click"/>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <GroupBox Header="Analyse système" Foreground="White" Style="{StaticResource Padded}">
-                        <StackPanel>
-                            <Button x:Name="MonitorButton"
-                                    Style="{StaticResource Padded}"
-                                    Content="Démarrer / Arrêter Monitoring"
-                                    Click="MonitorButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Lire Températures" Click="ReadTempsButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Top Processus RAM" Click="ProcessesButton_Click"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBox x:Name="KillPidBox" Width="80" Style="{StaticResource Padded}" ToolTip="PID à tuer"/>
-                                <Button Style="{StaticResource Padded}" Content="Tuer PID" Click="KillPidButton_Click"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <GroupBox Header="Services" Foreground="White" Style="{StaticResource Padded}">
-                        <StackPanel>
-                            <Button Style="{StaticResource Padded}" Content="Lister Services" Click="ListServicesButton_Click"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBox x:Name="SvcNameBox" Width="180" Style="{StaticResource Padded}" ToolTip="Nom du service"/>
-                                <Button Content="Start" Style="{StaticResource Padded}" Click="StartServiceButton_Click"/>
-                                <Button Content="Stop" Style="{StaticResource Padded}" Click="StopServiceButton_Click"/>
-                                <Button Content="Restart" Style="{StaticResource Padded}" Click="RestartServiceButton_Click"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <GroupBox Header="Outils &amp; Journal" Foreground="White" Style="{StaticResource Padded}">
-                        <StackPanel>
-                            <Button Style="{StaticResource Padded}" Content="Copier journal" Click="CopyLogButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Exporter journal" Click="ExportLogButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Gestionnaire de périphériques" Click="OpenDeviceManagerButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Nettoyage disque" Click="OpenDiskCleanupButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Services Windows" Click="OpenServicesConsoleButton_Click"/>
-                            <Button Style="{StaticResource Padded}" Content="Flush DNS" Click="FlushDnsButton_Click"/>
-                        </StackPanel>
-                    </GroupBox>
+                    <Button x:Name="MonitorToggleButton" Content="Démarrer le monitoring"
+                            Click="MonitorButton_Click" Margin="4"/>
+                    <Button Content="Lire températures" Click="ReadTempsButton_Click" Margin="4"/>
                 </StackPanel>
-            </ScrollViewer>
+            </GroupBox>
 
-            <!-- Colonne droite -->
-            <StackPanel Grid.Column="2">
-                <controls:VirgilAvatar x:Name="AvatarControl"
-                                       Width="320"
-                                       Height="320"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Top"
-                                       Margin="0,0,0,20"/>
-                <ProgressBar x:Name="TaskProgress" Height="22" Minimum="0" Maximum="100" Margin="0,0,0,6"/>
-                <TextBlock x:Name="StatusText" Text="Prêt."
-                           FontSize="14"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,12"/>
-                <TextBox x:Name="OutputBox"
-                         FontFamily="Consolas"
-                         FontSize="13"
-                         Background="#111"
-                         Foreground="#EEE"
-                         IsReadOnly="True"
-                         TextWrapping="Wrap"
-                         AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         Height="300"/>
-            </StackPanel>
-        </Grid>
+            <!-- Processus -->
+            <GroupBox Header="Processus" Foreground="#DDD" Margin="0,0,0,8">
+                <StackPanel>
+                    <Button Content="Top RAM" Click="ProcessesButton_Click" Margin="4"/>
+                    <StackPanel Orientation="Horizontal" Margin="4">
+                        <TextBox x:Name="KillPidBox" Width="90" Margin="0,0,6,0" />
+                        <Button Content="Kill PID" Click="KillPidButton_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
 
-        <Border Grid.Row="2" Background="#2D2D30" Padding="8">
-            <TextBlock Text="© Virgil System Tools" Foreground="Gray" HorizontalAlignment="Center"/>
-        </Border>
+            <!-- Services -->
+            <GroupBox Header="Services" Foreground="#DDD" Margin="0,0,0,8">
+                <StackPanel>
+                    <Button Content="Lister (30)" Click="ListServicesButton_Click" Margin="4"/>
+                    <TextBox x:Name="SvcNameBox" Margin="4" />
+                    <StackPanel Orientation="Horizontal" Margin="4,0,4,4">
+                        <Button Content="Start" Click="StartServiceButton_Click" Margin="0,0,6,0"/>
+                        <Button Content="Stop" Click="StopServiceButton_Click" Margin="0,0,6,0"/>
+                        <Button Content="Restart" Click="RestartServiceButton_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+        </StackPanel>
+
+        <!-- Colonne droite : actions principales -->
+        <StackPanel Grid.Row="1" Grid.Column="1">
+            <!-- Maintenance -->
+            <GroupBox Header="Maintenance" Foreground="#DDD" Margin="0,0,0,8">
+                <WrapPanel Margin="4">
+                    <Button Content="Maintenance rapide" Click="QuickMaintenanceButton_Click" Margin="4"/>
+                    <Button Content="Maintenance complète" Click="FullMaintenanceButton_Click" Margin="4"/>
+                    <Button Content="Nettoyage TEMP" Click="CleanButton_Click" Margin="4"/>
+                    <Button Content="Caches Navigateurs" Click="CleanBrowsersButton_Click" Margin="4"/>
+                    <Button Content="Nettoyage étendu" Click="CleanExtendedButton_Click" Margin="4"/>
+                </WrapPanel>
+            </GroupBox>
+
+            <!-- Mises à jour -->
+            <GroupBox Header="Mises à jour" Foreground="#DDD" Margin="0,0,0,8">
+                <WrapPanel Margin="4">
+                    <Button Content="MAJ Apps/Jeux (winget)" Click="UpdateButton_Click" Margin="4"/>
+                    <Button Content="Pilotes" Click="DriverButton_Click" Margin="4"/>
+                    <Button Content="Windows Update: Scan" Click="WindowsUpdateButton_Click" Margin="4"/>
+                    <Button Content="WU: Download" Click="WindowsUpdateDownloadButton_Click" Margin="4"/>
+                    <Button Content="WU: Install" Click="WindowsUpdateInstallButton_Click" Margin="4"/>
+                    <Button Content="WU: Restart" Click="WindowsUpdateRestartButton_Click" Margin="4"/>
+                </WrapPanel>
+            </GroupBox>
+
+            <!-- Outils -->
+            <GroupBox Header="Outils" Foreground="#DDD" Margin="0,0,0,8">
+                <WrapPanel Margin="4">
+                    <Button Content="Copier journal" Click="CopyLogButton_Click" Margin="4"/>
+                    <Button Content="Exporter journal" Click="ExportLogButton_Click" Margin="4"/>
+                    <Button Content="Gestionnaire de périph." Click="OpenDeviceManagerButton_Click" Margin="4"/>
+                    <Button Content="Nettoyage disque" Click="OpenDiskCleanupButton_Click" Margin="4"/>
+                    <Button Content="Services.msc" Click="OpenServicesConsoleButton_Click" Margin="4"/>
+                    <Button Content="Flush DNS" Click="FlushDnsButton_Click" Margin="4"/>
+                </WrapPanel>
+            </GroupBox>
+
+            <!-- Journal brut -->
+            <TextBox x:Name="OutputBox"
+                     Margin="0,4,0,0"
+                     FontFamily="Consolas"
+                     FontSize="12"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled"
+                     Height="220"
+                     IsReadOnly="True"/>
+        </StackPanel>
+
+        <!-- Barre d'état -->
+        <DockPanel Grid.Row="2" Grid.ColumnSpan="2" LastChildFill="True" Margin="0,8,0,0">
+            <ProgressBar x:Name="TaskProgress"
+                         Width="220" Height="12"
+                         Minimum="0" Maximum="100"
+                         Foreground="#27D7FF"
+                         Background="#222"
+                         Visibility="Collapsed"
+                         Margin="8,0"
+                         DockPanel.Dock="Left"/>
+            <TextBlock x:Name="StatusText"
+                       Text="Prêt."
+                       Foreground="#CCC"
+                       VerticalAlignment="Center"
+                       Margin="8,0"/>
+        </DockPanel>
     </Grid>
 </Window>
