@@ -21,32 +21,6 @@
                 </Ellipse.Effect>
             </Ellipse>
 
-            <!-- balayage holographique -->
-            <Rectangle Width="160" Height="160" IsHitTestVisible="False" Opacity="0.45">
-                <Rectangle.Fill>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#00FFFFFF" Offset="0.00"/>
-                        <GradientStop Color="#22FFFFFF" Offset="0.48"/>
-                        <GradientStop Color="#80FFFFFF" Offset="0.50"/>
-                        <GradientStop Color="#22FFFFFF" Offset="0.52"/>
-                        <GradientStop Color="#00FFFFFF" Offset="1.00"/>
-                    </LinearGradientBrush>
-                </Rectangle.Fill>
-                <Rectangle.Triggers>
-                    <EventTrigger RoutedEvent="Loaded">
-                        <BeginStoryboard>
-                            <Storyboard RepeatBehavior="Forever">
-                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
-                                                 From="-170" To="170" Duration="0:0:3"/>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </EventTrigger>
-                </Rectangle.Triggers>
-                <Rectangle.RenderTransform>
-                    <TranslateTransform X="-170"/>
-                </Rectangle.RenderTransform>
-            </Rectangle>
-
             <!-- yeux par défaut -->
             <Path x:Name="LeftEye" Fill="{Binding EyeBrush}" Width="44" Height="30"
                   Data="M 0,14 C 0,4 20,0 20,14 20,28 0,24 0,14 Z">
