@@ -1,192 +1,188 @@
+// Uses WPF namespaces explicitly to avoid conflicts with System.Windows.Forms / System.Drawing
 #nullable enable
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;     // Color, SolidColorBrush, Brushes
-using System.Windows.Shapes;    // Ellipse
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using SW = System.Windows;
+using SWC = System.Windows.Controls;
+using SWM = System.Windows.Media;
+using SWS = System.Windows.Shapes;
 
 namespace Virgil.App.Controls
 {
-    public class ChatMessage
+    public class ChatBubble
     {
         public string Text { get; set; } = "";
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-        public int TtlMs { get; set; } = 60_000; // 1 minute par défaut
-        public FrameworkElement? Container { get; set; }
+        public int TtlMs { get; set; } = 60_000; // 60s par défaut
+        public SW.FrameworkElement? Visual { get; set; }
     }
 
-    public partial class VirgilChatPanel : System.Windows.Controls.UserControl
+    public partial class VirgilChatPanel : SWC.UserControl
     {
-        public ObservableCollection<ChatMessage> Messages { get; } = new();
+        // Ces noms doivent exister dans VirgilChatPanel.xaml :
+        // <ScrollViewer x:Name="Scroller">, <ListBox x:Name="MessageList">, <Canvas x:Name="DustLayer">
+        public ObservableCollection<ChatBubble> Messages { get; } = new();
 
         public VirgilChatPanel()
         {
             InitializeComponent();
             DataContext = this;
 
-            // auto-scroll si un ScrollViewer entoure le ListBox côté XAML
-            Loaded += (_, __) =>
-            {
-                var sv = FindDescendant<ScrollViewer>(this);
-                if (sv != null)
-                {
-                    Messages.CollectionChanged += (_, __2) =>
-                    {
-                        sv.ScrollToEnd();
-                    };
-                }
-            };
+            // Scroll automatique sur nouveau contenu
+            CompositionTarget.Rendering += (_, __) => Scroller?.ScrollToEnd();
         }
 
-        // API publique pour poster un message (avec TTL optionnel)
+        /// <summary>Ajoute un message dans la zone de chat (avec TTL en ms, défaut 60s).</summary>
         public void Post(string text, string? mood = null, int? ttlMs = null)
         {
-            if (string.IsNullOrWhiteSpace(text)) return;
-            var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 60_000 };
-            Messages.Add(msg);
+            if (string.IsNullOrWhiteSpace(text))
+                return;
 
-            // Quand l’item visuel est prêt, on déclenche le timer d’effacement
+            var bubble = new ChatBubble
+            {
+                Text = text,
+                TtlMs = ttlMs ?? 60_000,
+                Created = DateTime.UtcNow
+            };
+            Messages.Add(bubble);
+
+            // Laisse WPF matérialiser l’item, puis on accroche la bulle et on programme sa disparition.
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                var container = FindContainerForLastItem();
+                var container = MessageList.ItemContainerGenerator.ContainerForItem(bubble) as SWC.ListBoxItem;
                 if (container != null)
                 {
-                    msg.Container = container;
-                    ScheduleVanish(msg);
+                    // On essaie de retrouver l'élément visuel nommé "Bubble" dans le template de l'item
+                    var bubbleVisual = FindElementByName(container, "Bubble") as SW.FrameworkElement ?? container;
+                    bubble.Visual = bubbleVisual;
+
+                    ScheduleVanish(bubble);
+                    Scroller?.ScrollToEnd();
                 }
-            }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }), DispatcherPriority.Loaded);
         }
 
-        // ===== helpers visuels =====
-        private FrameworkElement? FindContainerForLastItem()
+        public void ClearAll()
         {
-            if (Messages.Count == 0) return null;
-            var list = FindDescendant<ListBox>(this);
-            if (list == null) return null;
-            var container = list.ItemContainerGenerator.ContainerFromIndex(Messages.Count - 1) as FrameworkElement;
-            if (container == null) return null;
-
-            // Si ton DataTemplate nomme l’élément bulle "Bubble", on le récupère, sinon on garde le container
-            var bubble = container.FindName("Bubble") as FrameworkElement;
-            return bubble ?? container;
+            // Efface tout (sans effet visuel)
+            foreach (var child in DustLayer.Children.OfType<SW.FrameworkElement>().ToList())
+                DustLayer.Children.Remove(child);
+            Messages.Clear();
         }
 
-        private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
+        public void ScrollToEnd()
         {
-            int count = VisualTreeHelper.GetChildrenCount(root);
+            Scroller?.ScrollToEnd();
+        }
+
+        // ---------- Helpers internes ----------
+
+        private SW.DependencyObject? FindElementByName(SW.DependencyObject root, string name)
+        {
+            if (root is FrameworkElement fe && fe.Name == name)
+                return fe;
+
+            int count = SW.Media.VisualTreeHelper.GetChildrenCount(root);
             for (int i = 0; i < count; i++)
             {
-                var child = VisualTreeHelper.GetChild(root, i);
-                if (child is T t) return t;
-                var deeper = FindDescendant<T>(child);
-                if (deeper != null) return deeper;
+                var child = SW.Media.VisualTreeHelper.GetChild(root, i);
+                var found = FindElementByName(child, name);
+                if (found != null) return found;
             }
             return null;
         }
 
-        // ===== disparition + effet "Thanos" =====
-        private async void ScheduleVanish(ChatMessage msg)
+        private async void ScheduleVanish(ChatBubble cb)
         {
-            try
-            {
-                await System.Threading.Tasks.Task.Delay(msg.TtlMs);
-                if (!Messages.Contains(msg) || msg.Container == null) return;
+            await Task.Delay(cb.TtlMs);
+            if (!Messages.Contains(cb) || cb.Visual is null)
+                return;
 
-                PlayThanos(msg.Container);
-                FadeShrink(msg.Container, 240, () => Messages.Remove(msg));
-            }
-            catch { /* ignore */ }
+            // Effet "poussière" + fade/shrink puis suppression
+            PlayThanos(cb.Visual);
+            FadeAndShrink(cb.Visual, 240, () =>
+            {
+                Messages.Remove(cb);
+            });
         }
 
-        private void FadeShrink(FrameworkElement target, int ms, Action onDone)
+        private void FadeAndShrink(SW.FrameworkElement target, int ms, Action onDone)
         {
-            var sb = new Storyboard();
+            var sb = new SWM.Animation.Storyboard();
 
-            // Opacity -> 0
-            var daOpacity = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
+            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
             {
                 EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
             };
-            Storyboard.SetTarget(daOpacity, target);
-            Storyboard.SetTargetProperty(daOpacity, new PropertyPath("Opacity"));
-            sb.Children.Add(daOpacity);
+            SWM.Animation.Storyboard.SetTarget(fade, target);
+            SWM.Animation.Storyboard.SetTargetProperty(fade, new PropertyPath("Opacity"));
+            sb.Children.Add(fade);
 
-            // Scale 1 -> 0.85
-            var scale = new ScaleTransform(1, 1);
-            target.RenderTransformOrigin = new Point(0.5, 0.5);
+            var scale = new SWM.ScaleTransform(1, 1);
+            target.RenderTransformOrigin = new SW.Point(0.5, 0.5);
             target.RenderTransform = scale;
 
-            var daX = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
-            Storyboard.SetTarget(daX, target);
-            Storyboard.SetTargetProperty(daX, new PropertyPath("RenderTransform.ScaleX"));
-            sb.Children.Add(daX);
-
-            var daY = daX.Clone();
-            Storyboard.SetTargetProperty(daY, new PropertyPath("RenderTransform.ScaleY"));
-            sb.Children.Add(daY);
+            var sx = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            var sy = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            SWM.Animation.Storyboard.SetTarget(sx, target);
+            SWM.Animation.Storyboard.SetTargetProperty(sx, new PropertyPath("RenderTransform.ScaleX"));
+            SWM.Animation.Storyboard.SetTarget(sy, target);
+            SWM.Animation.Storyboard.SetTargetProperty(sy, new PropertyPath("RenderTransform.ScaleY"));
+            sb.children.Add(sx);
+            sb.children.Add(sy);
 
             sb.Completed += (_, __) => onDone();
             sb.Begin();
         }
 
-        /// <summary>Effet “poussière” simple (sans shader) : petits points qui s’éparpillent puis s’éteignent.</summary>
-        private void PlayThanos(FrameworkElement source)
+        /// <summary>Effet "Thanos" : petites particules blanches qui s’éparpillent depuis la bulle.</summary>
+        private void PlayThanos(SW.FrameworkElement source)
         {
-            if (source.ActualWidth < 6 || source.ActualHeight < 6) return;
+            if (source.ActualWidth <= 4 || source.ActualHeight <= 4 || DustLayer == null)
+                return;
 
-            // On cherche un Canvas appelé "DustLayer" dans le template, sinon on en injecte un dans la même parenté visuelle
-            var root = Window.GetWindow(this) as FrameworkElement ?? source;
-            var layer = FindDescendant<Canvas>(root);
-            if (layer == null)
-            {
-                // fallback : on essaye d’ajouter un Canvas au parent immédiat si c’est un Grid
-                if (source.Parent is Grid g)
-                {
-                    layer = new Canvas { IsHitTestVisible = false };
-                    g.Children.Add(layer);
-                }
-                else return;
-            }
-
-            var origin = source.TranslatePoint(new Point(0, 0), layer);
+            var origin = source.TranslatePoint(new SW.Point(0, 0), DustLayer);
             var rnd = new Random();
 
-            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 40);
+            int count = Math.Clamp((int)((source.ActualWidth * source.ActualHeight) / 550.0), 12, 42);
+
             for (int i = 0; i < count; i++)
             {
-                var dot = new Ellipse
+                var dot = new SWS.Ellipse
                 {
                     Width = rnd.Next(2, 5),
                     Height = rnd.Next(2, 5),
-                    Fill = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+                    Fill = new SWM.SolidColorBrush(SWM.Color.FromArgb(220, 255, 255, 255)),
                     Opacity = 0.0
                 };
-                Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
-                Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
-                layer.Children.Add(dot);
 
-                var dx = (rnd.NextDouble() - 0.2) * 120;
-                var dy = -(20 + rnd.NextDouble() * 80);
-                var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 200));
+                SWC.Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
+                SWC.Canvas.SetTop(dot,  origin.Y + rnd.NextDouble() * source.ActualHeight);
+                DustLayer.Children.Add(dot);
 
-                var ax = new DoubleAnimation(Canvas.GetLeft(dot), Canvas.GetLeft(dot) + dx, dur)
+                // Déplacement aléatoire vers le haut / côté
+                double dx = (rnd.NextDouble() - 0.2) * 120.0;
+                double dy = -(20 + rnd.NextDouble() * 80.0);
+                var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 220));
+
+                var ax = new DoubleAnimation(SWC.Canvas.GetLeft(dot), SWC.Canvas.GetLeft(dot) + dx, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-
-                var ay = new DoubleAnimation(Canvas.GetTop(dot), Canvas.GetTop(dot) + dy, dur)
+                var ay = new DoubleAnimation(SWC.Canvas.GetTop(dot), SWC.Canvas.GetTop(dot) + dy, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+                var aIn  = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
+                var aOut = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
 
-                var aoIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
-                var aoOut = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
+                dot.BeginAnimation(SW.UIElement.OpacityProperty, aIn);
+                dot.BeginAnimation(SW.UIElement.OpacityProperty, aOut);
+                dot.BeginAnimation(SWC.Canvas.LeftProperty, ax);
+                dot.BeginAnimation(SWC.Canvas.TopProperty,  ay);
 
-                dot.BeginAnimation(UIElement.OpacityProperty, aoIn);
-                dot.BeginAnimation(UIElement.OpacityProperty, aoOut);
-                dot.BeginAnimation(Canvas.LeftProperty, ax);
-                dot.BeginAnimation(Canvas.TopProperty, ay);
-
-                aoOut.Completed += (_, __) => layer.Children.Remove(dot);
+                aOut.Completed += (_, __) => DustLayer.Children.Remove(dot);
             }
         }
     }
