@@ -1,129 +1,192 @@
 #nullable enable
 using System;
-using System.Collections;
-using System.Collections.Specialized;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
-using Controls = System.Windows.Controls;
-using Media = System.Windows.Media;
-using Shapes = System.Windows.Shapes;
+using System.Windows.Controls;
+using System.Windows.Media;     // Color, SolidColorBrush, Brushes
+using System.Windows.Shapes;    // Ellipse
+using System.Windows.Media.Animation;
 
 namespace Virgil.App.Controls
 {
-    public partial class VirgilChatPanel : Controls.UserControl
+    public class ChatMessage
     {
+        public string Text { get; set; } = "";
+        public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+        public int TtlMs { get; set; } = 60_000; // 1 minute par défaut
+        public FrameworkElement? Container { get; set; }
+    }
+
+    public partial class VirgilChatPanel : System.Windows.Controls.UserControl
+    {
+        public ObservableCollection<ChatMessage> Messages { get; } = new();
+
         public VirgilChatPanel()
         {
             InitializeComponent();
+            DataContext = this;
+
+            // auto-scroll si un ScrollViewer entoure le ListBox côté XAML
             Loaded += (_, __) =>
             {
-                // auto-scroll à l’arrivée d’éléments
-                CompositionTarget.Rendering += (_, __) => Scroller?.ScrollToEnd();
-                HookCollectionChanged();
+                var sv = FindDescendant<ScrollViewer>(this);
+                if (sv != null)
+                {
+                    Messages.CollectionChanged += (_, __2) =>
+                    {
+                        sv.ScrollToEnd();
+                    };
+                }
             };
         }
 
-        // ItemsSource (on laisse MainWindow posséder la collection)
-        public static readonly DependencyProperty ItemsSourceProperty =
-            DependencyProperty.Register(nameof(ItemsSource), typeof(IEnumerable),
-                typeof(VirgilChatPanel),
-                new PropertyMetadata(null, OnItemsSourceChanged));
-
-        public IEnumerable? ItemsSource
+        // API publique pour poster un message (avec TTL optionnel)
+        public void Post(string text, string? mood = null, int? ttlMs = null)
         {
-            get => (IEnumerable?)GetValue(ItemsSourceProperty);
-            set => SetValue(ItemsSourceProperty, value);
-        }
+            if (string.IsNullOrWhiteSpace(text)) return;
+            var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 60_000 };
+            Messages.Add(msg);
 
-        private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            var self = (VirgilChatPanel)d;
-            self.List.ItemsSource = self.ItemsSource;
-            self.HookCollectionChanged();
-        }
-
-        private void HookCollectionChanged()
-        {
-            if (ItemsSource is INotifyCollectionChanged ncc)
+            // Quand l’item visuel est prêt, on déclenche le timer d’effacement
+            Dispatcher.BeginInvoke(new Action(() =>
             {
-                ncc.CollectionChanged -= Items_CollectionChanged;
-                ncc.CollectionChanged += Items_CollectionChanged;
-            }
+                var container = FindContainerForLastItem();
+                if (container != null)
+                {
+                    msg.Container = container;
+                    ScheduleVanish(msg);
+                }
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
-        private void Items_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        // ===== helpers visuels =====
+        private FrameworkElement? FindContainerForLastItem()
         {
-            // rien d’obligatoire ici; l’effet est déclenché par MainWindow via TriggerDustFor(...)
+            if (Messages.Count == 0) return null;
+            var list = FindDescendant<ListBox>(this);
+            if (list == null) return null;
+            var container = list.ItemContainerGenerator.ContainerFromIndex(Messages.Count - 1) as FrameworkElement;
+            if (container == null) return null;
+
+            // Si ton DataTemplate nomme l’élément bulle "Bubble", on le récupère, sinon on garde le container
+            var bubble = container.FindName("Bubble") as FrameworkElement;
+            return bubble ?? container;
         }
 
-        public void ScrollToEnd() => Scroller?.ScrollToEnd();
-
-        /// <summary>Déclenche l’effet poussière (“Thanos”) pour un item existant.</summary>
-        public void TriggerDustFor(object item)
+        private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
         {
-            var container = (FrameworkElement?)List.ItemContainerGenerator.ContainerFromItem(item);
-            if (container == null) return;
-
-            var bubble = FindDescendantByName(container, "Bubble") as FrameworkElement ?? container;
-            if (bubble == null) return;
-
-            PlayThanos(bubble);
-        }
-
-        private static FrameworkElement? FindDescendantByName(FrameworkElement root, string name)
-        {
-            if (root.Name == name) return root;
-            int count = Media.VisualTreeHelper.GetChildrenCount(root);
+            int count = VisualTreeHelper.GetChildrenCount(root);
             for (int i = 0; i < count; i++)
             {
-                var child = Media.VisualTreeHelper.GetChild(root, i) as FrameworkElement;
-                var r = child != null ? FindDescendantByName(child, name) : null;
-                if (r != null) return r;
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is T t) return t;
+                var deeper = FindDescendant<T>(child);
+                if (deeper != null) return deeper;
             }
             return null;
         }
 
+        // ===== disparition + effet "Thanos" =====
+        private async void ScheduleVanish(ChatMessage msg)
+        {
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(msg.TtlMs);
+                if (!Messages.Contains(msg) || msg.Container == null) return;
+
+                PlayThanos(msg.Container);
+                FadeShrink(msg.Container, 240, () => Messages.Remove(msg));
+            }
+            catch { /* ignore */ }
+        }
+
+        private void FadeShrink(FrameworkElement target, int ms, Action onDone)
+        {
+            var sb = new Storyboard();
+
+            // Opacity -> 0
+            var daOpacity = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
+            Storyboard.SetTarget(daOpacity, target);
+            Storyboard.SetTargetProperty(daOpacity, new PropertyPath("Opacity"));
+            sb.Children.Add(daOpacity);
+
+            // Scale 1 -> 0.85
+            var scale = new ScaleTransform(1, 1);
+            target.RenderTransformOrigin = new Point(0.5, 0.5);
+            target.RenderTransform = scale;
+
+            var daX = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            Storyboard.SetTarget(daX, target);
+            Storyboard.SetTargetProperty(daX, new PropertyPath("RenderTransform.ScaleX"));
+            sb.Children.Add(daX);
+
+            var daY = daX.Clone();
+            Storyboard.SetTargetProperty(daY, new PropertyPath("RenderTransform.ScaleY"));
+            sb.Children.Add(daY);
+
+            sb.Completed += (_, __) => onDone();
+            sb.Begin();
+        }
+
+        /// <summary>Effet “poussière” simple (sans shader) : petits points qui s’éparpillent puis s’éteignent.</summary>
         private void PlayThanos(FrameworkElement source)
         {
-            if (source.ActualWidth < 8 || source.ActualHeight < 8) return;
+            if (source.ActualWidth < 6 || source.ActualHeight < 6) return;
 
-            var origin = source.TranslatePoint(new Point(0, 0), DustLayer);
+            // On cherche un Canvas appelé "DustLayer" dans le template, sinon on en injecte un dans la même parenté visuelle
+            var root = Window.GetWindow(this) as FrameworkElement ?? source;
+            var layer = FindDescendant<Canvas>(root);
+            if (layer == null)
+            {
+                // fallback : on essaye d’ajouter un Canvas au parent immédiat si c’est un Grid
+                if (source.Parent is Grid g)
+                {
+                    layer = new Canvas { IsHitTestVisible = false };
+                    g.Children.Add(layer);
+                }
+                else return;
+            }
+
+            var origin = source.TranslatePoint(new Point(0, 0), layer);
             var rnd = new Random();
 
-            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 12, 40);
+            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 40);
             for (int i = 0; i < count; i++)
             {
-                var dot = new Shapes.Ellipse
+                var dot = new Ellipse
                 {
                     Width = rnd.Next(2, 5),
                     Height = rnd.Next(2, 5),
-                    Fill = new Media.SolidColorBrush(Media.Color.FromArgb(220, 255, 255, 255)),
+                    Fill = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
                     Opacity = 0.0
                 };
-                Controls.Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
-                Controls.Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
-                DustLayer.Children.Add(dot);
+                Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
+                Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
+                layer.Children.Add(dot);
 
                 var dx = (rnd.NextDouble() - 0.2) * 120;
                 var dy = -(20 + rnd.NextDouble() * 80);
                 var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 200));
 
-                var ax = new System.Windows.Media.Animation.DoubleAnimation(
-                    Controls.Canvas.GetLeft(dot), Controls.Canvas.GetLeft(dot) + dx, dur)
-                { EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } };
+                var ax = new DoubleAnimation(Canvas.GetLeft(dot), Canvas.GetLeft(dot) + dx, dur)
+                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
 
-                var ay = new System.Windows.Media.Animation.DoubleAnimation(
-                    Controls.Canvas.GetTop(dot), Controls.Canvas.GetTop(dot) + dy, dur)
-                { EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } };
+                var ay = new DoubleAnimation(Canvas.GetTop(dot), Canvas.GetTop(dot) + dy, dur)
+                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
 
-                var ao = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
-                var ao2 = new System.Windows.Media.Animation.DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
+                var aoIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
+                var aoOut = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
 
-                dot.BeginAnimation(UIElement.OpacityProperty, ao);
-                dot.BeginAnimation(UIElement.OpacityProperty, ao2);
-                dot.BeginAnimation(Controls.Canvas.LeftProperty, ax);
-                dot.BeginAnimation(Controls.Canvas.TopProperty, ay);
+                dot.BeginAnimation(UIElement.OpacityProperty, aoIn);
+                dot.BeginAnimation(UIElement.OpacityProperty, aoOut);
+                dot.BeginAnimation(Canvas.LeftProperty, ax);
+                dot.BeginAnimation(Canvas.TopProperty, ay);
 
-                ao2.Completed += (_, __) => DustLayer.Children.Remove(dot);
+                aoOut.Completed += (_, __) => layer.Children.Remove(dot);
             }
         }
     }
