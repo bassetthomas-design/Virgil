@@ -4,30 +4,13 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
+        xmlns:local="clr-namespace:Virgil.App"
         mc:Ignorable="d"
         Title="Virgil" Height="720" Width="1180"
         Background="#111318">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <!-- Bulle simple pour le chat -->
-        <Style x:Key="ChatItemContainer" TargetType="ListBoxItem">
-            <Setter Property="Padding" Value="8"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-
-        <DataTemplate DataType="{x:Type local:ChatMessage}">
-            <Border CornerRadius="10"
-                    Background="{Binding BubbleBrush}"
-                    Padding="10" Margin="2,4"
-                    SnapsToDevicePixels="True">
-                <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap"
-                           FontSize="14"/>
-            </Border>
-        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -42,7 +25,7 @@
             <TextBlock x:Name="ClockText"
                        Foreground="#8FA3B8" VerticalAlignment="Center"
                        FontWeight="SemiBold"/>
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Spacing="8">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                 <ToggleButton x:Name="SurveillanceToggle"
                               Content="{Binding SurveillanceButtonText}"
                               IsChecked="{Binding IsSurveillanceOn, Mode=TwoWay}"
@@ -57,18 +40,19 @@
                 <ColumnDefinition Width="*"/>     <!-- chat + actions -->
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT PANEL: Avatar + Stats (stats visibles seulement en surveillance) -->
-            <StackPanel Grid.Column="0" Margin="12" Spacing="12">
+            <!-- LEFT: Avatar + Stats (stats visibles seulement en surveillance) -->
+            <StackPanel Grid.Column="0" Margin="12" >
                 <Border CornerRadius="16" Background="#161a23" Padding="12">
                     <controls:VirgilAvatar x:Name="AvatarControl" />
                 </Border>
 
                 <Border CornerRadius="12" Background="#161a23" Padding="12"
+                        Margin="0,12,0,0"
                         Visibility="{Binding IsSurveillanceOn, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="Surveillance" FontWeight="SemiBold" Foreground="#CDE3FF"
                                    Margin="0,0,0,8"/>
-                        <StackPanel Orientation="Vertical" Spacing="6">
+                        <StackPanel Orientation="Vertical">
                             <TextBlock Text="{Binding CpuTempText}" Foreground="#AFC6DA"/>
                             <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding CpuUsage}"/>
 
@@ -92,14 +76,9 @@
                     <RowDefinition Height="Auto"/> <!-- actions -->
                 </Grid.RowDefinitions>
 
-                <!-- CHAT LIST -->
+                <!-- CHAT: custom panel -->
                 <Border CornerRadius="12" Background="#151821" Padding="10" Margin="0,0,0,10">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ListBox x:Name="ChatList"
-                                 ItemsSource="{Binding ChatMessages}"
-                                 ItemContainerStyle="{StaticResource ChatItemContainer}"
-                                 Background="Transparent" BorderThickness="0" />
-                    </ScrollViewer>
+                    <controls:VirgilChatPanel x:Name="ChatPanel"/>
                 </Border>
 
                 <!-- ACTION BUTTONS -->
