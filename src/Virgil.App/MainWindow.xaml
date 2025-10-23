@@ -3,237 +3,120 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Virgil.App"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         mc:Ignorable="d"
-        Title="Virgil"
-        Height="720"
-        Width="1200"
-        Background="#0E1014"
-        FontFamily="Segoe UI"
-        WindowStartupLocation="CenterScreen"
-        SnapsToDevicePixels="True">
+        Title="Virgil" Height="720" Width="1180"
+        Background="#111318">
 
     <Window.Resources>
-
-        <!-- Couleurs/moods -->
-        <SolidColorBrush x:Key="MoodNeutral"  Color="#22FFFFFF"/>
-        <SolidColorBrush x:Key="MoodProud"    Color="#2246FF7A"/>
-        <SolidColorBrush x:Key="MoodVigilant" Color="#22FFE46B"/>
-        <SolidColorBrush x:Key="MoodAlert"    Color="#22FF6961"/>
-
-        <!-- Ombre et blur -->
-        <DropShadowEffect x:Key="BubbleShadow" BlurRadius="12" ShadowDepth="0" Color="#3348FFDF"/>
-
-        <!-- Template d’un message de Virgil -->
-        <DataTemplate x:Key="ChatTemplate" DataType="{x:Type local:ChatMessage}">
-            <Border x:Name="Bubble"
-                    CornerRadius="14"
-                    Padding="12"
-                    Margin="8,6"
-                    Background="{Binding BubbleBrush}"
-                    Effect="{StaticResource BubbleShadow}">
-                <StackPanel>
-                    <TextBlock Text="{Binding Text}"
-                               TextWrapping="Wrap"
-                               Foreground="#E8FDF9"
-                               FontSize="15"
-                               Opacity="0.96"/>
-                    <TextBlock Text="{Binding Timestamp, StringFormat={}{0:T}}"
-                               Foreground="#99FFFFFF"
-                               FontSize="11"
-                               HorizontalAlignment="Right"
-                               Margin="0,4,0,0"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Animation de disparition (effet Thanos) -->
-            <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding IsExpiring}" Value="True">
-                    <DataTrigger.EnterActions>
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation Storyboard.TargetName="Bubble"
-                                                 Storyboard.TargetProperty="Opacity"
-                                                 To="0"
-                                                 Duration="0:0:0.9"
-                                                 AccelerationRatio="0.2"/>
-                                <DoubleAnimation Storyboard.TargetName="Bubble"
-                                                 Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
-                                                 To="1.15"
-                                                 Duration="0:0:0.9"/>
-                                <DoubleAnimation Storyboard.TargetName="Bubble"
-                                                 Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                                                 To="1.15"
-                                                 Duration="0:0:0.9"/>
-                                <DoubleAnimation Storyboard.TargetName="Bubble"
-                                                 Storyboard.TargetProperty="(UIElement.Effect).(BlurEffect.Radius)"
-                                                 To="12"
-                                                 Duration="0:0:0.9"/>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </DataTrigger.EnterActions>
-                </DataTrigger>
-            </DataTemplate.Triggers>
-        </DataTemplate>
-
-        <!-- RenderTransform par défaut sur toutes les bulles -->
-        <Style TargetType="Border">
-            <Setter Property="RenderTransform">
-                <Setter.Value>
-                    <ScaleTransform ScaleX="1" ScaleY="1"/>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <BlurEffect Radius="0"/>
-                </Setter.Value>
-            </Setter>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- Bulle simple pour le chat -->
+        <Style x:Key="ChatItemContainer" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
         </Style>
 
+        <DataTemplate DataType="{x:Type local:ChatMessage}">
+            <Border CornerRadius="10"
+                    Background="{Binding BubbleBrush}"
+                    Padding="10" Margin="2,4"
+                    SnapsToDevicePixels="True">
+                <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap"
+                           FontSize="14"/>
+            </Border>
+        </DataTemplate>
     </Window.Resources>
 
-    <!-- ==================== LAYOUT PRINCIPAL ==================== -->
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="430"/> <!-- Avatar -->
-            <ColumnDefinition Width="*"/>   <!-- Chat -->
-        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="58"/> <!-- Barre d’état -->
+            <RowDefinition Height="48"/>   <!-- top bar -->
+            <RowDefinition Height="*"/>    <!-- content -->
+            <RowDefinition Height="44"/>   <!-- status -->
         </Grid.RowDefinitions>
 
-        <!-- ==== AVATAR + SURVEILLANCE ==== -->
-        <Grid Grid.Column="0" Grid.Row="0" Margin="22">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="12"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!-- Avatar holographique -->
-            <controls:VirgilAvatar x:Name="AvatarControl" Height="320"/>
-
-            <!-- Panneau de surveillance CPU/GPU etc. -->
-            <Border Grid.Row="2"
-                    CornerRadius="14"
-                    Background="#161B22"
-                    Padding="12"
-                    BorderBrush="#2233FFAA"
-                    BorderThickness="1"
-                    Visibility="{Binding IsSurveillanceOn, ElementName=Root, Converter={StaticResource BoolToVisibility}}">
-                <StackPanel>
-                    <TextBlock Text="Surveillance en direct"
-                               Foreground="#D7FFF2"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-
-                    <UniformGrid Columns="2" Rows="2">
-                        <StackPanel>
-                            <TextBlock Text="CPU" Foreground="#9FFFE2"/>
-                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding CpuUsage}" />
-                            <TextBlock Text="{Binding CpuTempText}" Foreground="#99FFFFFF" FontSize="11"/>
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="GPU" Foreground="#9FFFE2"/>
-                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding GpuUsage}" />
-                            <TextBlock Text="{Binding GpuTempText}" Foreground="#99FFFFFF" FontSize="11"/>
-                        </StackPanel>
-                        <StackPanel Margin="0,8,0,0">
-                            <TextBlock Text="Mémoire" Foreground="#9FFFE2"/>
-                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding MemUsage}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,8,0,0">
-                            <TextBlock Text="Disque" Foreground="#9FFFE2"/>
-                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding DiskUsage}" />
-                            <TextBlock Text="{Binding DiskTempText}" Foreground="#99FFFFFF" FontSize="11"/>
-                        </StackPanel>
-                    </UniformGrid>
-                </StackPanel>
-            </Border>
-        </Grid>
-
-        <!-- ==== CHAT ==== -->
-        <Grid Grid.Column="1" Grid.Row="0" Margin="10,16,16,10">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="8"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <!-- Liste de messages (bulle de Virgil) -->
-            <ListBox x:Name="ChatList"
-                     Grid.Row="0"
-                     Background="Transparent"
-                     BorderThickness="0"
-                     ItemsSource="{Binding ChatMessages}"
-                     ItemTemplate="{StaticResource ChatTemplate}"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-
-            <!-- Bouton pour activer/désactiver la surveillance -->
-            <ToggleButton x:Name="SurveillanceToggle"
-                          Grid.Row="1"
-                          Content="{Binding SurveillanceButtonText}"
-                          IsChecked="{Binding IsSurveillanceOn}"
-                          Padding="14,10"
-                          Margin="0,10,0,0"
-                          Background="#1C2A2F"
-                          Foreground="#D7FFF2"
-                          BorderBrush="#3355FFBB"
-                          BorderThickness="1"
-                          Cursor="Hand"/>
-
-            <!-- Ligne d’actions -->
-            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button Content="Maintenance rapide"
-                        Click="QuickMaintenanceButton_Click"
-                        Margin="0,0,10,0"
-                        Padding="14,10"/>
-                <Button Content="Maintenance complète"
-                        Click="FullMaintenanceButton_Click"
-                        Margin="0,0,10,0"
-                        Padding="14,10"/>
-                <Button Content="Nettoyage TEMP"
-                        Click="CleanButton_Click"
-                        Margin="0,0,10,0"
-                        Padding="14,10"/>
-                <Button Content="Caches navigateurs"
-                        Click="CleanBrowsersButton_Click"
-                        Margin="0,0,10,0"
-                        Padding="14,10"/>
-                <Button Content="Mises à jour (apps+jeux+Windows+pilotes)"
-                        Click="UpdateAllButton_Click"
-                        Padding="14,10"/>
+        <!-- TOP BAR -->
+        <DockPanel Grid.Row="0" Background="#151821" LastChildFill="True" Padding="10,0">
+            <TextBlock x:Name="ClockText"
+                       Foreground="#8FA3B8" VerticalAlignment="Center"
+                       FontWeight="SemiBold"/>
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Spacing="8">
+                <ToggleButton x:Name="SurveillanceToggle"
+                              Content="{Binding SurveillanceButtonText}"
+                              IsChecked="{Binding IsSurveillanceOn, Mode=TwoWay}"
+                              Margin="8,6" Padding="14,6"/>
             </StackPanel>
-        </Grid>
+        </DockPanel>
 
-        <!-- ==== BARRE D’ÉTAT ==== -->
-        <Grid Grid.ColumnSpan="2" Grid.Row="1" Margin="16,4,16,16">
+        <!-- CONTENT -->
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="220"/>
+                <ColumnDefinition Width="320"/>   <!-- avatar + stats -->
+                <ColumnDefinition Width="*"/>     <!-- chat + actions -->
             </Grid.ColumnDefinitions>
 
-            <ProgressBar x:Name="TaskProgress"
-                         Height="8"
-                         Minimum="0"
-                         Maximum="100"
-                         Grid.ColumnSpan="2"
-                         VerticalAlignment="Center"/>
+            <!-- LEFT PANEL: Avatar + Stats (stats visibles seulement en surveillance) -->
+            <StackPanel Grid.Column="0" Margin="12" Spacing="12">
+                <Border CornerRadius="16" Background="#161a23" Padding="12">
+                    <controls:VirgilAvatar x:Name="AvatarControl" />
+                </Border>
 
-            <TextBlock x:Name="StatusText"
-                       Grid.Column="0"
-                       Text="Prêt."
-                       Margin="0,10,0,0"
-                       Foreground="#CFFFEF"/>
+                <Border CornerRadius="12" Background="#161a23" Padding="12"
+                        Visibility="{Binding IsSurveillanceOn, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="Surveillance" FontWeight="SemiBold" Foreground="#CDE3FF"
+                                   Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Vertical" Spacing="6">
+                            <TextBlock Text="{Binding CpuTempText}" Foreground="#AFC6DA"/>
+                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding CpuUsage}"/>
 
-            <TextBlock x:Name="ClockText"
-                       Grid.Column="1"
-                       TextAlignment="Right"
-                       Margin="0,10,0,0"
-                       Foreground="#9FFFE2"/>
+                            <TextBlock Text="{Binding GpuTempText}" Foreground="#AFC6DA" Margin="0,6,0,0"/>
+                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding GpuUsage}"/>
+
+                            <TextBlock Text="Mémoire" Foreground="#AFC6DA" Margin="0,6,0,0"/>
+                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding MemUsage}"/>
+
+                            <TextBlock Text="Disque" Foreground="#AFC6DA" Margin="0,6,0,0"/>
+                            <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding DiskUsage}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- RIGHT: Chat + Actions -->
+            <Grid Grid.Column="1" Margin="12" >
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>    <!-- chat -->
+                    <RowDefinition Height="Auto"/> <!-- actions -->
+                </Grid.RowDefinitions>
+
+                <!-- CHAT LIST -->
+                <Border CornerRadius="12" Background="#151821" Padding="10" Margin="0,0,0,10">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ListBox x:Name="ChatList"
+                                 ItemsSource="{Binding ChatMessages}"
+                                 ItemContainerStyle="{StaticResource ChatItemContainer}"
+                                 Background="Transparent" BorderThickness="0" />
+                    </ScrollViewer>
+                </Border>
+
+                <!-- ACTION BUTTONS -->
+                <UniformGrid Grid.Row="1" Columns="4" Margin="0,6,0,0">
+                    <Button Content="Maintenance complète" Click="FullMaintenanceButton_Click" Margin="4" Padding="10"/>
+                    <Button Content="Nettoyer TEMP" Click="CleanButton_Click" Margin="4" Padding="10"/>
+                    <Button Content="Nettoyer navigateurs" Click="CleanBrowsersButton_Click" Margin="4" Padding="10"/>
+                    <Button Content="Tout mettre à jour" Click="UpdateAllButton_Click" Margin="4" Padding="10"/>
+                </UniformGrid>
+            </Grid>
         </Grid>
+
+        <!-- STATUS BAR -->
+        <DockPanel Grid.Row="2" Background="#151821" LastChildFill="True" Padding="10,6">
+            <TextBlock x:Name="StatusText" Foreground="#AFC6DA" VerticalAlignment="Center" />
+            <ProgressBar x:Name="TaskProgress" DockPanel.Dock="Right" Width="280" Height="10"
+                         Margin="10,0,0,0" Minimum="0" Maximum="100"/>
+        </DockPanel>
     </Grid>
 </Window>
