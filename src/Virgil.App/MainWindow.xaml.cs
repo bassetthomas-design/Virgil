@@ -198,40 +198,32 @@ namespace Virgil.App
         // ================== SURVEILLANCE ==================
        private void SurveillancePulse()
 {
-    // Punchline liée à l’heure
     Say(Dialogues.PulseLineByTimeOfDay(), "vigilant");
 
-    // Si tu as AdvancedMonitoringService dans CoreServices (déjà utilisé ailleurs)
-    try
+    if (_monitoringService == null) return;
+
+    var m = _monitoringService.ReadInstant();
+    CpuUsage = m.CpuUsage;
+    MemUsage = m.MemoryUsage;
+    GpuUsage = m.GpuUsage;
+    DiskUsage = m.DiskUsage;
+
+    CpuTempText = m.CpuTempC.HasValue ? $"CPU: {m.CpuTempC.Value:F0} °C" : "CPU: —";
+    GpuTempText = m.GpuTempC.HasValue ? $"GPU: {m.GpuTempC.Value:F0} °C" : "GPU: —";
+    DiskTempText = m.DiskTempC.HasValue ? $"Disque: {m.DiskTempC.Value:F0} °C" : "Disque: —";
+    OnPropertyChanged(nameof(CpuTempText));
+    OnPropertyChanged(nameof(GpuTempText));
+    OnPropertyChanged(nameof(DiskTempText));
+
+    var c = _config.Current;
+    if ((m.CpuTempC.HasValue && m.CpuTempC.Value >= c.CpuTempAlert) ||
+        (m.GpuTempC.HasValue && m.GpuTempC.Value >= c.GpuTempAlert))
     {
-        using var adv = new CoreServices.AdvancedMonitoringService();
-        var m = adv.Read();
-
-        CpuUsage = m.CpuUsage;
-        MemUsage = m.MemoryUsage;
-        GpuUsage = m.GpuUsage;
-        DiskUsage = m.DiskUsage;
-
-        CpuTempText  = m.CpuTempC.HasValue ? $"CPU: {m.CpuTempC.Value:F0} °C" : "CPU: —";
-        GpuTempText  = m.GpuTempC.HasValue ? $"GPU: {m.GpuTempC.Value:F0} °C" : "GPU: —";
-        DiskTempText = m.DiskTempC.HasValue ? $"Disque: {m.DiskTempC.Value:F0} °C" : "Disque: —";
-        OnPropertyChanged(nameof(CpuTempText));
-        OnPropertyChanged(nameof(GpuTempText));
-        OnPropertyChanged(nameof(DiskTempText));
-
-        var c = _config.Current;
-        if ((m.CpuTempC.HasValue && m.CpuTempC.Value >= c.CpuTempAlert) ||
-            (m.GpuTempC.HasValue && m.GpuTempC.Value >= c.GpuTempAlert))
-        {
-            Say(Dialogues.AlertTemp(), "alert");
-            SetAvatarMood("alert");
-        }
-    }
-    catch
-    {
-        // Pas de mesure dispo -> no-op
+        Say(Dialogues.AlertTemp(), "alert");
+        SetAvatarMood("alert");
     }
 }
+
 
 
         private void SurveillancePulse()
