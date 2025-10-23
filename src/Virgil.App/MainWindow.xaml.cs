@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -8,20 +9,21 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using Serilog.Events;
-using Virgil.Core;
+// ⚠️ Do NOT "using Virgil.Core;" (it brings another MonitoringService into scope)
 using Virgil.Core.Services;
 using CoreServices = Virgil.Core.Services;
-using Virgil.App.Controls; // pour VirgilChatPanel / VirgilAvatarViewModel
+using Virgil.App.Controls;
+using MonSvc = Virgil.Core.Services.MonitoringService; // disambiguate
 
 namespace Virgil.App
 {
-    public partial class MainWindow : Window, IHasNotifyPropertyChanged
+    public partial class MainWindow : Window, INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? p = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
-        // === Etat de la surveillance (affiche aussi le panneau CPU/GPU uniquement quand true)
+        // === Etat de la surveillance
         private bool _isMonitoring;
         public bool IsSurveillanceOn
         {
@@ -41,7 +43,7 @@ namespace Virgil.App
         public string DiskTempText { get; set; } = "Disque: —";
 
         private readonly CoreServices.ConfigService _config;
-        private readonly MonitoringService? _monitoringService;
+        private readonly MonSvc? _monService; // <- alias used here
         private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
         private readonly DispatcherTimer _surveillanceTimer = new() { Interval = TimeSpan.FromSeconds(10) };
 
@@ -53,7 +55,7 @@ namespace Virgil.App
             _config = new CoreServices.ConfigService();
             CoreServices.LoggingService.Init(LogEventLevel.Information);
 
-            // Binder le VM de l’avatar si présent
+            // Avatar VM
             try
             {
                 if (AvatarControl != null)
@@ -65,27 +67,26 @@ namespace Virgil.App
             }
             catch { /* ignore */ }
 
-            // Service de monitoring (wrap autour de AdvancedMonitoringService)
-            try { _monService = new MonitoringService(); }
+            // Monitoring (wrapper autour d’AdvancedMonitoringService)
+            try { _monService = new MonSvc(); }
             catch { _monService = null; }
 
-            // Horloge dans la barre d’état
+            // Horloge
             _clockTimer.Tick += (_, __) => { ClockText.Text = DateTime.Now.ToString("dddd dd MMM HH:mm"); };
             _clockTimer.Start();
 
-            // Tick de surveillance (stats + punchlines)
+            // Surveillance
             _surveillanceTimer.Tick += (_, __) => SurveillancePulse();
 
-            // Message d’accueil via la zone de chat custom
+            // Accueil
             Say(Dialogues.Startup(), "neutral");
         }
 
-        // -------------- Chat + helpers --------------
+        // ---------- Chat helpers ----------
         private void Say(string text, string mood = "neutral")
         {
             if (string.IsNullOrWhiteSpace(text)) return;
-            // on délègue l’affichage + auto-scroll + auto-expire au composant
-            ChatArea?.Post(text, mood, 60_000);
+            ChatArea?.Post(text, mood, 60_000); // 60s TTL
             ChatArea?.ScrollToEnd();
             SetAvatarMood(mood);
         }
@@ -100,6 +101,7 @@ namespace Virgil.App
             catch { /* ignore */ }
         }
 
+        // ---------- Progress ----------
         private void Progress(double percent, string status, string mood = "vigilant")
         {
             if (percent < 0) percent = 0;
@@ -136,7 +138,7 @@ namespace Virgil.App
             SetAvatarMood("neutral");
         }
 
-        // -------------- Surveillance --------------
+        // ---------- Surveillance ----------
         private void UpdateSurveillanceState()
         {
             OnPropertyChanged(nameof(SurveillanceButtonText));
@@ -154,9 +156,7 @@ namespace Virgil.App
 
         private void SurveillancePulse()
         {
-            // Punchline selon l’heure
             Say(Dialogues.PulseLineByTimeOfDay(), "vigilant");
-
             if (_monService == null) return;
 
             var m = _monService.ReadInstant();
@@ -181,7 +181,7 @@ namespace Virgil.App
             }
         }
 
-        // -------------- Actions (boutons) --------------
+        // ---------- Actions (boutons) ----------
         private async void QuickMaintenanceButton_Click(object? sender, RoutedEventArgs e)
         {
             try
@@ -209,32 +209,30 @@ namespace Virgil.App
         {
             try
             {
-                Progress(0,   Dialogues.Action("maintenance_full_start"));
-                Progress(10,  Dialogues.Action("clean_temp_start"));
+                Progress(0, Dialogues.Action("maintenance_full_start"));
+
+                Progress(10, Dialogues.Action("clean_temp_start"));
                 await Task.Run(CleanTempWithProgressInternal);
 
-                Progress(30,  Dialogues.Action("clean_browsers_start"));
+                Progress(30, Dialogues.Action("clean_browsers_start"));
                 var browsers = new BrowserCleaningService();
                 var bRep = await Task.Run(() => browsers.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
                 Say(Dialogues.Action("clean_browsers_done") + $" (~{bRep.BytesDeleted / (1024.0 * 1024):F1} MB)");
 
-                Progress(50,  Dialogues.Action("clean_extended_start"));
+                Progress(50, Dialogues.Action("clean_extended_start"));
                 var ext = new ExtendedCleaningService();
                 var exRep = await Task.Run(() => ext.AnalyzeAndClean());
                 Say(Dialogues.Action("clean_extended_done") + $" (~{exRep.BytesDeleted / (1024.0 * 1024):F1} MB)");
 
-                // Apps
                 ProgressIndeterminate(Dialogues.Action("update_apps_games_start"));
                 var app = new ApplicationUpdateService();
                 var txt = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
                 if (!string.IsNullOrWhiteSpace(txt)) Say(Dialogues.Action("update_apps_done"));
 
-                // Jeux
                 var games = new GameUpdateService();
-                var gout = await games.UpdateAllAsync();
-                if (!string.IsNullOrWhiteSpace(gout)) Say(gout);
+                var gOut = await games.UpdateAllAsync();
+                if (!string.IsNullOrWhiteSpace(gOut)) Say(gOut);
 
-                // Windows Update
                 ProgressIndeterminate(Dialogues.Action("update_windows_start"));
                 var wu = new WindowsUpdateService();
                 await wu.StartScanAsync();
@@ -242,11 +240,10 @@ namespace Virgil.App
                 await wu.StartInstallAsync();
                 Say(Dialogues.Action("update_windows_done"));
 
-                // Pilotes
                 ProgressIndeterminate(Dialogues.Action("update_drivers_start"));
                 var drv = new DriverUpdateService();
-                var dout = await drv.UpgradeDriversAsync();
-                if (!string.IsNullOrWhiteSpace(dout)) Say(Dialogues.Action("update_drivers_done"));
+                var dOut = await drv.UpgradeDriversAsync();
+                if (!string.IsNullOrWhiteSpace(dOut)) Say(Dialogues.Action("update_drivers_done"));
 
                 ProgressDone(Dialogues.Action("maintenance_full_done"));
             }
@@ -261,7 +258,7 @@ namespace Virgil.App
         {
             try
             {
-                Progress(0,  Dialogues.Action("clean_temp_start"));
+                Progress(0, Dialogues.Action("clean_temp_start"));
                 await Task.Run(CleanTempWithProgressInternal);
                 ProgressDone(Dialogues.Action("clean_temp_done"));
             }
@@ -276,7 +273,7 @@ namespace Virgil.App
         {
             try
             {
-                Progress(0,  Dialogues.Action("clean_browsers_start"));
+                Progress(0, Dialogues.Action("clean_browsers_start"));
                 var svc = new BrowserCleaningService();
                 var rep = await Task.Run(() => svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
                 ProgressDone(Dialogues.Action("clean_browsers_done") + $" (~{rep.BytesDeleted / (1024.0 * 1024):F1} MB)");
@@ -293,17 +290,18 @@ namespace Virgil.App
             try
             {
                 ProgressIndeterminate(Dialogues.Action("update_apps_games_start"));
+
                 var app = new ApplicationUpdateService();
                 var txt = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
                 if (!string.IsNullOrWhiteSpace(txt)) Say(Dialogues.Action("update_apps_done"));
 
                 var games = new GameUpdateService();
-                var gout = await games.UpdateAllAsync();
-                if (!string.IsNullOrWhiteSpace(gout)) Say(gout);
+                var gOut = await games.UpdateAllAsync();
+                if (!string.IsNullOrWhiteSpace(gOut)) Say(gOut);
 
                 var drv = new DriverUpdateService();
-                var dout = await drv.UpgradeDriversAsync();
-                if (!string.IsNullOrWhiteSpace(dout)) Say(Dialogues.Action("update_drivers_done"));
+                var dOut = await drv.UpgradeDriversAsync();
+                if (!string.IsNullOrWhiteSpace(dOut)) Say(Dialogues.Action("update_drivers_done"));
 
                 var wu = new WindowsUpdateService();
                 await wu.StartScanAsync();
@@ -320,7 +318,7 @@ namespace Virgil.App
             }
         }
 
-        // -------------- Nettoyage TEMP avec progression réelle --------------
+        // ---------- Nettoyage TEMP ----------
         private void CleanTempWithProgressInternal()
         {
             var targets = new[]
@@ -380,7 +378,7 @@ namespace Virgil.App
         }
     }
 
-    // --------- Dialogues centralisés (inchangé) ---------
+    // ---------- Dialogues ----------
     static class Dialogues
     {
         private static readonly Random R = new();
@@ -403,7 +401,7 @@ namespace Virgil.App
         {
             try
             {
-                var arr = _b?[section];
+                var arr = _data?[section];
                 if (arr == null) return "…";
                 var list = ((System.Text.Json.Nodes.JsonArray)arr)
                     .Select(x => x?.ToString() ?? "")
