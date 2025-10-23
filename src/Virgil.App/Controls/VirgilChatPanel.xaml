@@ -1,29 +1,41 @@
 <UserControl x:Class="Virgil.App.Controls.VirgilChatPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:Virgil.App.Controls"
-             xmlns:app="clr-namespace:Virgil.App"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="mc"
              Background="Transparent">
-    <Grid>
-        <!-- poussière pour l’effet thanos -->
-        <Canvas x:Name="DustLayer" IsHitTestVisible="False"/>
 
-        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages, RelativeSource={RelativeSource AncestorType=local:VirgilChatPanel}}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="{x:Type app:ChatMessage}">
+    <Grid>
+        <!-- La liste des bulles -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ListBox x:Name="MessageList"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="0"
+                     ItemContainerStyle="{DynamicResource {x:Static ListBoxItem.StyleKey}}">
+
+                <!-- Template de bulle -->
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
                         <Border x:Name="Bubble"
                                 CornerRadius="10"
-                                Background="{Binding BubbleBrush}"
-                                Padding="10" Margin="2,6"
-                                SnapsToDevicePixels="True"
-                                Opacity="1">
-                            <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap"
+                                Background="#22FFFFFF"
+                                Padding="10"
+                                Margin="4,6"
+                                SnapsToDevicePixels="True">
+                            <TextBlock Text="{Binding Text}"
+                                       Foreground="White"
+                                       TextWrapping="Wrap"
                                        FontSize="14"/>
                         </Border>
                     </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </ScrollViewer>
+
+        <!-- Couche “poussière” pour l’effet Thanos -->
+        <Canvas x:Name="DustLayer"
+                IsHitTestVisible="False"
+                Background="Transparent"/>
     </Grid>
 </UserControl>
