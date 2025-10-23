@@ -3,14 +3,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
-
-// Alias sûrs pour éviter System.Drawing collisions
+using System.Windows.Controls;
 using SW = System.Windows;
-using Media = System.Windows.Media;
 
 namespace Virgil.App.Controls
 {
@@ -19,10 +16,10 @@ namespace Virgil.App.Controls
         public string Text { get; set; } = "";
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
         public int TtlMs { get; set; } = 5000;
-        public FrameworkElement? Container { get; set; }   // attaché au visuel réel
+        public FrameworkElement? Container { get; set; }
     }
 
-    public partial class VirgilChatPanel : UserControl
+    public partial class VirgilChatPanel : System.Windows.Controls.UserControl
     {
         public ObservableCollection<ChatMessage> Messages { get; } = new();
 
@@ -38,7 +35,6 @@ namespace Virgil.App.Controls
             var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 5000 };
             Messages.Add(msg);
 
-            // Attendre que l’item visuel existe
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 var container = FindContainerFor(msg);
@@ -52,7 +48,6 @@ namespace Virgil.App.Controls
 
         private FrameworkElement? FindContainerFor(ChatMessage msg)
         {
-            // ItemsControl génère un container par item; on prend le dernier
             var container = List.ItemContainerGenerator.ContainerFromIndex(Messages.Count - 1) as FrameworkElement;
             return container?.FindName("Bubble") as FrameworkElement ?? container;
         }
@@ -62,12 +57,8 @@ namespace Virgil.App.Controls
             await System.Threading.Tasks.Task.Delay(msg.TtlMs);
             if (!Messages.Contains(msg) || msg.Container == null) return;
 
-            // Effet Thanos
             PlayThanos(msg.Container);
-            FadeShrink(msg.Container, 240, () =>
-            {
-                Messages.Remove(msg);
-            });
+            FadeShrink(msg.Container, 240, () => Messages.Remove(msg));
         }
 
         private void FadeShrink(FrameworkElement target, int ms, Action onDone)
@@ -97,7 +88,6 @@ namespace Virgil.App.Controls
             sb.Begin();
         }
 
-        /// <summary>Effet "Thanos" sans shader : petites particules qui s’éparpillent.</summary>
         private void PlayThanos(FrameworkElement source)
         {
             if (source.ActualWidth < 10 || source.ActualHeight < 10) return;
@@ -112,33 +102,30 @@ namespace Virgil.App.Controls
                 {
                     Width = rnd.Next(2, 5),
                     Height = rnd.Next(2, 5),
-                    Fill = new SolidColorBrush(Media.Color.FromArgb(220, 255, 255, 255)),
+                    Fill = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
                     Opacity = 0.0
                 };
                 Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
                 Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
                 DustLayer.Children.Add(dot);
 
-                // destination aléatoire
                 var dx = (rnd.NextDouble() - 0.2) * 120;
-                var dy = -(20 + rnd.NextDouble() * 80); // un peu vers le haut
+                var dy = -(20 + rnd.NextDouble() * 80);
                 var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 200));
 
                 var ax = new DoubleAnimation(Canvas.GetLeft(dot), Canvas.GetLeft(dot) + dx, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-                var ay = new DoubleAnimation(Canvas.GetTop(dot),  Canvas.GetTop(dot)  + dy, dur)
+                var ay = new DoubleAnimation(Canvas.GetTop(dot), Canvas.GetTop(dot) + dy, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
 
-                // opacités
-                var ao  = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
+                var ao = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
                 var ao2 = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
 
                 dot.BeginAnimation(UIElement.OpacityProperty, ao);
                 dot.BeginAnimation(UIElement.OpacityProperty, ao2);
                 dot.BeginAnimation(Canvas.LeftProperty, ax);
-                dot.BeginAnimation(Canvas.TopProperty,  ay);
+                dot.BeginAnimation(Canvas.TopProperty, ay);
 
-                // nettoyage après fade-out
                 ao2.Completed += (_, __) => DustLayer.Children.Remove(dot);
             }
         }
