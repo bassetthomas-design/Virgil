@@ -196,22 +196,43 @@ namespace Virgil.App
         }
 
         // ================== SURVEILLANCE ==================
-        private void UpdateSurveillanceState()
-        {
-            OnPropertyChanged(nameof(SurveillanceButtonText));
+       private void SurveillancePulse()
+{
+    // Punchline liée à l’heure
+    Say(Dialogues.PulseLineByTimeOfDay(), "vigilant");
 
-            if (IsSurveillanceOn)
-            {
-                Say(Dialogues.SurveillanceStart(), "vigilant");
-                _surveillanceTimer.Start();
-            }
-            else
-            {
-                _surveillanceTimer.Stop();
-                Say(Dialogues.SurveillanceStop(), "neutral");
-                // Les stats ne s’affichent que pendant la surveillance (via bindings côté XAML).
-            }
+    // Si tu as AdvancedMonitoringService dans CoreServices (déjà utilisé ailleurs)
+    try
+    {
+        using var adv = new CoreServices.AdvancedMonitoringService();
+        var m = adv.Read();
+
+        CpuUsage = m.CpuUsage;
+        MemUsage = m.MemoryUsage;
+        GpuUsage = m.GpuUsage;
+        DiskUsage = m.DiskUsage;
+
+        CpuTempText  = m.CpuTempC.HasValue ? $"CPU: {m.CpuTempC.Value:F0} °C" : "CPU: —";
+        GpuTempText  = m.GpuTempC.HasValue ? $"GPU: {m.GpuTempC.Value:F0} °C" : "GPU: —";
+        DiskTempText = m.DiskTempC.HasValue ? $"Disque: {m.DiskTempC.Value:F0} °C" : "Disque: —";
+        OnPropertyChanged(nameof(CpuTempText));
+        OnPropertyChanged(nameof(GpuTempText));
+        OnPropertyChanged(nameof(DiskTempText));
+
+        var c = _config.Current;
+        if ((m.CpuTempC.HasValue && m.CpuTempC.Value >= c.CpuTempAlert) ||
+            (m.GpuTempC.HasValue && m.GpuTempC.Value >= c.GpuTempAlert))
+        {
+            Say(Dialogues.AlertTemp(), "alert");
+            SetAvatarMood("alert");
         }
+    }
+    catch
+    {
+        // Pas de mesure dispo -> no-op
+    }
+}
+
 
         private void SurveillancePulse()
         {
