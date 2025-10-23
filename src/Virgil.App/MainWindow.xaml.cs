@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using System.Windows.Media.Brush _myBrush; // (optionnel)
 using System.Windows.Threading;
 
 using Serilog.Events;
