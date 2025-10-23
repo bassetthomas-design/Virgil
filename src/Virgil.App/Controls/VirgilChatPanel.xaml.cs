@@ -1,31 +1,37 @@
-// Uses WPF namespaces explicitly to avoid conflicts with System.Windows.Forms / System.Drawing
 #nullable enable
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media.Animation;
-using System.Windows.Threading;
+
+// Alias WPF pour éviter System.Drawing / WinForms
 using SW = System.Windows;
 using SWC = System.Windows.Controls;
 using SWM = System.Windows.Media;
-using SWS = System.Windows.Shapes;
+using SWMA = System.Windows.Media.Animation;
+using SWShapes = System.Windows.Shapes;
 
 namespace Virgil.App.Controls
 {
-    public class ChatBubble
+    /// <summary>Un message visuel dans le panel.</summary>
+    public sealed class ChatBubble
     {
         public string Text { get; set; } = "";
-        public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-        public int TtlMs { get; set; } = 60_000; // 60s par défaut
-        public SW.FrameworkElement? Visual { get; set; }
+        public DateTime Created { get; set; } = DateTime.UtcNow;
+        public int TtlMs { get; set; } = 60_000; // 1 minute par défaut
+        public double Opacity { get; set; } = 1.0;
+
+        // Couleur de fond déjà calculée ; on reste en Media.Brush
+        public SWM.Brush Background { get; set; } =
+            new SWM.SolidColorBrush(SWM.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+
+        // Référence au conteneur visuel (Border "Bubble") une fois généré
+        public SW.FrameworkElement? Container { get; set; }
     }
 
+    /// <summary>Panneau de chat + effet "Thanos".</summary>
     public partial class VirgilChatPanel : SWC.UserControl
     {
-        // Ces noms doivent exister dans VirgilChatPanel.xaml :
-        // <ScrollViewer x:Name="Scroller">, <ListBox x:Name="MessageList">, <Canvas x:Name="DustLayer">
         public ObservableCollection<ChatBubble> Messages { get; } = new();
 
         public VirgilChatPanel()
@@ -33,127 +39,143 @@ namespace Virgil.App.Controls
             InitializeComponent();
             DataContext = this;
 
-            // Scroll automatique sur nouveau contenu
-            CompositionTarget.Rendering += (_, __) => Scroller?.ScrollToEnd();
+            // Auto-scroll à chaque frame si la liste change
+            SWM.CompositionTarget.Rendering += (_, __) =>
+            {
+                try { MessageList?.ScrollIntoView(MessageList.Items.Cast<object>().LastOrDefault()); }
+                catch { /* ignore */ }
+            };
         }
 
-        /// <summary>Ajoute un message dans la zone de chat (avec TTL en ms, défaut 60s).</summary>
+        /// <summary>Ajoute un message et programme sa disparition.</summary>
         public void Post(string text, string? mood = null, int? ttlMs = null)
         {
-            if (string.IsNullOrWhiteSpace(text))
-                return;
+            if (string.IsNullOrWhiteSpace(text)) return;
 
             var bubble = new ChatBubble
             {
-                Text = text,
+                Text = text.Trim(),
                 TtlMs = ttlMs ?? 60_000,
-                Created = DateTime.UtcNow
+                Background = MoodToBrush(mood ?? "neutral")
             };
+
             Messages.Add(bubble);
 
-            // Laisse WPF matérialiser l’item, puis on accroche la bulle et on programme sa disparition.
+            // Quand le conteneur est prêt, on le retrouve pour animer la disparition
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                var container = MessageList.ItemContainerGenerator.ContainerForItem(bubble) as SWC.ListBoxItem;
-                if (container != null)
-                {
-                    // On essaie de retrouver l'élément visuel nommé "Bubble" dans le template de l'item
-                    var bubbleVisual = FindElementByName(container, "Bubble") as SW.FrameworkElement ?? container;
-                    bubble.Visual = bubbleVisual;
-
-                    ScheduleVanish(bubble);
-                    Scroller?.ScrollToEnd();
-                }
-            }), DispatcherPriority.Loaded);
+                AttachContainerFor(bubble);
+                _ = ScheduleVanishAsync(bubble);
+            }), SW.Threading.DispatcherPriority.Loaded);
         }
 
-        public void ClearAll()
-        {
-            // Efface tout (sans effet visuel)
-            foreach (var child in DustLayer.Children.OfType<SW.FrameworkElement>().ToList())
-                DustLayer.Children.Remove(child);
-            Messages.Clear();
-        }
-
+        /// <summary>Scroll jusqu’au bas.</summary>
         public void ScrollToEnd()
         {
-            Scroller?.ScrollToEnd();
+            try { MessageList?.ScrollIntoView(MessageList.Items.Cast<object>().LastOrDefault()); } catch { }
         }
 
-        // ---------- Helpers internes ----------
-
-        private SW.DependencyObject? FindElementByName(SW.DependencyObject root, string name)
+        /// <summary>Supprime tous les messages.</summary>
+        public void Clear()
         {
-            if (root is FrameworkElement fe && fe.Name == name)
-                return fe;
-
-            int count = SW.Media.VisualTreeHelper.GetChildrenCount(root);
-            for (int i = 0; i < count; i++)
-            {
-                var child = SW.Media.VisualTreeHelper.GetChild(root, i);
-                var found = FindElementByName(child, name);
-                if (found != null) return found;
-            }
-            return null;
+            Messages.Clear();
+            DustLayer.Children.Clear();
         }
 
-        private async void ScheduleVanish(ChatBubble cb)
+        // ---------------- internals ----------------
+
+        private SWM.Brush MoodToBrush(string mood)
         {
-            await Task.Delay(cb.TtlMs);
-            if (!Messages.Contains(cb) || cb.Visual is null)
-                return;
-
-            // Effet "poussière" + fade/shrink puis suppression
-            PlayThanos(cb.Visual);
-            FadeAndShrink(cb.Visual, 240, () =>
+            return mood.ToLowerInvariant() switch
             {
-                Messages.Remove(cb);
-            });
-        }
-
-        private void FadeAndShrink(SW.FrameworkElement target, int ms, Action onDone)
-        {
-            var sb = new SWM.Animation.Storyboard();
-
-            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+                "proud"    => new SWM.SolidColorBrush(SWM.Color.FromArgb(0x33, 0x46, 0xFF, 0x7A)),
+                "vigilant" => new SWM.SolidColorBrush(SWM.Color.FromArgb(0x33, 0xFF, 0xE4, 0x6B)),
+                "alert"    => new SWM.SolidColorBrush(SWM.Color.FromArgb(0x33, 0xFF, 0x69, 0x61)),
+                _          => new SWM.SolidColorBrush(SWM.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
             };
-            SWM.Animation.Storyboard.SetTarget(fade, target);
-            SWM.Animation.Storyboard.SetTargetProperty(fade, new PropertyPath("Opacity"));
-            sb.Children.Add(fade);
+        }
 
+        private void AttachContainerFor(ChatBubble bubble)
+        {
+            var idx = Messages.IndexOf(bubble);
+            if (idx < 0) return;
+
+            var container = MessageList.ItemContainerGenerator.ContainerFromIndex(idx) as SW.FrameworkElement;
+            if (container == null) return;
+
+            // Le Border dans le DataTemplate s’appelle "Bubble"
+            var bubbleBorder = container.FindName("Bubble") as SW.FrameworkElement ?? container;
+            bubble.Container = bubbleBorder;
+        }
+
+        private async Task ScheduleVanishAsync(ChatBubble bubble)
+        {
+            try
+            {
+                await Task.Delay(bubble.TtlMs);
+                if (!Messages.Contains(bubble)) return;
+
+                if (bubble.Container != null)
+                {
+                    PlayThanos(bubble.Container);
+                    FadeShrink(bubble.Container, 240, () =>
+                    {
+                        Messages.Remove(bubble);
+                    });
+                }
+                else
+                {
+                    Messages.Remove(bubble);
+                }
+            }
+            catch { /* ignore */ }
+        }
+
+        private void FadeShrink(SW.FrameworkElement target, int ms, Action onDone)
+        {
+            var sb = new SWMA.Storyboard();
+
+            // Opacity 1 -> 0
+            var daOpacity = new SWMA.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
+            {
+                EasingFunction = new SWMA.QuadraticEase { EasingMode = SWMA.EasingMode.EaseIn }
+            };
+            SWMA.Storyboard.SetTarget(daOpacity, target);
+            SWMA.Storyboard.SetTargetProperty(daOpacity, new SW.PropertyPath("Opacity"));
+            sb.Children.Add(daOpacity);
+
+            // Scale 1 -> 0.85
             var scale = new SWM.ScaleTransform(1, 1);
             target.RenderTransformOrigin = new SW.Point(0.5, 0.5);
             target.RenderTransform = scale;
 
-            var sx = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
-            var sy = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
-            SWM.Animation.Storyboard.SetTarget(sx, target);
-            SWM.Animation.Storyboard.SetTargetProperty(sx, new PropertyPath("RenderTransform.ScaleX"));
-            SWM.Animation.Storyboard.SetTarget(sy, target);
-            SWM.Animation.Storyboard.SetTargetProperty(sy, new PropertyPath("RenderTransform.ScaleY"));
-            sb.children.Add(sx);
-            sb.children.Add(sy);
+            var daX = new SWMA.DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            SWMA.Storyboard.SetTarget(daX, target);
+            SWMA.Storyboard.SetTargetProperty(daX, new SW.PropertyPath("RenderTransform.ScaleX"));
+            sb.Children.Add(daX);
+
+            var daY = new SWMA.DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            SWMA.Storyboard.SetTarget(daY, target);
+            SWMA.Storyboard.SetTargetProperty(daY, new SW.PropertyPath("RenderTransform.ScaleY"));
+            sb.Children.Add(daY);
 
             sb.Completed += (_, __) => onDone();
             sb.Begin();
         }
 
-        /// <summary>Effet "Thanos" : petites particules blanches qui s’éparpillent depuis la bulle.</summary>
+        /// <summary>Effet poussière ("Thanos") simple sans shader.</summary>
         private void PlayThanos(SW.FrameworkElement source)
         {
-            if (source.ActualWidth <= 4 || source.ActualHeight <= 4 || DustLayer == null)
-                return;
+            if (source.ActualWidth < 8 || source.ActualHeight < 8) return;
 
+            // position absolue du coin haut-gauche dans coord du DustLayer
             var origin = source.TranslatePoint(new SW.Point(0, 0), DustLayer);
             var rnd = new Random();
 
-            int count = Math.Clamp((int)((source.ActualWidth * source.ActualHeight) / 550.0), 12, 42);
-
+            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 40);
             for (int i = 0; i < count; i++)
             {
-                var dot = new SWS.Ellipse
+                var dot = new SWShapes.Ellipse
                 {
                     Width = rnd.Next(2, 5),
                     Height = rnd.Next(2, 5),
@@ -162,27 +184,29 @@ namespace Virgil.App.Controls
                 };
 
                 SWC.Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
-                SWC.Canvas.SetTop(dot,  origin.Y + rnd.NextDouble() * source.ActualHeight);
+                SWC.Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
                 DustLayer.Children.Add(dot);
 
-                // Déplacement aléatoire vers le haut / côté
-                double dx = (rnd.NextDouble() - 0.2) * 120.0;
-                double dy = -(20 + rnd.NextDouble() * 80.0);
-                var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 220));
+                // Trajectoire
+                var dx = (rnd.NextDouble() - 0.2) * 120;
+                var dy = -(20 + rnd.NextDouble() * 80);
+                var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 200));
 
-                var ax = new DoubleAnimation(SWC.Canvas.GetLeft(dot), SWC.Canvas.GetLeft(dot) + dx, dur)
-                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-                var ay = new DoubleAnimation(SWC.Canvas.GetTop(dot), SWC.Canvas.GetTop(dot) + dy, dur)
-                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-                var aIn  = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
-                var aOut = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
+                var ax = new SWMA.DoubleAnimation(SWC.Canvas.GetLeft(dot), SWC.Canvas.GetLeft(dot) + dx, dur)
+                { EasingFunction = new SWMA.QuadraticEase { EasingMode = SWMA.EasingMode.EaseOut } };
 
-                dot.BeginAnimation(SW.UIElement.OpacityProperty, aIn);
-                dot.BeginAnimation(SW.UIElement.OpacityProperty, aOut);
+                var ay = new SWMA.DoubleAnimation(SWC.Canvas.GetTop(dot), SWC.Canvas.GetTop(dot) + dy, dur)
+                { EasingFunction = new SWMA.QuadraticEase { EasingMode = SWMA.EasingMode.EaseOut } };
+
+                var aoIn = new SWMA.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
+                var aoOut = new SWMA.DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
+
+                dot.BeginAnimation(SW.UIElement.OpacityProperty, aoIn);
+                dot.BeginAnimation(SW.UIElement.OpacityProperty, aoOut);
                 dot.BeginAnimation(SWC.Canvas.LeftProperty, ax);
-                dot.BeginAnimation(SWC.Canvas.TopProperty,  ay);
+                dot.BeginAnimation(SWC.Canvas.TopProperty, ay);
 
-                aOut.Completed += (_, __) => DustLayer.Children.Remove(dot);
+                aoOut.Completed += (_, __) => DustLayer.Children.Remove(dot);
             }
         }
     }
