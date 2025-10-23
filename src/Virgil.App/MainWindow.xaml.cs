@@ -2,11 +2,9 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
@@ -24,7 +22,7 @@ namespace Virgil.App
         public DateTime Timestamp { get; set; } = DateTime.Now;
 
         private string _text = "";
-        public string Text { get => _text; set { _text = value; OnPropertyChanged(); } }
+        public string Text { get => _text; set { _text = value; OnPropertyChanged();} }
 
         private string _mood = "neutral";
         public string Mood { get => _mood; set { _mood = value; OnPropertyChanged(); UpdateBrush(); } }
@@ -36,7 +34,8 @@ namespace Virgil.App
         public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
 
         public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        private void OnPropertyChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
         private void UpdateBrush()
         {
@@ -53,6 +52,17 @@ namespace Virgil.App
 
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
+        // Petit conteneur pour les métriques, évite d’exiger ReadInstant() côté service
+        private readonly record struct Metrics(
+            double CpuUsage,
+            double MemoryUsage,
+            double GpuUsage,
+            double DiskUsage,
+            double? CpuTempC,
+            double? GpuTempC,
+            double? DiskTempC
+        );
+
         // === Bindings UI ===
         public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
         public bool IsSurveillanceOn
@@ -73,7 +83,8 @@ namespace Virgil.App
         public string DiskTempText { get; set; } = "Disque: —";
 
         public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        private void OnPropertyChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
         private readonly CoreServices.ConfigService _config;
         private readonly MonitoringService? _monitoringService;
@@ -196,21 +207,57 @@ namespace Virgil.App
         }
 
         // ================== SURVEILLANCE ==================
-        private void UpdateSurveillanceState()
+        private Metrics ReadInstantSafe()
         {
-            OnPropertyChanged(nameof(SurveillanceButtonText));
+            if (_monitoringService == null)
+                return new Metrics(0, 0, 0, 0, null, null, null);
 
-            if (IsSurveillanceOn)
+            var svc = _monitoringService;
+            var t = svc.GetType();
+
+            double GetDouble(string name)
             {
-                Say(Dialogues.SurveillanceStart(), "vigilant");
-                _surveillanceTimer.Start();
+                try
+                {
+                    var p = t.GetProperty(name);
+                    if (p != null) return Convert.ToDouble(p.GetValue(svc) ?? 0);
+                    var m = t.GetMethod(name, Type.EmptyTypes);
+                    if (m != null) return Convert.ToDouble(m.Invoke(svc, null) ?? 0);
+                }
+                catch { }
+                return 0;
             }
-            else
+
+            double? GetNullable(string name)
             {
-                _surveillanceTimer.Stop();
-                Say(Dialogues.SurveillanceStop(), "neutral");
-                // Les stats ne s’affichent qu’en surveillance (masquées via bindings autrement)
+                try
+                {
+                    var p = t.GetProperty(name);
+                    if (p != null)
+                    {
+                        var v = p.GetValue(svc);
+                        return v == null ? (double?)null : Convert.ToDouble(v);
+                    }
+                    var m = t.GetMethod(name, Type.EmptyTypes);
+                    if (m != null)
+                    {
+                        var v = m.Invoke(svc, null);
+                        return v == null ? (double?)null : Convert.ToDouble(v);
+                    }
+                }
+                catch { }
+                return null;
             }
+
+            return new Metrics(
+                CpuUsage:    GetDouble("CpuUsage"),
+                MemoryUsage: GetDouble("MemoryUsage"),
+                GpuUsage:    GetDouble("GpuUsage"),
+                DiskUsage:   GetDouble("DiskUsage"),
+                CpuTempC:    GetNullable("CpuTempC"),
+                GpuTempC:    GetNullable("GpuTempC"),
+                DiskTempC:   GetNullable("DiskTempC")
+            );
         }
 
         private void SurveillancePulse()
@@ -220,8 +267,8 @@ namespace Virgil.App
 
             if (_monitoringService == null) return;
 
-            // Mesures “live”
-            var m = _monitoringService.ReadInstant(); // assure-toi que cette méthode existe côté service
+            // Mesures “live” via réflexion (pas besoin de ReadInstant côté service)
+            var m = ReadInstantSafe();
             CpuUsage = m.CpuUsage;
             MemUsage = m.MemoryUsage;
             GpuUsage = m.GpuUsage;
@@ -470,7 +517,10 @@ namespace Virgil.App
             {
                 var arr = _data?[section];
                 if (arr == null) return "…";
-                var list = ((System.Text.Json.Nodes.JsonArray)arr).Select(x => x?.ToString() ?? "").Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                var list = ((System.Text.Json.Nodes.JsonArray)arr)
+                    .Select(x => x?.ToString() ?? "")
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToList();
                 if (list.Count == 0) return "…";
                 return list[R.Next(list.Count)];
             }
