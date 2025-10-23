@@ -1,17 +1,14 @@
 #nullable enable
 using System;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
-
-// Alias pratique si tu veux en ajouter
+using System.Windows.Controls;
 using SW = System.Windows;
 
 namespace Virgil.App.Controls
 {
-    public partial class VirgilAvatar : UserControl
+    public partial class VirgilAvatar : System.Windows.Controls.UserControl
     {
-        // VM liée par DataContext
         private VirgilAvatarViewModel VM => (VirgilAvatarViewModel)DataContext;
 
         public VirgilAvatar()
@@ -23,39 +20,28 @@ namespace Virgil.App.Controls
             ApplyTransforms(animated: false);
         }
 
-        /// <summary>
-        /// Change l’humeur (et donc la géométrie/couleurs) de l’avatar.
-        /// </summary>
         public void SetMood(string mood)
         {
             VM.SetMood(mood);
 
-            // bascule des variantes visuelles (doivent exister dans le XAML avec x:Name)
             if (RoundEyes != null) RoundEyes.Visibility = VM.UseRoundEyes ? Visibility.Visible : Visibility.Collapsed;
-            if (Tear      != null) Tear.Visibility      = VM.ShowTear     ? Visibility.Visible : Visibility.Collapsed;
-            if (Hearts    != null) Hearts.Visibility    = VM.ShowHearts   ? Visibility.Visible : Visibility.Collapsed;
-            if (CatAddons != null) CatAddons.Visibility = VM.ShowCat      ? Visibility.Visible : Visibility.Collapsed;
-            if (DevilHorns!= null) DevilHorns.Visibility= VM.ShowDevil    ? Visibility.Visible : Visibility.Collapsed;
+            if (Tear != null) Tear.Visibility = VM.ShowTear ? Visibility.Visible : Visibility.Collapsed;
+            if (Hearts != null) Hearts.Visibility = VM.ShowHearts ? Visibility.Visible : Visibility.Collapsed;
+            if (CatAddons != null) CatAddons.Visibility = VM.ShowCat ? Visibility.Visible : Visibility.Collapsed;
+            if (DevilHorns != null) DevilHorns.Visibility = VM.ShowDevil ? Visibility.Visible : Visibility.Collapsed;
 
-            // masquer yeux amande si yeux ronds actifs
             if (LeftEye != null && RightEye != null)
             {
                 var vis = VM.UseRoundEyes ? Visibility.Collapsed : Visibility.Visible;
-                LeftEye.Visibility  = vis;
+                LeftEye.Visibility = vis;
                 RightEye.Visibility = vis;
             }
 
             ApplyTransforms(animated: true);
         }
 
-        /// <summary>
-        /// Alias pratique si tu utilises SetExpression côté appelant.
-        /// </summary>
         public void SetExpression(string expr) => SetMood(expr);
 
-        /// <summary>
-        /// Barre de progression intégrée à l’avatar (si présente dans le XAML).
-        /// </summary>
         public void SetProgress(double percent)
         {
             if (AvatarProgress == null) return;
@@ -79,14 +65,8 @@ namespace Virgil.App.Controls
             AvatarProgress.IsIndeterminate = on;
         }
 
-        /// <summary>
-        /// Applique les transforms (échelle/orientation/déport) des yeux selon la VM.
-        /// S’appuie sur les objets définis dans le XAML via x:Name :
-        /// LE_S/RE_S : ScaleTransform, LE_R/RE_R : RotateTransform, LE_T/RE_T : TranslateTransform
-        /// </summary>
         private void ApplyTransforms(bool animated)
         {
-            // Lerp tout simple via DispatcherTimer (évite des storyboards pour chaque champ)
             void Lerp(Action<double> setter, double from, double to, int ms = 220)
             {
                 var t0 = from; var t1 = to;
@@ -102,39 +82,34 @@ namespace Virgil.App.Controls
                 timer.Start();
             }
 
-            // Sécurité : si les transforms n’existent pas (XAML différent), on sort.
             if (LE_S == null || RE_S == null || LE_R == null || RE_R == null || LE_T == null || RE_T == null)
                 return;
 
             if (!animated)
             {
-                // gauche
-                LE_S.ScaleX = VM.EyeScale;   LE_S.ScaleY = VM.EyeScale;
-                LE_R.Angle  = -VM.EyeTilt;
-                LE_T.X      = -VM.EyeSeparation;
-                LE_T.Y      = VM.EyeY;
+                LE_S.ScaleX = VM.EyeScale; LE_S.ScaleY = VM.EyeScale;
+                LE_R.Angle = -VM.EyeTilt;
+                LE_T.X = -VM.EyeSeparation;
+                LE_T.Y = VM.EyeY;
 
-                // droite (ScaleX inversé pour “miroir”)
-                RE_S.ScaleX = -VM.EyeScale;  RE_S.ScaleY = VM.EyeScale;
-                RE_R.Angle  =  VM.EyeTilt;
-                RE_T.X      =  VM.EyeSeparation;
-                RE_T.Y      =  VM.EyeY;
+                RE_S.ScaleX = -VM.EyeScale; RE_S.ScaleY = VM.EyeScale;
+                RE_R.Angle = VM.EyeTilt;
+                RE_T.X = VM.EyeSeparation;
+                RE_T.Y = VM.EyeY;
             }
             else
             {
-                // gauche
                 Lerp(v => LE_S.ScaleX = v, LE_S.ScaleX, VM.EyeScale);
                 Lerp(v => LE_S.ScaleY = v, LE_S.ScaleY, VM.EyeScale);
-                Lerp(v => LE_R.Angle  = v, LE_R.Angle,  -VM.EyeTilt);
-                Lerp(v => LE_T.X      = v, LE_T.X,      -VM.EyeSeparation);
-                Lerp(v => LE_T.Y      = v, LE_T.Y,       VM.EyeY);
+                Lerp(v => LE_R.Angle = v, LE_R.Angle, -VM.EyeTilt);
+                Lerp(v => LE_T.X = v, LE_T.X, -VM.EyeSeparation);
+                Lerp(v => LE_T.Y = v, LE_T.Y, VM.EyeY);
 
-                // droite
                 Lerp(v => RE_S.ScaleX = v, RE_S.ScaleX, -VM.EyeScale);
-                Lerp(v => RE_S.ScaleY = v, RE_S.ScaleY,  VM.EyeScale);
-                Lerp(v => RE_R.Angle  = v, RE_R.Angle,   VM.EyeTilt);
-                Lerp(v => RE_T.X      = v, RE_T.X,       VM.EyeSeparation);
-                Lerp(v => RE_T.Y      = v, RE_T.Y,       VM.EyeY);
+                Lerp(v => RE_S.ScaleY = v, RE_S.ScaleY, VM.EyeScale);
+                Lerp(v => RE_R.Angle = v, RE_R.Angle, VM.EyeTilt);
+                Lerp(v => RE_T.X = v, RE_T.X, VM.EyeSeparation);
+                Lerp(v => RE_T.Y = v, RE_T.Y, VM.EyeY);
             }
         }
     }
