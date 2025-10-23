@@ -3,40 +3,48 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             mc:Ignorable="d" d:DesignHeight="300" d:DesignWidth="400"
+             mc:Ignorable="d"
+             d:DesignHeight="400" d:DesignWidth="600"
              Background="Transparent">
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <!-- Couche poussière (effet Thanos) -->
+        <Canvas x:Name="DustLayer" IsHitTestVisible="False" Panel.ZIndex="10"/>
 
         <!-- Liste des messages -->
-        <ScrollViewer x:Name="Scroller"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <ItemsControl x:Name="List"
-                          Margin="0"
-                          ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=ItemsSource}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="{x:Type sys:Object}" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                        <!-- Bulle : on s’attend à un objet avec .Text et .BubbleBrush (ChatMessage) -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      Background="Transparent">
+            <ListBox x:Name="MessageList"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     ItemsSource="{Binding Messages, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                     ScrollViewer.CanContentScroll="False"
+                     HorizontalContentAlignment="Stretch">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="6"/>
+                        <Setter Property="Margin" Value="4,6"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
                         <Border x:Name="Bubble"
-                                Background="{Binding BubbleBrush}"
                                 CornerRadius="10"
-                                Padding="10" Margin="6,4"
+                                Padding="10"
+                                Background="{Binding Background}"
+                                Opacity="{Binding Opacity}"
                                 SnapsToDevicePixels="True">
                             <TextBlock Text="{Binding Text}"
                                        Foreground="White"
-                                       FontSize="14"
-                                       TextWrapping="WrapWithOverflow"/>
+                                       TextWrapping="Wrap"
+                                       FontSize="14"/>
                         </Border>
                     </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </ScrollViewer>
-
-        <!-- Couche particules (effet “Thanos”) -->
-        <Canvas x:Name="DustLayer" IsHitTestVisible="False"
-                Panel.ZIndex="10"/>
     </Grid>
 </UserControl>
