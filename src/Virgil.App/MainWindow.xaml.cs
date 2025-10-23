@@ -196,35 +196,22 @@ namespace Virgil.App
         }
 
         // ================== SURVEILLANCE ==================
-       private void SurveillancePulse()
-{
-    Say(Dialogues.PulseLineByTimeOfDay(), "vigilant");
+        private void UpdateSurveillanceState()
+        {
+            OnPropertyChanged(nameof(SurveillanceButtonText));
 
-    if (_monitoringService == null) return;
-
-    var m = _monitoringService.ReadInstant();
-    CpuUsage = m.CpuUsage;
-    MemUsage = m.MemoryUsage;
-    GpuUsage = m.GpuUsage;
-    DiskUsage = m.DiskUsage;
-
-    CpuTempText = m.CpuTempC.HasValue ? $"CPU: {m.CpuTempC.Value:F0} °C" : "CPU: —";
-    GpuTempText = m.GpuTempC.HasValue ? $"GPU: {m.GpuTempC.Value:F0} °C" : "GPU: —";
-    DiskTempText = m.DiskTempC.HasValue ? $"Disque: {m.DiskTempC.Value:F0} °C" : "Disque: —";
-    OnPropertyChanged(nameof(CpuTempText));
-    OnPropertyChanged(nameof(GpuTempText));
-    OnPropertyChanged(nameof(DiskTempText));
-
-    var c = _config.Current;
-    if ((m.CpuTempC.HasValue && m.CpuTempC.Value >= c.CpuTempAlert) ||
-        (m.GpuTempC.HasValue && m.GpuTempC.Value >= c.GpuTempAlert))
-    {
-        Say(Dialogues.AlertTemp(), "alert");
-        SetAvatarMood("alert");
-    }
-}
-
-
+            if (IsSurveillanceOn)
+            {
+                Say(Dialogues.SurveillanceStart(), "vigilant");
+                _surveillanceTimer.Start();
+            }
+            else
+            {
+                _surveillanceTimer.Stop();
+                Say(Dialogues.SurveillanceStop(), "neutral");
+                // Les stats ne s’affichent qu’en surveillance (masquées via bindings autrement)
+            }
+        }
 
         private void SurveillancePulse()
         {
@@ -234,7 +221,7 @@ namespace Virgil.App
             if (_monitoringService == null) return;
 
             // Mesures “live”
-            var m = _monitoringService.ReadInstant(); // assure-toi que cette méthode existe (sinon utilise la tienne)
+            var m = _monitoringService.ReadInstant(); // assure-toi que cette méthode existe côté service
             CpuUsage = m.CpuUsage;
             MemUsage = m.MemoryUsage;
             GpuUsage = m.GpuUsage;
