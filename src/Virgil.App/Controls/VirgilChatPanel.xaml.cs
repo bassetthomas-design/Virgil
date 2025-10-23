@@ -1,14 +1,13 @@
+#nullable enable
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
-using System.Windows.Controls;
-public partial class VirgilChatPanel : System.Windows.Controls.UserControl
-
+using System.Windows.Threading;
 
 namespace Virgil.App.Controls
 {
@@ -20,7 +19,8 @@ namespace Virgil.App.Controls
         public FrameworkElement? Container { get; set; }   // attaché au visuel réel
     }
 
-    public partial class VirgilChatPanel : UserControl
+    // On qualifie la base pour être sûr d'utiliser WPF (et pas WinForms).
+    public partial class VirgilChatPanel : System.Windows.Controls.UserControl
     {
         public ObservableCollection<ChatMessage> Messages { get; } = new();
 
@@ -28,16 +28,28 @@ namespace Virgil.App.Controls
         {
             InitializeComponent();
             DataContext = this;
-            CompositionTarget.Rendering += (_, __) => Scroller.ScrollToEnd();
+
+            // auto-scroll vers le bas quand on rend une frame (si un Scroller existe dans le XAML)
+            CompositionTarget.Rendering += (_, __) =>
+            {
+                var prop = GetType().GetProperty("Scroller");
+                if (prop?.GetValue(this) is System.Windows.Controls.ScrollViewer sv)
+                    sv.ScrollToEnd();
+            };
         }
 
+        /// <summary>
+        /// Ajoute une bulle et programme sa disparition (effet "Thanos").
+        /// </summary>
         public void Post(string text, string? mood = null, int? ttlMs = null)
         {
+            if (string.IsNullOrWhiteSpace(text)) return;
+
             var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 5000 };
             Messages.Add(msg);
 
-            // on attend que le conteneur visuel existe
-            this.Dispatcher.BeginInvoke(new Action(() =>
+            // On attend que l'ItemContainer soit matérialisé par l'ItemsControl.
+            Dispatcher.BeginInvoke(new Action(() =>
             {
                 var container = FindContainerFor(msg);
                 if (container != null)
@@ -45,22 +57,31 @@ namespace Virgil.App.Controls
                     msg.Container = container;
                     ScheduleVanish(msg);
                 }
-            }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }), DispatcherPriority.Loaded);
         }
 
         private FrameworkElement? FindContainerFor(ChatMessage msg)
         {
-            // ItemsControl génère un container par item; on prend le dernier
-            var container = List.ItemContainerGenerator.ContainerFromIndex(Messages.Count - 1) as FrameworkElement;
-            return container?.FindName("Bubble") as FrameworkElement ?? container;
+            // Requiert un ItemsControl nommé "List" dans le XAML.
+            // On récupère le container de l'item tout juste ajouté (dernier index).
+            var listProp = GetType().GetField("List") ?? GetType().GetProperty("List");
+            var list = listProp?.GetValue(this) as System.Windows.Controls.ItemsControl;
+            if (list == null) return null;
+
+            var idx = Messages.Count - 1;
+            var container = list.ItemContainerGenerator.ContainerFromIndex(idx) as FrameworkElement;
+
+            // Idéalement tes DataTemplate contiennent un élément nommé "Bubble".
+            var bubble = container?.FindName("Bubble") as FrameworkElement;
+            return bubble ?? container;
         }
 
         private async void ScheduleVanish(ChatMessage msg)
         {
-            await System.Threading.Tasks.Task.Delay(msg.TtlMs);
+            await Task.Delay(msg.TtlMs);
             if (!Messages.Contains(msg) || msg.Container == null) return;
 
-            // lancer l’effet Thanos (poussière) à partir des bounds de la bulle
+            // Effet particules + fondu/réduction
             PlayThanos(msg.Container);
             FadeShrink(msg.Container, 240, () =>
             {
@@ -71,32 +92,49 @@ namespace Virgil.App.Controls
         private void FadeShrink(FrameworkElement target, int ms, Action onDone)
         {
             var sb = new Storyboard();
-            sb.Children.Add(new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
-            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } });
-            Storyboard.SetTarget(sb.Children[0], target);
-            Storyboard.SetTargetProperty(sb.Children[0], new PropertyPath("Opacity"));
 
+            // Opacity 1 -> 0
+            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
+            Storyboard.SetTarget(fade, target);
+            Storyboard.SetTargetProperty(fade, new PropertyPath("Opacity"));
+            sb.Children.Add(fade);
+
+            // Scale 1 -> 0.85
             var scale = new ScaleTransform(1, 1);
             target.RenderTransformOrigin = new Point(0.5, 0.5);
             target.RenderTransform = scale;
-            var da = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
-            Storyboard.SetTarget(da, target);
-            Storyboard.SetTargetProperty(da, new PropertyPath("RenderTransform.ScaleX"));
-            sb.Children.Add(da);
-            var da2 = da.Clone();
-            Storyboard.SetTargetProperty(da2, new PropertyPath("RenderTransform.ScaleY"));
-            sb.Children.Add(da2);
+
+            var sx = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            Storyboard.SetTarget(sx, target);
+            Storyboard.SetTargetProperty(sx, new PropertyPath("RenderTransform.ScaleX"));
+            sb.Children.Add(sx);
+
+            var sy = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            Storyboard.SetTarget(sy, target);
+            Storyboard.SetTargetProperty(sy, new PropertyPath("RenderTransform.ScaleY"));
+            sb.Children.Add(sy);
 
             sb.Completed += (_, __) => onDone();
             sb.Begin();
         }
 
-        /// <summary>Effet "Thanos" sans shader : petites particules qui s’éparpillent.</summary>
+        /// <summary>
+        /// Effet "Thanos" sans shader : petites particules qui s’éparpillent.
+        /// Requiert un Canvas nommé "DustLayer" dans le XAML parent.
+        /// </summary>
         private void PlayThanos(FrameworkElement source)
         {
             if (source.ActualWidth < 10 || source.ActualHeight < 10) return;
 
-            var origin = source.TranslatePoint(new Point(0, 0), DustLayer);
+            // Cherche un Canvas "DustLayer" exposé par code-behind (field or prop).
+            var dustMember = GetType().GetField("DustLayer") ?? GetType().GetProperty("DustLayer");
+            var dust = dustMember?.GetValue(this) as System.Windows.Controls.Canvas;
+            if (dust == null) return;
+
+            var origin = source.TranslatePoint(new Point(0, 0), dust);
             var rnd = new Random();
 
             int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 40);
@@ -109,29 +147,33 @@ namespace Virgil.App.Controls
                     Fill = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
                     Opacity = 0.0
                 };
-                Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
-                Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
-                DustLayer.Children.Add(dot);
+                System.Windows.Controls.Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
+                System.Windows.Controls.Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
+                dust.Children.Add(dot);
 
                 // destination aléatoire
                 var dx = (rnd.NextDouble() - 0.2) * 120;
                 var dy = -(20 + rnd.NextDouble() * 80); // un peu vers le haut
                 var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 200));
 
-                var ax = new DoubleAnimation(Canvas.GetLeft(dot), Canvas.GetLeft(dot) + dx, dur)
+                var ax = new DoubleAnimation(System.Windows.Controls.Canvas.GetLeft(dot),
+                                             System.Windows.Controls.Canvas.GetLeft(dot) + dx, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-                var ay = new DoubleAnimation(Canvas.GetTop(dot), Canvas.GetTop(dot) + dy, dur)
-                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-                var ao = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
-                var ao2 = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
 
-                dot.BeginAnimation(UIElement.OpacityProperty, ao);
-                dot.BeginAnimation(UIElement.OpacityProperty, ao2);
-                dot.BeginAnimation(Canvas.LeftProperty, ax);
-                dot.BeginAnimation(Canvas.TopProperty, ay);
+                var ay = new DoubleAnimation(System.Windows.Controls.Canvas.GetTop(dot),
+                                             System.Windows.Controls.Canvas.GetTop(dot) + dy, dur)
+                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+
+                var aoIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
+                var aoOut = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
+
+                dot.BeginAnimation(UIElement.OpacityProperty, aoIn);
+                dot.BeginAnimation(UIElement.OpacityProperty, aoOut);
+                dot.BeginAnimation(System.Windows.Controls.Canvas.LeftProperty, ax);
+                dot.BeginAnimation(System.Windows.Controls.Canvas.TopProperty, ay);
 
                 // nettoyage
-                ao2.Completed += (_, __) => DustLayer.Children.Remove(dot);
+                aoOut.Completed += (_, __) => dust.Children.Remove(dot);
             }
         }
     }
