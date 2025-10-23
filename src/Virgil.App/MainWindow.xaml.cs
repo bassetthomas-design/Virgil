@@ -30,8 +30,8 @@ namespace Virgil.App
             set { _mood = value; OnPropertyChanged(); UpdateBrush(); }
         }
 
-        public Brush BubbleBrush { get; private set; } =
-            new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+        public System.Windows.Media.Brush BubbleBrush { get; private set; } =
+    new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
 
         private bool _isExpiring;
         public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
@@ -41,23 +41,17 @@ namespace Virgil.App
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
         private void UpdateBrush()
-        {
-            switch (Mood)
-            {
-                case "proud":
-                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0x46, 0xFF, 0x7A));
-                    break;
-                case "vigilant":
-                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B));
-                    break;
-                case "alert":
-                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0x69, 0x61));
-                    break;
-                default:
-                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
-                    break;
-            }
-            OnPropertyChanged(nameof(BubbleBrush));
+{
+    BubbleBrush = Mood switch
+    {
+        "proud"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
+        "vigilant" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
+        "alert"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
+        _          => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+    };
+    OnPropertyChanged(nameof(BubbleBrush));
+}
+
         }
     }
 
