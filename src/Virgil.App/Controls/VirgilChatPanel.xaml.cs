@@ -1,113 +1,102 @@
 #nullable enable
 using System;
-using System.Collections;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;                // WPF controls
-using System.Windows.Media;                   // CompositionTarget, Brushes, Color, VisualTreeHelper
-using System.Windows.Media.Animation;         // Storyboard, DoubleAnimation, Easing
-using System.Windows.Shapes;                  // Ellipse
+using System.Windows.Media.Animation;
+using System.Windows.Shapes;
+using Media = System.Windows.Media;                 // Brush/Color/etc.
+using WpfControls = System.Windows.Controls;       // ListBox, UserControl
 
 namespace Virgil.App.Controls
 {
-    public class ChatBubble
+    public class ChatMessage
     {
         public string Text { get; set; } = "";
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-        public int TtlMs { get; set; } = 60000;
-        public FrameworkElement? Container { get; set; }
+        public int TtlMs { get; set; } = 5000;
+        public FrameworkElement? Container { get; set; }   // attaché au visuel réel
     }
 
-    public partial class VirgilChatPanel : System.Windows.Controls.UserControl
+    public partial class VirgilChatPanel : WpfControls.UserControl
     {
-        // Source interne (utilisée par Post()) si aucune source externe n’est fournie
-        public ObservableCollection<ChatBubble> Items { get; } = new();
-
-        // Option : binder une source externe (ex: ChatMessages) si tu ne veux pas utiliser Post()
+        // ItemsSource bindée depuis XAML (ChatItemsSource="{Binding ChatMessages}")
         public static readonly DependencyProperty ChatItemsSourceProperty =
             DependencyProperty.Register(
                 nameof(ChatItemsSource),
-                typeof(IEnumerable),
+                typeof(ObservableCollection<ChatMessage>),
                 typeof(VirgilChatPanel),
-                new PropertyMetadata(null, OnChatItemsSourceChanged));
+                new PropertyMetadata(null, OnItemsSourceChanged));
 
-        public IEnumerable? ChatItemsSource
+        public ObservableCollection<ChatMessage>? ChatItemsSource
         {
-            get => (IEnumerable?)GetValue(ChatItemsSourceProperty);
+            get => (ObservableCollection<ChatMessage>?)GetValue(ChatItemsSourceProperty);
             set => SetValue(ChatItemsSourceProperty, value);
         }
 
-        private static void OnChatItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is VirgilChatPanel p && p.FindName("MessageList") is ListBox lb)
-            {
-                lb.ItemsSource = e.NewValue as IEnumerable;
-            }
+            var panel = (VirgilChatPanel)d;
+            panel.MessageList.ItemsSource = (ObservableCollection<ChatMessage>?)e.NewValue;
         }
 
         public VirgilChatPanel()
         {
             InitializeComponent();
 
-            // Si aucune source externe n’est bindée, on alimente la liste avec Items
-            if (FindName("MessageList") is ListBox lb && ChatItemsSource is null)
-                lb.ItemsSource = Items;
-
-            // Autoscroll fluide à chaque frame rendue
-            CompositionTarget.Rendering += (_, __) => ScrollToEnd();
+            // Auto-scroll vers le bas à chaque frame si de nouveaux items arrivent
+            Media.CompositionTarget.Rendering += (_, __) =>
+            {
+                var lb = MessageList;
+                if (lb?.Items?.Count > 0)
+                    lb.ScrollIntoView(lb.Items[lb.Items.Count - 1]);
+            };
         }
 
-        /// <summary>Affiche un message + planifie sa disparition (utilise la collection interne).</summary>
-        public void Post(string text, string? mood = null, int ttlMs = 60000)
+        /// <summary>API pratique pour garder ton code appelant (MainWindow → ChatArea.Post)</summary>
+        public void Post(string text, string? mood = null, int? ttlMs = null)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
 
-            var m = new ChatBubble { Text = text, TtlMs = ttlMs };
-            Items.Add(m);
+            var target = ChatItemsSource ??= new ObservableCollection<ChatMessage>();
+            var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 5000 };
+            target.Add(msg);
 
-            // Attendre que le conteneur visuel soit créé
+            // attendre que le conteneur visuel existe puis programmer la disparition
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                m.Container = GetContainerForLastItem();
-                if (m.Container != null)
-                    _ = ScheduleVanishAsync(m);
+                var container = FindContainerFor(msg);
+                if (container != null)
+                {
+                    msg.Container = container;
+                    _ = ScheduleVanish(msg);
+                }
             }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
-        // ===== utilitaires =====
-
-        private FrameworkElement? GetContainerForLastItem()
+        private FrameworkElement? FindContainerFor(ChatMessage msg)
         {
-            if (FindName("MessageList") is not ListBox lb) return null;
-            var idx = lb.Items.Count - 1;
-            if (idx < 0) return null;
+            // on récupère l’item container correspondant au message
+            var container = MessageList.ItemContainerGenerator.ContainerFromItem(msg) as FrameworkElement;
+            if (container == null && MessageList.Items.Count > 0)
+                container = MessageList.ItemContainerGenerator.ContainerFromIndex(MessageList.Items.Count - 1) as FrameworkElement;
 
-            var container = lb.ItemContainerGenerator.ContainerFromIndex(idx) as FrameworkElement;
-            if (container == null) return null;
-
-            var bubble = container.FindName("Bubble") as FrameworkElement;
-            return bubble ?? container;
+            // si le DataTemplate contient un élément nommé "Bubble", on le prend sinon le container
+            return container?.FindName("Bubble") as FrameworkElement ?? container;
         }
 
-        private async Task ScheduleVanishAsync(ChatBubble msg)
+        private async Task ScheduleVanish(ChatMessage msg)
         {
-            try
+            await Task.Delay(msg.TtlMs);
+            var src = ChatItemsSource;
+            if (src == null || !src.Contains(msg) || msg.Container == null) return;
+
+            PlayThanos(msg.Container);
+            FadeShrink(msg.Container, 240, () =>
             {
-                await Task.Delay(Math.Max(1000, msg.TtlMs)); // minimum 1s
-                if (!Items.Contains(msg) || msg.Container == null) return;
-
-                // effet “Thanos”
-                PlayThanos(msg.Container);
-
-                // fondu + léger shrink puis suppression de l’item
-                FadeShrink(msg.Container, 240, () =>
-                {
-                    Items.Remove(msg);
-                });
-            }
-            catch { /* ignore */ }
+                src.Remove(msg);
+            });
         }
 
         private void FadeShrink(FrameworkElement target, int ms, Action onDone)
@@ -115,61 +104,63 @@ namespace Virgil.App.Controls
             var sb = new Storyboard();
 
             var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
-            };
+            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
             Storyboard.SetTarget(fade, target);
             Storyboard.SetTargetProperty(fade, new PropertyPath("Opacity"));
             sb.Children.Add(fade);
 
-            var st = new ScaleTransform(1, 1);
+            var scale = new Media.ScaleTransform(1, 1);
             target.RenderTransformOrigin = new Point(0.5, 0.5);
-            target.RenderTransform = st;
+            target.RenderTransform = scale;
 
-            var s1 = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
-            Storyboard.SetTarget(s1, target);
-            Storyboard.SetTargetProperty(s1, new PropertyPath("RenderTransform.ScaleX"));
-            sb.Children.Add(s1);
+            var sx = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            Storyboard.SetTarget(sx, target);
+            Storyboard.SetTargetProperty(sx, new PropertyPath("RenderTransform.ScaleX"));
+            sb.Children.Add(sx);
 
-            var s2 = s1.Clone();
-            Storyboard.SetTargetProperty(s2, new PropertyPath("RenderTransform.ScaleY"));
-            sb.Children.Add(s2);
+            var sy = sx.Clone();
+            Storyboard.SetTargetProperty(sy, new PropertyPath("RenderTransform.ScaleY"));
+            sb.Children.Add(sy);
 
             sb.Completed += (_, __) => onDone();
             sb.Begin();
         }
 
-        /// <summary>Effet “Thanos” sans shader : particules blanches qui se dissipent.</summary>
+        /// <summary>Effet "Thanos" (poussière) sans shader.</summary>
         private void PlayThanos(FrameworkElement source)
         {
-            if (FindName("DustLayer") is not Canvas dust) return;
-            if (source.ActualWidth < 8 || source.ActualHeight < 8) return;
+            if (source.ActualWidth < 10 || source.ActualHeight < 10) return;
 
-            var origin = source.TranslatePoint(new Point(0, 0), dust);
+            var origin = source.TranslatePoint(new Point(0, 0), DustLayer);
             var rnd = new Random();
 
-            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 42);
+            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 40);
             for (int i = 0; i < count; i++)
             {
                 var dot = new Ellipse
                 {
                     Width = rnd.Next(2, 5),
                     Height = rnd.Next(2, 5),
-                    Fill = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+                    Fill = new Media.SolidColorBrush(Media.Color.FromArgb(220, 255, 255, 255)),
                     Opacity = 0.0
                 };
+                WpfControls.Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
+                WpfControls.Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
+                DustLayer.Children.Add(dot);
 
-                Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
-                Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
-                dust.Children.Add(dot);
-
+                // destination aléatoire
                 var dx = (rnd.NextDouble() - 0.2) * 120;
-                var dy = -(20 + rnd.NextDouble() * 80);
+                var dy = -(20 + rnd.NextDouble() * 80); // un peu vers le haut
                 var dur = TimeSpan.FromMilliseconds(400 + rnd.Next(0, 200));
 
-                var ax = new DoubleAnimation(Canvas.GetLeft(dot), Canvas.GetLeft(dot) + dx, dur)
+                var ax = new DoubleAnimation(
+                    WpfControls.Canvas.GetLeft(dot),
+                    WpfControls.Canvas.GetLeft(dot) + dx, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-                var ay = new DoubleAnimation(Canvas.GetTop(dot), Canvas.GetTop(dot) + dy, dur)
+
+                var ay = new DoubleAnimation(
+                    WpfControls.Canvas.GetTop(dot),
+                    WpfControls.Canvas.GetTop(dot) + dy, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
 
                 var ao = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
@@ -177,19 +168,12 @@ namespace Virgil.App.Controls
 
                 dot.BeginAnimation(UIElement.OpacityProperty, ao);
                 dot.BeginAnimation(UIElement.OpacityProperty, ao2);
-                dot.BeginAnimation(Canvas.LeftProperty, ax);
-                dot.BeginAnimation(Canvas.TopProperty, ay);
+                dot.BeginAnimation(WpfControls.Canvas.LeftProperty, ax);
+                dot.BeginAnimation(WpfControls.Canvas.TopProperty, ay);
 
-                ao2.Completed += (_, __) => dust.Children.Remove(dot);
+                // nettoyage
+                ao2.Completed += (_, __) => DustLayer.Children.Remove(dot);
             }
-        }
-
-        private void ScrollToEnd()
-        {
-            if (FindName("MessageList") is not ListBox lb) return;
-            if (lb.Items.Count == 0) return;
-            try { lb.ScrollIntoView(lb.Items[lb.Items.Count - 1]); }
-            catch { /* ignore */ }
         }
     }
 }
