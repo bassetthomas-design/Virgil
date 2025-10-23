@@ -1,17 +1,22 @@
+#nullable enable
 using System;
 using System.Windows;
-using System.Windows.Media.Animation;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+// Alias pratique si tu veux en ajouter
+using SW = System.Windows;
 
 namespace Virgil.App.Controls
 {
-    public partial class VirgilAvatar : System.Windows.Controls.UserControl
+    public partial class VirgilAvatar : UserControl
     {
+        // VM liée par DataContext
         private VirgilAvatarViewModel VM => (VirgilAvatarViewModel)DataContext;
 
         public VirgilAvatar()
         {
             InitializeComponent();
-
             if (DataContext == null)
                 DataContext = new VirgilAvatarViewModel();
 
@@ -19,159 +24,118 @@ namespace Virgil.App.Controls
         }
 
         /// <summary>
-        /// Définit l’humeur (et ses variantes visuelles). 
+        /// Change l’humeur (et donc la géométrie/couleurs) de l’avatar.
         /// </summary>
         public void SetMood(string mood)
         {
             VM.SetMood(mood);
 
-            // Afficher / masquer les éléments optionnels (si présents dans le XAML)
-            SafeSetVisibility(nameof(RoundEyes), VM.UseRoundEyes);
-            SafeSetVisibility(nameof(Tear),      VM.ShowTear);
-            SafeSetVisibility(nameof(Hearts),    VM.ShowHearts);
-            SafeSetVisibility(nameof(CatAddons), VM.ShowCat);
-            SafeSetVisibility(nameof(DevilHorns),VM.ShowDevil);
+            // bascule des variantes visuelles (doivent exister dans le XAML avec x:Name)
+            if (RoundEyes != null) RoundEyes.Visibility = VM.UseRoundEyes ? Visibility.Visible : Visibility.Collapsed;
+            if (Tear      != null) Tear.Visibility      = VM.ShowTear     ? Visibility.Visible : Visibility.Collapsed;
+            if (Hearts    != null) Hearts.Visibility    = VM.ShowHearts   ? Visibility.Visible : Visibility.Collapsed;
+            if (CatAddons != null) CatAddons.Visibility = VM.ShowCat      ? Visibility.Visible : Visibility.Collapsed;
+            if (DevilHorns!= null) DevilHorns.Visibility= VM.ShowDevil    ? Visibility.Visible : Visibility.Collapsed;
 
-            // Yeux amande vs ronds : si yeux ronds ON, on masque les amandes
-            if (FindName(nameof(LeftEye))  is FrameworkElement le)  le.Visibility  = VM.UseRoundEyes ? Visibility.Collapsed : Visibility.Visible;
-            if (FindName(nameof(RightEye)) is FrameworkElement re)  re.Visibility  = VM.UseRoundEyes ? Visibility.Collapsed : Visibility.Visible;
+            // masquer yeux amande si yeux ronds actifs
+            if (LeftEye != null && RightEye != null)
+            {
+                var vis = VM.UseRoundEyes ? Visibility.Collapsed : Visibility.Visible;
+                LeftEye.Visibility  = vis;
+                RightEye.Visibility = vis;
+            }
 
             ApplyTransforms(animated: true);
         }
 
+        /// <summary>
+        /// Alias pratique si tu utilises SetExpression côté appelant.
+        /// </summary>
         public void SetExpression(string expr) => SetMood(expr);
 
         /// <summary>
-        /// Affiche une progression (0–100). Passer une valeur négative pour masquer.
+        /// Barre de progression intégrée à l’avatar (si présente dans le XAML).
         /// </summary>
         public void SetProgress(double percent)
         {
-            if (FindName(nameof(AvatarProgress)) is not System.Windows.Controls.ProgressBar bar)
-                return;
+            if (AvatarProgress == null) return;
 
             if (percent < 0)
             {
-                bar.Visibility = Visibility.Collapsed;
-                bar.IsIndeterminate = false;
+                AvatarProgress.Visibility = Visibility.Collapsed;
+                AvatarProgress.IsIndeterminate = false;
                 return;
             }
 
-            bar.Visibility = Visibility.Visible;
-            bar.IsIndeterminate = false;
-            bar.Value = Math.Max(0, Math.Min(100, percent));
+            AvatarProgress.Visibility = Visibility.Visible;
+            AvatarProgress.IsIndeterminate = false;
+            AvatarProgress.Value = Math.Max(0, Math.Min(100, percent));
         }
 
-        /// <summary>
-        /// Active/Désactive le mode indéterminé (spinner).
-        /// </summary>
         public void SetProgressIndeterminate(bool on)
         {
-            if (FindName(nameof(AvatarProgress)) is not System.Windows.Controls.ProgressBar bar)
+            if (AvatarProgress == null) return;
+            AvatarProgress.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            AvatarProgress.IsIndeterminate = on;
+        }
+
+        /// <summary>
+        /// Applique les transforms (échelle/orientation/déport) des yeux selon la VM.
+        /// S’appuie sur les objets définis dans le XAML via x:Name :
+        /// LE_S/RE_S : ScaleTransform, LE_R/RE_R : RotateTransform, LE_T/RE_T : TranslateTransform
+        /// </summary>
+        private void ApplyTransforms(bool animated)
+        {
+            // Lerp tout simple via DispatcherTimer (évite des storyboards pour chaque champ)
+            void Lerp(Action<double> setter, double from, double to, int ms = 220)
+            {
+                var t0 = from; var t1 = to;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var timer = new SW.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+                timer.Tick += (_, __) =>
+                {
+                    var p = Math.Min(1.0, sw.Elapsed.TotalMilliseconds / ms);
+                    var eased = 1 - Math.Pow(1 - p, 2);
+                    setter(t0 + (t1 - t0) * eased);
+                    if (p >= 1) timer.Stop();
+                };
+                timer.Start();
+            }
+
+            // Sécurité : si les transforms n’existent pas (XAML différent), on sort.
+            if (LE_S == null || RE_S == null || LE_R == null || RE_R == null || LE_T == null || RE_T == null)
                 return;
 
-            bar.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-            bar.IsIndeterminate = on;
-        }
-
-        /// <summary>
-        /// Applique les transformations sur les yeux (scale/rotation/déplacement),
-        /// sans timer custom : on utilise DoubleAnimation (WPF natif).
-        /// </summary>
-      private void ApplyTransforms(bool animated)
-{
-    void Lerp(Action<double> set, double from, double to, int ms = 220)
-    {
-        var t0 = from; var t1 = to;
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        var timer = new SW.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        timer.Tick += (_, __) =>
-        {
-            var p = Math.Min(1.0, sw.Elapsed.TotalMilliseconds / ms);
-            var eased = 1 - Math.Pow(1 - p, 2);
-            set(t0 + (t1 - t0) * eased);
-            if (p >= 1) timer.Stop();
-        };
-        timer.Start();
-    }
-
-    // Ici on référence directement les champs générés par XAML : LE_S, LE_R, LE_T, RE_S, RE_R, RE_T
-    if (!animated)
-    {
-        LE_S.ScaleX = VM.EyeScale;  LE_S.ScaleY = VM.EyeScale;
-        RE_S.ScaleX = -VM.EyeScale; RE_S.ScaleY = VM.EyeScale;
-
-        LE_R.Angle = -VM.EyeTilt;   RE_R.Angle = VM.EyeTilt;
-        LE_T.X = -VM.EyeSeparation; RE_T.X = VM.EyeSeparation;
-        LE_T.Y = VM.EyeY;           RE_T.Y = VM.EyeY;
-    }
-    else
-    {
-        Lerp(v => LE_S.ScaleX = v, LE_S.ScaleX, VM.EyeScale);
-        Lerp(v => LE_S.ScaleY = v, LE_S.ScaleY, VM.EyeScale);
-        Lerp(v => RE_S.ScaleX = v, RE_S.ScaleX, -VM.EyeScale);
-        Lerp(v => RE_S.ScaleY = v, RE_S.ScaleY, VM.EyeScale);
-
-        Lerp(v => LE_R.Angle = v, LE_R.Angle, -VM.EyeTilt);
-        Lerp(v => RE_R.Angle = v, RE_R.Angle,  VM.EyeTilt);
-
-        Lerp(v => LE_T.X = v, LE_T.X, -VM.EyeSeparation);
-        Lerp(v => RE_T.X = v, RE_T.X,  VM.EyeSeparation);
-        Lerp(v => LE_T.Y = v, LE_T.Y,  VM.EyeY);
-        Lerp(v => RE_T.Y = v, RE_T.Y,  VM.EyeY);
-    }
-}
-
-            // Les transforms doivent exister dans le XAML :
-            // LE_S / RE_S : ScaleTransform
-            // LE_R / RE_R : RotateTransform
-            // LE_T / RE_T : TranslateTransform
-            // Si un nom est absent, on ignore proprement.
-
-            var eyeScale = VM.EyeScale;
-            var eyeTilt  = VM.EyeTilt;
-            var eyeSep   = VM.EyeSeparation;
-            var eyeY     = VM.EyeY;
-
-            // Left eye (scale/rot/translate)
-            if (FindName(nameof(LE_S)) is System.Windows.Media.ScaleTransform LE_S)
+            if (!animated)
             {
-                Anim(LE_S, System.Windows.Media.ScaleTransform.ScaleXProperty, eyeScale);
-                Anim(LE_S, System.Windows.Media.ScaleTransform.ScaleYProperty, eyeScale);
-            }
-            if (FindName(nameof(LE_R)) is System.Windows.Media.RotateTransform LE_R)
-            {
-                Anim(LE_R, System.Windows.Media.RotateTransform.AngleProperty, -eyeTilt);
-            }
-            if (FindName(nameof(LE_T)) is System.Windows.Media.TranslateTransform LE_T)
-            {
-                Anim(LE_T, System.Windows.Media.TranslateTransform.XProperty, -eyeSep);
-                Anim(LE_T, System.Windows.Media.TranslateTransform.YProperty,  eyeY);
-            }
+                // gauche
+                LE_S.ScaleX = VM.EyeScale;   LE_S.ScaleY = VM.EyeScale;
+                LE_R.Angle  = -VM.EyeTilt;
+                LE_T.X      = -VM.EyeSeparation;
+                LE_T.Y      = VM.EyeY;
 
-            // Right eye (scale inversé en X pour symétrie, rot/translate)
-            if (FindName(nameof(RE_S)) is System.Windows.Media.ScaleTransform RE_S)
-            {
-                Anim(RE_S, System.Windows.Media.ScaleTransform.ScaleXProperty, -eyeScale);
-                Anim(RE_S, System.Windows.Media.ScaleTransform.ScaleYProperty,  eyeScale);
+                // droite (ScaleX inversé pour “miroir”)
+                RE_S.ScaleX = -VM.EyeScale;  RE_S.ScaleY = VM.EyeScale;
+                RE_R.Angle  =  VM.EyeTilt;
+                RE_T.X      =  VM.EyeSeparation;
+                RE_T.Y      =  VM.EyeY;
             }
-            if (FindName(nameof(RE_R)) is System.Windows.Media.RotateTransform RE_R)
+            else
             {
-                Anim(RE_R, System.Windows.Media.RotateTransform.AngleProperty, eyeTilt);
-            }
-            if (FindName(nameof(RE_T)) is System.Windows.Media.TranslateTransform RE_T)
-            {
-                Anim(RE_T, System.Windows.Media.TranslateTransform.XProperty, eyeSep);
-                Anim(RE_T, System.Windows.Media.TranslateTransform.YProperty, eyeY);
-            }
-        }
+                // gauche
+                Lerp(v => LE_S.ScaleX = v, LE_S.ScaleX, VM.EyeScale);
+                Lerp(v => LE_S.ScaleY = v, LE_S.ScaleY, VM.EyeScale);
+                Lerp(v => LE_R.Angle  = v, LE_R.Angle,  -VM.EyeTilt);
+                Lerp(v => LE_T.X      = v, LE_T.X,      -VM.EyeSeparation);
+                Lerp(v => LE_T.Y      = v, LE_T.Y,       VM.EyeY);
 
-        /// <summary>
-        /// Utilitaire : applique Visibility sur un élément nommé s’il existe.
-        /// </summary>
-        private void SafeSetVisibility(string elementName, bool visible)
-        {
-            if (FindName(elementName) is FrameworkElement fe)
-                fe.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                // droite
+                Lerp(v => RE_S.ScaleX = v, RE_S.ScaleX, -VM.EyeScale);
+                Lerp(v => RE_S.ScaleY = v, RE_S.ScaleY,  VM.EyeScale);
+                Lerp(v => RE_R.Angle  = v, RE_R.Angle,   VM.EyeTilt);
+                Lerp(v => RE_T.X      = v, RE_T.X,       VM.EyeSeparation);
+                Lerp(v => RE_T.Y      = v, RE_T.Y,       VM.EyeY);
+            }
         }
     }
 }
