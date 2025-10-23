@@ -1,161 +1,390 @@
 #nullable enable
-using Virgil.App.Controls;                 // VirgilAvatar / VirgilChatPanel
 using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
+
 using Serilog.Events;
 using Virgil.Core;
+using Virgil.Core.Services;
 using CoreServices = Virgil.Core.Services;
 
 namespace Virgil.App
 {
-    public partial class MainWindow : Window
+    public class ChatMessage : INotifyPropertyChanged
     {
-        private readonly MonitoringService? _monitoringService;
+        public string Id { get; } = Guid.NewGuid().ToString("N");
+        public DateTime Timestamp { get; set; } = DateTime.Now;
+
+        private string _text = "";
+        public string Text { get => _text; set { _text = value; OnPropertyChanged(); } }
+
+        private string _mood = "neutral";
+        public string Mood { get => _mood; set { _mood = value; OnPropertyChanged(); UpdateBrush(); } }
+
+        public Brush BubbleBrush { get; private set; } = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+
+        private bool _isExpiring;
+        public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+
+        private void UpdateBrush()
+        {
+            BubbleBrush = Mood switch
+            {
+                "proud"    => new SolidColorBrush(Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
+                "vigilant" => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
+                "alert"    => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
+                _          => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+            };
+            OnPropertyChanged(nameof(BubbleBrush));
+        }
+    }
+
+    public partial class MainWindow : Window, INotifyPropertyChanged
+    {
+        // === Bindings UI ===
+        public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
+        public bool IsSurveillanceOn
+        {
+            get => _isMonitoring;
+            set { _isMonitoring = value; OnPropertyChanged(); UpdateSurveillanceState(); }
+        }
+        public string SurveillanceButtonText => IsSurveillanceOn ? "Arrêter la surveillance" : "Démarrer la surveillance";
+
+        // Stats bindées au panneau
+        private double _cpu, _gpu, _mem, _disk;
+        public double CpuUsage { get => _cpu; set { _cpu = value; OnPropertyChanged(); } }
+        public double GpuUsage { get => _gpu; set { _gpu = value; OnPropertyChanged(); } }
+        public double MemUsage { get => _mem; set { _mem = value; OnPropertyChanged(); } }
+        public double DiskUsage { get => _disk; set { _disk = value; OnPropertyChanged(); } }
+        public string CpuTempText { get; set; } = "CPU: —";
+        public string GpuTempText { get; set; } = "GPU: —";
+        public string DiskTempText { get; set; } = "Disque: —";
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+
         private readonly CoreServices.ConfigService _config;
+        private readonly MonitoringService? _monitoringService;
+        private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+        private readonly DispatcherTimer _surveillanceTimer = new() { Interval = TimeSpan.FromSeconds(10) };
+
         private bool _isMonitoring;
 
         public MainWindow()
         {
+            DataContext = this;
             InitializeComponent();
 
             _config = new CoreServices.ConfigService();
             CoreServices.LoggingService.Init(LogEventLevel.Information);
 
+            // Avatar VM (si dispo)
+            try
+            {
+                var vmType = Type.GetType("Virgil.App.Controls.VirgilAvatarViewModel, Virgil.App");
+                if (vmType != null && AvatarControl != null)
+                {
+                    var vm = Activator.CreateInstance(vmType);
+                    AvatarControl.DataContext = vm;
+                    SetAvatarMood("neutral");
+                }
+            }
+            catch { /* ignore */ }
+
+            // Monitoring service (mesures bas niveau)
             try
             {
                 _monitoringService = new MonitoringService();
-                _monitoringService.MetricsUpdated += OnMetricsUpdated;
             }
             catch { _monitoringService = null; }
 
-            // Attach ViewModel to Avatar & message d’accueil
+            // Horloge en barre d’état
+            _clockTimer.Tick += (_, __) => { ClockText.Text = DateTime.Now.ToString("dddd dd MMM HH:mm"); };
+            _clockTimer.Start();
+
+            // Surveillance (chat + stats) — seulement si activé
+            _surveillanceTimer.Tick += (_, __) => SurveillancePulse();
+
+            // Message d’accueil
+            Say(Dialogues.Startup(), "neutral");
+        }
+
+        // ================== CHAT (messages + disparition 60s) ==================
+        private void Say(string text, string mood = "neutral")
+        {
+            var msg = new ChatMessage { Text = text, Mood = mood, Timestamp = DateTime.Now };
+            ChatMessages.Add(msg);
+            ScrollToEnd();
+
+            // disparition au bout d’1 minute + “effet Thanos”
+            _ = ExpireMessageAsync(msg, TimeSpan.FromMinutes(1));
+        }
+
+        private async Task ExpireMessageAsync(ChatMessage msg, TimeSpan delay)
+        {
             try
             {
-                if (AvatarControl != null)
-                {
-                    Say("Bonjour, je suis prêt.", "neutral");
-                }
+                await Task.Delay(delay);
+                msg.IsExpiring = true;
+                await Task.Delay(TimeSpan.FromMilliseconds(950));
+                ChatMessages.Remove(msg);
             }
-            catch { }
+            catch { /* ignore */ }
         }
 
-        // ============== Helpers UI & Chat ==============
-        private void Append(string text) { OutputBox.AppendText(text); OutputBox.ScrollToEnd(); }
-        private void AppendLine(string line) { OutputBox.AppendText($"[{DateTime.Now:T}] {line}\n"); OutputBox.ScrollToEnd(); }
-
-        private void Say(string text, string mood = "neutral", int ttl = 5500)
+        private void ScrollToEnd()
         {
-            try { AvatarControl.SetMood(mood); } catch { }
-            ChatPanel.Post(text, mood, ttl);
-            AppendLine(text);
+            if (ChatList.Items.Count == 0) return;
+            ChatList.ScrollIntoView(ChatList.Items[^1]);
         }
 
-        private void Progress(double percent, string status)
+        private void SetAvatarMood(string mood)
         {
-            if (percent < 0) percent = 0; if (percent > 100) percent = 100;
-            TaskProgress.Visibility = Visibility.Visible;
+            try
+            {
+                var vm = AvatarControl?.DataContext;
+                vm?.GetType().GetMethod("SetMood")?.Invoke(vm, new object[] { mood });
+            }
+            catch { /* ignore */ }
+        }
+
+        // ================== PROGRESSION / ETAT ==================
+        private void Progress(double percent, string status, string mood = "vigilant")
+        {
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = percent;
             StatusText.Text = status;
-            try { AvatarControl.SetProgress(percent); } catch { }
-            ChatPanel.Post(status, percent < 90 ? "vigilant" : "proud", 3000);
+            Say(status, mood);
+            SetAvatarMood(percent >= 100 ? "proud" : "vigilant");
         }
-
-        private void ProgressIndeterminate(string status)
+        private void ProgressIndeterminate(string status, string mood = "vigilant")
         {
-            TaskProgress.Visibility = Visibility.Visible;
             TaskProgress.IsIndeterminate = true;
             StatusText.Text = status;
-            try { AvatarControl.SetProgressIndeterminate(true); } catch { }
-            ChatPanel.Post(status, "vigilant", 3000);
+            Say(status, mood);
+            SetAvatarMood(mood);
         }
-
         private void ProgressDone(string status = "Terminé.")
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 100;
             StatusText.Text = status;
-            try { AvatarControl.SetProgress(100); } catch { }
-            ChatPanel.Post(status, "proud", 3000);
-            TaskProgress.Visibility = Visibility.Collapsed;
+            Say(status, "proud");
+            SetAvatarMood("proud");
         }
-
         private void ProgressReset()
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 0;
-            TaskProgress.Visibility = Visibility.Collapsed;
             StatusText.Text = "Prêt.";
+            SetAvatarMood("neutral");
         }
 
-        // ============== Maintenance ==============
+        // ================== SURVEILLANCE ==================
+        private void UpdateSurveillanceState()
+        {
+            OnPropertyChanged(nameof(SurveillanceButtonText));
+
+            if (IsSurveillanceOn)
+            {
+                Say(Dialogues.SurveillanceStart(), "vigilant");
+                _surveillanceTimer.Start();
+            }
+            else
+            {
+                _surveillanceTimer.Stop();
+                Say(Dialogues.SurveillanceStop(), "neutral");
+                // On ne montre LES STATS que pendant la surveillance — rien à faire ici, le panneau se masque via binding.
+            }
+        }
+
+        private void SurveillancePulse()
+        {
+            // Punchline liée à l’heure
+            Say(Dialogues.PulseLineByTimeOfDay(), "vigilant");
+
+            if (_monitoringService == null) return;
+
+            // Mesures “live”
+            var m = _monitoringService.ReadInstant(); // méthode courte (ajoute si besoin dans ton service)
+            CpuUsage = m.CpuUsage;
+            MemUsage = m.MemoryUsage;
+            GpuUsage = m.GpuUsage;
+            DiskUsage = m.DiskUsage;
+
+            CpuTempText = m.CpuTempC.HasValue ? $"CPU: {m.CpuTempC.Value:F0} °C" : "CPU: —";
+            GpuTempText = m.GpuTempC.HasValue ? $"GPU: {m.GpuTempC.Value:F0} °C" : "GPU: —";
+            DiskTempText = m.DiskTempC.HasValue ? $"Disque: {m.DiskTempC.Value:F0} °C" : "Disque: —";
+            OnPropertyChanged(nameof(CpuTempText));
+            OnPropertyChanged(nameof(GpuTempText));
+            OnPropertyChanged(nameof(DiskTempText));
+
+            // Réactions température
+            var c = _config.Current;
+            if ((m.CpuTempC.HasValue && m.CpuTempC.Value >= c.CpuTempAlert) ||
+                (m.GpuTempC.HasValue && m.GpuTempC.Value >= c.GpuTempAlert))
+            {
+                Say(Dialogues.AlertTemp(), "alert");
+                SetAvatarMood("alert");
+            }
+        }
+
+        // ================== ACTIONS (boutons) ==================
         private async void QuickMaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                Progress(0, "Maintenance rapide…");
+                Progress(0, Dialogues.Action("maintenance_quick_start"));
 
-                Progress(10, "Nettoyage TEMP…");
+                Progress(10, Dialogues.Action("clean_temp_start"));
                 await Task.Run(CleanTempWithProgressInternal);
 
-                Progress(50, "Navigateurs (caches)…");
-                var browsers = new CoreServices.BrowserCleaningService();
-                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
-                AppendLine($"[Browsers] {rep}");
+                Progress(50, Dialogues.Action("clean_browsers_start"));
+                var browsers = new BrowserCleaningService();
+                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
+                Say(Dialogues.Action("clean_browsers_done") + $" (~{rep.BytesDeleted / (1024.0 * 1024):F1} MB)");
 
-                ProgressDone("Maintenance rapide : terminé.");
-                Say("Maintenance rapide terminée.", "proud");
+                ProgressDone(Dialogues.Action("maintenance_quick_done"));
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur maintenance rapide: {ex.Message}", "alert"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
+            }
         }
 
         private async void FullMaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                Progress(0, "Maintenance complète : démarrage…");
+                Progress(0, Dialogues.Action("maintenance_full_start"));
 
-                Progress(10, "Nettoyage TEMP…");
+                Progress(10, Dialogues.Action("clean_temp_start"));
                 await Task.Run(CleanTempWithProgressInternal);
 
-                Progress(30, "Navigateurs (caches)…");
-                var browsers = new CoreServices.BrowserCleaningService();
-                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
-                AppendLine($"[Browsers] {rep}");
+                Progress(30, Dialogues.Action("clean_browsers_start"));
+                var browsers = new BrowserCleaningService();
+                var bRep = await Task.Run(() => browsers.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
+                Say(Dialogues.Action("clean_browsers_done") + $" (~{bRep.BytesDeleted / (1024.0 * 1024):F1} MB)");
 
-                Progress(50, "Nettoyage étendu…");
-                var ext = new CoreServices.ExtendedCleaningService();
+                Progress(50, Dialogues.Action("clean_extended_start"));
+                var ext = new ExtendedCleaningService();
                 var exRep = await Task.Run(() => ext.AnalyzeAndClean());
-                AppendLine($"[Extended] ~{exRep.BytesFound / (1024.0 * 1024):F1} MB → ~{exRep.BytesDeleted / (1024.0 * 1024):F1} MB");
+                Say(Dialogues.Action("clean_extended_done") + $" (~{exRep.BytesDeleted / (1024.0 * 1024):F1} MB)");
 
-                ProgressIndeterminate("MAJ apps/jeux (winget)…");
-                var app = new CoreServices.ApplicationUpdateService();
-                var wingetOut = await WingetWithRoughProgress(app);
-                if (!string.IsNullOrWhiteSpace(wingetOut)) Append(wingetOut);
+                ProgressIndeterminate(Dialogues.Action("update_apps_games_start"));
+                var app = new ApplicationUpdateService();
+                var txt = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
+                if (!string.IsNullOrWhiteSpace(txt)) Say(Dialogues.Action("update_apps_done"));
 
-                ProgressIndeterminate("Windows Update…");
+                // Jeux (Steam/Epic)
+                var games = new GameUpdateService();
+                var gOut = await games.UpdateAllAsync();
+                Say(gOut);
+
+                // Windows Update
+                ProgressIndeterminate(Dialogues.Action("update_windows_start"));
                 var wu = new WindowsUpdateService();
-                AppendLine("[WU] Scan…"); var s = await wu.StartScanAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s);
-                Progress(86, "WU: Download…"); var d = await wu.StartDownloadAsync(); if (!string.IsNullOrWhiteSpace(d)) Append(d);
-                Progress(93, "WU: Install…"); var i = await wu.StartInstallAsync(); if (!string.IsNullOrWhiteSpace(i)) Append(i);
+                await wu.StartScanAsync();
+                await wu.StartDownloadAsync();
+                await wu.StartInstallAsync();
+                Say(Dialogues.Action("update_windows_done"));
 
-                ProgressDone("Maintenance complète : terminé.");
-                Say("Tout est optimisé et à jour.", "proud");
+                // Pilotes
+                ProgressIndeterminate(Dialogues.Action("update_drivers_start"));
+                var drv = new DriverUpdateService();
+                var dOut = await drv.UpgradeDriversAsync();
+                if (!string.IsNullOrWhiteSpace(dOut)) Say(Dialogues.Action("update_drivers_done"));
+
+                ProgressDone(Dialogues.Action("maintenance_full_done"));
             }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur maintenance complète: {ex.Message}", "alert"); }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
+            }
         }
 
         private async void CleanButton_Click(object sender, RoutedEventArgs e)
         {
-            try { Progress(0, "Nettoyage TEMP…"); await Task.Run(CleanTempWithProgressInternal); ProgressDone("Nettoyage TEMP terminé."); Say("C’est propre !", "proud"); }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur de nettoyage: {ex.Message}", "alert"); }
+            try
+            {
+                Progress(0, Dialogues.Action("clean_temp_start"));
+                await Task.Run(CleanTempWithProgressInternal);
+                ProgressDone(Dialogues.Action("clean_temp_done"));
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
+            }
         }
 
+        private async void CleanBrowsersButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Progress(0, Dialogues.Action("clean_browsers_start"));
+                var svc = new BrowserCleaningService();
+                var rep = await Task.Run(() => svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
+                ProgressDone(Dialogues.Action("clean_browsers_done") + $" (~{rep.BytesDeleted / (1024.0 * 1024):F1} MB)");
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
+            }
+        }
+
+        private async void UpdateAllButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ProgressIndeterminate(Dialogues.Action("update_apps_games_start"));
+
+                var app = new ApplicationUpdateService();
+                var txt = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
+                if (!string.IsNullOrWhiteSpace(txt)) Say(Dialogues.Action("update_apps_done"));
+
+                var games = new GameUpdateService();
+                var gOut = await games.UpdateAllAsync();
+                Say(gOut);
+
+                var drv = new DriverUpdateService();
+                var dOut = await drv.UpgradeDriversAsync();
+                if (!string.IsNullOrWhiteSpace(dOut)) Say(Dialogues.Action("update_drivers_done"));
+
+                var wu = new WindowsUpdateService();
+                await wu.StartScanAsync();
+                await wu.StartDownloadAsync();
+                await wu.StartInstallAsync();
+                Say(Dialogues.Action("update_windows_done"));
+
+                ProgressDone(Dialogues.Action("update_all_done"));
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
+            }
+        }
+
+        // ================== Nettoyage TEMP avec progression réelle ==================
         private void CleanTempWithProgressInternal()
         {
             var targets = new[]
@@ -174,7 +403,6 @@ namespace Virgil.App
             double total = files.Count == 0 ? 1 : files.Count;
             double done = 0;
             long bytesFound = 0, bytesDeleted = 0;
-            int deleted = 0;
 
             foreach (var f in files)
                 try { bytesFound += new FileInfo(f).Length; } catch { }
@@ -187,7 +415,6 @@ namespace Virgil.App
                     var len = fi.Exists ? fi.Length : 0;
                     File.SetAttributes(f, FileAttributes.Normal);
                     fi.Delete();
-                    deleted++;
                     bytesDeleted += len;
                 }
                 catch { /* locked */ }
@@ -197,229 +424,72 @@ namespace Virgil.App
                 Dispatcher.Invoke(() => Progress(p, $"Nettoyage TEMP… {p:0}%"));
             }
 
+            // Dossiers
             foreach (var t in targets)
             {
                 try
                 {
                     foreach (var d in Directory.EnumerateDirectories(t, "*", SearchOption.AllDirectories)
                                                .OrderByDescending(s => s.Length))
-                    { try { Directory.Delete(d, true); } catch { } }
+                    {
+                        try { Directory.Delete(d, true); } catch { }
+                    }
                 }
                 catch { }
             }
 
             Dispatcher.Invoke(() =>
             {
-                AppendLine($"TEMP détecté ~{bytesFound / (1024.0 * 1024):F1} MB — supprimé ~{bytesDeleted / (1024.0 * 1024):F1} MB, {deleted} fichiers.");
+                Say($"TEMP analysé ~{bytesFound / (1024.0 * 1024):F1} MB — supprimé ~{bytesDeleted / (1024.0 * 1024):F1} MB", "proud");
             });
         }
+    }
 
-        private async void CleanBrowsersButton_Click(object sender, RoutedEventArgs e)
+    // ================== Dialogues centralisés ==================
+    static class Dialogues
+    {
+        private static readonly Random R = new();
+        private static dynamic? _data;
+
+        static Dialogues()
         {
             try
             {
-                Progress(0, "Navigateurs: scan…");
-                var svc = new CoreServices.BrowserCleaningService();
-                var rep = await Task.Run(() => svc.AnalyzeAndClean(new CoreServices.BrowserCleaningOptions { Force = false }));
-                Progress(100, "Navigateurs: terminé.");
-                AppendLine($"Caches navigateurs ~{rep.BytesFound / (1024.0 * 1024):F1} MB → supprimés ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
-                Say("Caches navigateurs nettoyés.", "proud");
-            }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur nettoyage navigateurs: {ex.Message}", "alert"); }
-        }
-
-        private async void CleanExtendedButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                Progress(0, "Nettoyage étendu…");
-                var ext = new CoreServices.ExtendedCleaningService();
-                var rep = await Task.Run(() => ext.AnalyzeAndClean());
-                Progress(100, "Nettoyage étendu terminé.");
-                AppendLine($"Étendu: ~{rep.BytesFound / (1024.0 * 1024):F1} MB → ~{rep.BytesDeleted / (1024.0 * 1024):F1} MB");
-                Say("Nettoyage étendu : ok.", "proud");
-            }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur Clean Extended: {ex.Message}", "alert"); }
-        }
-
-        // ============== Mises à jour ==============
-        private async void UpdateButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                ProgressIndeterminate("MAJ apps/jeux (winget)…");
-                var app = new CoreServices.ApplicationUpdateService();
-                var txt = await WingetWithRoughProgress(app);
-                if (!string.IsNullOrWhiteSpace(txt)) Append(txt);
-                ProgressDone("MAJ apps/jeux terminées.");
-                Say("Applications à jour.", "proud");
-            }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur MAJ apps: {ex.Message}", "alert"); }
-        }
-
-        private async Task<string> WingetWithRoughProgress(CoreServices.ApplicationUpdateService app)
-        {
-            Progress(5, "Winget: inventaire…"); await Task.Delay(250);
-            var output = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
-            Progress(65, "Winget: installation…"); await Task.Delay(200);
-            Progress(92, "Winget: finalisation…"); await Task.Delay(200);
-            return output;
-        }
-
-        private async void DriverButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                ProgressIndeterminate("MAJ pilotes (best-effort)…");
-                var drv = new DriverUpdateService();
-                var output = await drv.UpgradeDriversAsync();
-                if (!string.IsNullOrWhiteSpace(output)) Append(output);
-                ProgressDone("Pilotes : vérification terminée.");
-                Say("Vérification des pilotes effectuée.", "proud");
-            }
-            catch (Exception ex) { ProgressReset(); Say($"Erreur pilotes: {ex.Message}", "alert"); }
-        }
-
-        // Windows Update (UsoClient)
-        private async void WindowsUpdateButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { Progress(10, "WU: Scan…"); var s = await new WindowsUpdateService().StartScanAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Scan demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Scan: {ex.Message}", "alert"); }
-        }
-        private async void WindowsUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { Progress(10, "WU: Download…"); var s = await new WindowsUpdateService().StartDownloadAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Download demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Download: {ex.Message}", "alert"); }
-        }
-        private async void WindowsUpdateInstallButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { Progress(10, "WU: Install…"); var s = await new WindowsUpdateService().StartInstallAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Install demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Install: {ex.Message}", "alert"); }
-        }
-        private async void WindowsUpdateRestartButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { Progress(10, "WU: Restart…"); var s = await new WindowsUpdateService().RestartDeviceAsync(); if (!string.IsNullOrWhiteSpace(s)) Append(s); ProgressDone("WU: Restart demandé."); }
-            catch (Exception ex) { ProgressReset(); Say($"WU Restart: {ex.Message}", "alert"); }
-        }
-
-        // ============== Monitoring ==============
-        private void MonitorButton_Click(object sender, RoutedEventArgs e)
-        {
-            _isMonitoring = !_isMonitoring;
-            if (_isMonitoring && _monitoringService != null)
-            {
-                _monitoringService.Start();
-                MonitorToggleButton.Content = "Arrêter le monitoring";
-                Say("Monitoring démarré.", "vigilant");
-            }
-            else
-            {
-                _monitoringService?.Stop();
-                MonitorToggleButton.Content = "Démarrer le monitoring";
-                Say("Monitoring arrêté.", "neutral");
-            }
-        }
-
-        private void ReadTempsButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                using var adv = new CoreServices.AdvancedMonitoringService();
-                var s = adv.Read();
-                Say($"Températures → CPU: {(s.CpuTempC?.ToString("F0") ?? "?")}°C | GPU: {(s.GpuTempC?.ToString("F0") ?? "?")}°C | Disque: {(s.DiskTempC?.ToString("F0") ?? "?")}°C",
-                    DecideMoodFromTemps(s));
-            }
-            catch (Exception ex) { Say($"Erreur lecture températures: {ex.Message}", "alert"); }
-        }
-
-        private string DecideMoodFromTemps(CoreServices.HardwareSnapshot s)
-        {
-            var c = _config.Current;
-            if ((s.CpuTempC.HasValue && s.CpuTempC.Value >= c.CpuTempAlert) ||
-                (s.GpuTempC.HasValue && s.GpuTempC.Value >= c.GpuTempAlert))
-                return "alert";
-            if ((s.CpuTempC.HasValue && s.CpuTempC.Value >= c.CpuTempWarn) ||
-                (s.GpuTempC.HasValue && s.GpuTempC.Value >= c.GpuTempWarn))
-                return "vigilant";
-            return "neutral";
-        }
-
-        private void OnMetricsUpdated(object? sender, EventArgs e)
-        {
-            if (_monitoringService == null) return;
-            var m = _monitoringService.LatestMetrics;
-
-            Dispatcher.Invoke(() =>
-            {
-                AppendLine($"CPU: {m.CpuUsage:F1}%  MEM: {m.MemoryUsage:F1}%");
-                var c = _config.Current;
-                if (m.CpuUsage >= c.CpuAlert || m.MemoryUsage >= c.MemAlert)      Say("Charge élevée.", "alert", 2500);
-                else if (m.CpuUsage >= c.CpuWarn || m.MemoryUsage >= c.MemWarn)   Say("Charge modérée.", "vigilant", 2500);
-                else                                                              Say("Charge normale.", "neutral", 2000);
-            });
-        }
-
-        // ============== Outils & Journal ==============
-        private void CopyLogButton_Click(object sender, RoutedEventArgs e)
-        {
-            try { System.Windows.Clipboard.SetText(OutputBox.Text); Say("Journal copié.", "proud"); }
-            catch (Exception ex) { Say($"Clipboard : {ex.Message}", "alert"); }
-        }
-
-        private void ExportLogButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "logs");
-                Directory.CreateDirectory(dir);
-                var file = Path.Combine(dir, $"session-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
-                File.WriteAllText(file, OutputBox.Text, Encoding.UTF8);
-                Say($"Journal exporté : {file}", "proud");
-                try { Process.Start("explorer.exe", $"/select,\"{file}\""); } catch { }
-            }
-            catch (Exception ex) { Say($"Export journal : {ex.Message}", "alert"); }
-        }
-
-        private void OpenDeviceManagerButton_Click(object sender, RoutedEventArgs e) => TryStart("devmgmt.msc", true, "Gestionnaire de périphériques");
-        private void OpenDiskCleanupButton_Click(object sender, RoutedEventArgs e) => TryStart("cleanmgr.exe", true, "Nettoyage de disque");
-        private void OpenServicesConsoleButton_Click(object sender, RoutedEventArgs e) => TryStart("services.msc", true, "Console des services");
-
-        private async void FlushDnsButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                ProgressIndeterminate("Flush DNS…");
-                var psi = new ProcessStartInfo("ipconfig", "/flushdns")
+                var file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "virgil-dialogues.json");
+                if (File.Exists(file))
                 {
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-                using var p = Process.Start(psi);
-                if (p != null)
-                {
-                    var output = await p.StandardOutput.ReadToEndAsync();
-                    var err = await p.StandardError.ReadToEndAsync();
-                    await p.WaitForExitAsync();
-                    if (!string.IsNullOrWhiteSpace(output)) Append(output);
-                    if (!string.IsNullOrWhiteSpace(err)) Append(err);
+                    _data = System.Text.Json.JsonSerializer.Deserialize<dynamic>(File.ReadAllText(file));
                 }
-                ProgressDone("Flush DNS : ok.");
-                Say("Cache DNS vidé.", "proud");
             }
-            catch (Exception ex) { ProgressReset(); Say($"Flush DNS : {ex.Message}", "alert"); }
+            catch { /* ignore */ }
         }
 
-        private void TryStart(string fileName, bool useShell, string label)
+        private static string Pick(string section)
         {
             try
             {
-                var psi = new ProcessStartInfo(fileName) { UseShellExecute = useShell };
-                Process.Start(psi);
-                Say($"Ouverture : {label}", "neutral");
+                var arr = _data?[section];
+                if (arr == null) return "…";
+                var list = ((System.Text.Json.Nodes.JsonArray)arr).Select(x => x?.ToString() ?? "").Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                if (list.Count == 0) return "…";
+                return list[R.Next(list.Count)];
             }
-            catch (Exception ex) { Say($"Impossible d’ouvrir {label} : {ex.Message}", "alert"); }
+            catch { return "…"; }
         }
+
+        public static string Startup() => Pick("startup");
+        public static string SurveillanceStart() => Pick("surveillance_start");
+        public static string SurveillanceStop() => Pick("surveillance_stop");
+        public static string PulseLineByTimeOfDay()
+        {
+            var h = DateTime.Now.Hour;
+            if (h is >= 6 and < 12) return Pick("time_morning");
+            if (h is >= 12 and < 18) return Pick("time_afternoon");
+            if (h is >= 18 and < 23) return Pick("time_evening");
+            return Pick("time_night");
+        }
+        public static string AlertTemp() => Pick("alert_temp");
+
+        public static string Action(string key) => Pick($"action_{key}");
     }
 }
