@@ -5,16 +5,25 @@
              mc:Ignorable="mc"
              Background="Transparent">
 
+    <!-- Implicit style for ListBoxItem (applies automatically to MessageList items) -->
+    <UserControl.Resources>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
-        <!-- La liste des bulles -->
+        <!-- List area -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <ListBox x:Name="MessageList"
                      Background="Transparent"
                      BorderThickness="0"
-                     Padding="0"
-                     ItemContainerStyle="{DynamicResource {x:Static ListBoxItem.StyleKey}}">
-
-                <!-- Template de bulle -->
+                     Padding="0">
+                <!-- Bubble template -->
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Border x:Name="Bubble"
@@ -33,7 +42,7 @@
             </ListBox>
         </ScrollViewer>
 
-        <!-- Couche “poussière” pour l’effet Thanos -->
+        <!-- Dust layer for the Thanos effect -->
         <Canvas x:Name="DustLayer"
                 IsHitTestVisible="False"
                 Background="Transparent"/>
