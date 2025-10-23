@@ -8,7 +8,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Media;
 using System.Windows.Threading;
 
 using Virgil.Core.Services; // AdvancedMonitoringService, BrowserCleaningService, etc.
@@ -30,8 +29,9 @@ namespace Virgil.App
             set { _mood = value; OnPropertyChanged(); UpdateBrush(); }
         }
 
+        // On garde les types WPF entièrement qualifiés pour éviter toute ambiguïté.
         public System.Windows.Media.Brush BubbleBrush { get; private set; } =
-    new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
 
         private bool _isExpiring;
         public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
@@ -41,17 +41,15 @@ namespace Virgil.App
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
         private void UpdateBrush()
-{
-    BubbleBrush = Mood switch
-    {
-        "proud"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
-        "vigilant" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
-        "alert"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
-        _          => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
-    };
-    OnPropertyChanged(nameof(BubbleBrush));
-}
-
+        {
+            BubbleBrush = Mood switch
+            {
+                "proud"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
+                "vigilant" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
+                "alert"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
+                _          => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+            };
+            OnPropertyChanged(nameof(BubbleBrush));
         }
     }
 
