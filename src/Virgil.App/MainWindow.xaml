@@ -6,14 +6,16 @@
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         xmlns:local="clr-namespace:Virgil.App"
         mc:Ignorable="d"
-        Title="Virgil" Height="720" Width="1180"
+        Title="Virgil"
+        Height="720"
+        Width="1180"
         Background="#111318">
 
-    <!-- ================== Resources ================== -->
+    <!-- ================== RESSOURCES ================== -->
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-        <!-- Style items du chat si tu réutilises une ListBox un jour -->
+        <!-- Style pour les items du chat -->
         <Style x:Key="ChatItemContainer" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="8"/>
             <Setter Property="Margin" Value="4"/>
@@ -22,7 +24,7 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
 
-        <!-- DataTemplate facultatif au cas où tu bindes une ListBox<ChatMessage> -->
+        <!-- Template des bulles de chat -->
         <DataTemplate DataType="{x:Type local:ChatMessage}">
             <Border CornerRadius="10"
                     Background="{Binding BubbleBrush}"
@@ -36,85 +38,107 @@
         </DataTemplate>
     </Window.Resources>
 
+    <!-- ================== CONTENU PRINCIPAL ================== -->
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>   <!-- top bar -->
-            <RowDefinition Height="*"/>    <!-- content -->
-            <RowDefinition Height="44"/>   <!-- status -->
+            <RowDefinition Height="48"/>   <!-- barre du haut -->
+            <RowDefinition Height="*"/>    <!-- contenu -->
+            <RowDefinition Height="44"/>   <!-- statut -->
         </Grid.RowDefinitions>
 
-        <!-- ================== TOP BAR ================== -->
-        <Border Grid.Row="0" Background="#151821" Padding="10,0">
-            <DockPanel LastChildFill="True">
-                <TextBlock x:Name="ClockText"
-                           Foreground="#8FA3B8"
-                           VerticalAlignment="Center"
-                           FontWeight="SemiBold"/>
+        <!-- ======= TOP BAR ======= -->
+        <DockPanel Grid.Row="0"
+                   Background="#151821"
+                   LastChildFill="True"
+                   Padding="10,0">
+            <TextBlock x:Name="ClockText"
+                       Foreground="#8FA3B8"
+                       VerticalAlignment="Center"
+                       FontWeight="SemiBold"/>
+            <StackPanel Orientation="Horizontal"
+                        DockPanel.Dock="Right"
+                        Spacing="8">
+                <ToggleButton x:Name="SurveillanceToggle"
+                              Content="{Binding SurveillanceButtonText}"
+                              IsChecked="{Binding IsSurveillanceOn, Mode=TwoWay}"
+                              Margin="8,6" Padding="14,6"/>
+            </StackPanel>
+        </DockPanel>
 
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                    <ToggleButton x:Name="SurveillanceToggle"
-                                  Content="{Binding SurveillanceButtonText}"
-                                  IsChecked="{Binding IsSurveillanceOn, Mode=TwoWay}"
-                                  Margin="8,6" Padding="14,6"/>
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <!-- ================== CONTENT ================== -->
+        <!-- ======= CONTENU PRINCIPAL ======= -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="320"/>   <!-- avatar + stats -->
                 <ColumnDefinition Width="*"/>     <!-- chat + actions -->
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT: Avatar + Stats (stats visibles seulement en surveillance) -->
-            <StackPanel Grid.Column="0" Margin="12">
-                <Border CornerRadius="16" Background="#161a23" Padding="12">
-                    <controls:VirgilAvatar x:Name="AvatarControl" />
+            <!-- === PANNEAU GAUCHE : Avatar + Stats === -->
+            <StackPanel Grid.Column="0" Margin="12" Spacing="12">
+                <Border CornerRadius="16"
+                        Background="#161a23"
+                        Padding="12">
+                    <controls:VirgilAvatar x:Name="AvatarControl"/>
                 </Border>
 
-                <Border CornerRadius="12" Background="#161a23" Padding="12"
-                        Margin="0,12,0,0"
+                <Border CornerRadius="12"
+                        Background="#161a23"
+                        Padding="12"
                         Visibility="{Binding IsSurveillanceOn, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="Surveillance"
                                    FontWeight="SemiBold"
                                    Foreground="#CDE3FF"
                                    Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Vertical" Spacing="6">
+                            <TextBlock Text="{Binding CpuTempText}"
+                                       Foreground="#AFC6DA"/>
+                            <ProgressBar Minimum="0" Maximum="100"
+                                         Height="8" Value="{Binding CpuUsage}"/>
 
-                        <!-- CPU -->
-                        <TextBlock Text="{Binding CpuTempText}" Foreground="#AFC6DA" Margin="0,0,0,4"/>
-                        <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding CpuUsage}"/>
+                            <TextBlock Text="{Binding GpuTempText}"
+                                       Foreground="#AFC6DA" Margin="0,6,0,0"/>
+                            <ProgressBar Minimum="0" Maximum="100"
+                                         Height="8" Value="{Binding GpuUsage}"/>
 
-                        <!-- GPU -->
-                        <TextBlock Text="{Binding GpuTempText}" Foreground="#AFC6DA" Margin="0,8,0,4"/>
-                        <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding GpuUsage}"/>
+                            <TextBlock Text="Mémoire"
+                                       Foreground="#AFC6DA" Margin="0,6,0,0"/>
+                            <ProgressBar Minimum="0" Maximum="100"
+                                         Height="8" Value="{Binding MemUsage}"/>
 
-                        <!-- MEM -->
-                        <TextBlock Text="Mémoire" Foreground="#AFC6DA" Margin="0,8,0,4"/>
-                        <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding MemUsage}"/>
-
-                        <!-- DISK -->
-                        <TextBlock Text="Disque" Foreground="#AFC6DA" Margin="0,8,0,4"/>
-                        <ProgressBar Minimum="0" Maximum="100" Height="8" Value="{Binding DiskUsage}"/>
+                            <TextBlock Text="Disque"
+                                       Foreground="#AFC6DA" Margin="0,6,0,0"/>
+                            <ProgressBar Minimum="0" Maximum="100"
+                                         Height="8" Value="{Binding DiskUsage}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
-            <!-- RIGHT: Chat + Actions -->
+            <!-- === PANNEAU DROIT : Chat + Actions === -->
             <Grid Grid.Column="1" Margin="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>    <!-- chat -->
                     <RowDefinition Height="Auto"/> <!-- actions -->
                 </Grid.RowDefinitions>
 
-                <!-- CHAT: panneau custom avec auto-effacement + effet "Thanos" -->
-                <Border CornerRadius="12" Background="#151821" Padding="10" Margin="0,0,0,10">
-                    <controls:VirgilChatPanel x:Name="ChatArea" />
+                <!-- Zone de chat -->
+                <Border CornerRadius="12"
+                        Background="#151821"
+                        Padding="10"
+                        Margin="0,0,0,10">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ListBox x:Name="ChatList"
+                                 ItemsSource="{Binding ChatMessages}"
+                                 ItemContainerStyle="{StaticResource ChatItemContainer}"
+                                 Background="Transparent"
+                                 BorderThickness="0"/>
+                    </ScrollViewer>
                 </Border>
 
-                <!-- ACTION BUTTONS -->
-                <UniformGrid Grid.Row="1" Columns="4" Margin="0,6,0,0">
+                <!-- Boutons d’action -->
+                <UniformGrid Grid.Row="1"
+                             Columns="4"
+                             Margin="0,6,0,0">
                     <Button Content="Maintenance complète"
                             Click="FullMaintenanceButton_Click"
                             Margin="4" Padding="10"/>
@@ -131,16 +155,20 @@
             </Grid>
         </Grid>
 
-        <!-- ================== STATUS BAR ================== -->
-        <Border Grid.Row="2" Background="#151821" Padding="10,6">
-            <DockPanel LastChildFill="True">
-                <TextBlock x:Name="StatusText" Foreground="#AFC6DA" VerticalAlignment="Center" />
-                <ProgressBar x:Name="TaskProgress"
-                             DockPanel.Dock="Right"
-                             Width="280" Height="10"
-                             Margin="10,0,0,0"
-                             Minimum="0" Maximum="100"/>
-            </DockPanel>
-        </Border>
+        <!-- ======= BARRE DE STATUT ======= -->
+        <DockPanel Grid.Row="2"
+                   Background="#151821"
+                   LastChildFill="True"
+                   Padding="10,6">
+            <TextBlock x:Name="StatusText"
+                       Foreground="#AFC6DA"
+                       VerticalAlignment="Center"/>
+            <ProgressBar x:Name="TaskProgress"
+                         DockPanel.Dock="Right"
+                         Width="280"
+                         Height="10"
+                         Margin="10,0,0,0"
+                         Minimum="0" Maximum="100"/>
+        </DockPanel>
     </Grid>
 </Window>
