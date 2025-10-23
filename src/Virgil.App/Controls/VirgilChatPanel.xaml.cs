@@ -2,7 +2,8 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Controls;           // WPF Controls
+using System.Windows.Media;              // CompositionTarget
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -21,7 +22,8 @@ namespace Virgil.App.Controls
         public FrameworkElement? Container { get; set; } // attaché au visuel réel
     }
 
-    public partial class VirgilChatPanel : UserControl
+    // <<< clé de la correction : on hérite explicitement de la version WPF >>>
+    public partial class VirgilChatPanel : System.Windows.Controls.UserControl
     {
         public ObservableCollection<ChatMessage> Messages { get; } = new();
 
