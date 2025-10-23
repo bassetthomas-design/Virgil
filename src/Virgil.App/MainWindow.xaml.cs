@@ -86,8 +86,8 @@ namespace Virgil.App
         private void Say(string text, string mood = "neutral")
         {
             if (string.IsNullOrWhiteSpace(text)) return;
-            ChatArea?.Post(text, mood, 60_000); // 60s TTL
-            ChatArea?.ScrollToEnd();
+            MessageList?.Post(text, mood, 60_000); // 60s TTL
+            MessageList?.ScrollToEnd();
             SetAvatarMood(mood);
         }
 
