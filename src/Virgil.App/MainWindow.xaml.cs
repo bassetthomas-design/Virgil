@@ -11,8 +11,8 @@ using System.Windows;
 using System.Windows.Threading;
 
 using Serilog.Events;
-using Virgil.Core;
 using Virgil.Core.Services;
+using Virgil.App.Controls; // pour VirgilChatPanel
 
 namespace Virgil.App
 {
@@ -75,7 +75,14 @@ namespace Virgil.App
             DataContext = this;
             InitializeComponent();
 
-            Core.LoggingService.Init(LogEventLevel.Information);
+            // Appel de LoggingService.Init(LogEventLevel.Information) si disponible (réflexion)
+            try
+            {
+                var t = Type.GetType("Virgil.Core.LoggingService, Virgil.Core");
+                var m = t?.GetMethod("Init", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (m != null) m.Invoke(null, new object[] { LogEventLevel.Information });
+            }
+            catch { /* pas d'Init dans cette version → on ignore */ }
 
             // Horloge
             _clockTimer.Tick += (_, __) => { ClockText.Text = DateTime.Now.ToString("dddd dd MMM HH:mm"); };
@@ -92,7 +99,8 @@ namespace Virgil.App
         private void Say(string text, string mood = "neutral", int ttlMs = 60000)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
-            ChatArea.Post(text, mood, ttlMs); // VirgilChatPanel expose Post()
+            // ChatArea est un <controls:VirgilChatPanel x:Name="ChatArea" /> dans MainWindow.xaml
+            ChatArea.Post(text, mood, ttlMs);
         }
 
         // ================== PROGRESSION / ETAT ==================
@@ -156,6 +164,10 @@ namespace Virgil.App
             MemUsage = u.mem;
             DiskUsage = u.disk;
             GpuUsage = u.gpu; // peut rester 0 si pas dispo
+            OnPropertyChanged(nameof(CpuUsage));
+            OnPropertyChanged(nameof(MemUsage));
+            OnPropertyChanged(nameof(DiskUsage));
+            OnPropertyChanged(nameof(GpuUsage));
 
             // températures via AdvancedMonitoringService
             var t = _adv.Read();
@@ -166,7 +178,7 @@ namespace Virgil.App
             OnPropertyChanged(nameof(GpuTempText));
             OnPropertyChanged(nameof(DiskTempText));
 
-            // alerte température simple
+            // alerte température simple (seuils fixes — ajuste si tu as de la config)
             if ((t.CpuTempC ?? 0) >= 85 || (t.GpuTempC ?? 0) >= 85)
                 Say("🔥 Ça chauffe un peu. Pense à ventiler.", "alert", 12000);
         }
@@ -335,22 +347,25 @@ namespace Virgil.App
         }
     }
 
-    // ======= Petit lecteur d’usages (CPU/GPU/Mémoire/Disque) sans dépendances externes
+    /// <summary>
+    /// Petit lecteur d’usages (CPU/GPU/Mémoire/Disque) sans dépendances externes.
+    /// GPU à 0 par défaut (à remplacer si tu as un compteur adapté).
+    /// </summary>
     internal sealed class UsageProbe
     {
         private readonly PerformanceCounter _cpu = new("Processor", "% Processor Time", "_Total", true);
         private readonly PerformanceCounter _disk = new("PhysicalDisk", "% Disk Time", "_Total", true);
-        // GPU usage standardisé n’existe pas partout → on laisse 0 par défaut
+
         public (double cpu, double gpu, double mem, double disk) Read()
         {
             double cpu = SafeRead(_cpu);
             double disk = SafeRead(_disk);
 
-            // mémoire totale utilisée (commit) approximative
+            // mémoire utilisée
             var pc = new Microsoft.VisualBasic.Devices.ComputerInfo();
             double memUsed = (pc.TotalPhysicalMemory - pc.AvailablePhysicalMemory) / (double)pc.TotalPhysicalMemory * 100.0;
 
-            double gpu = 0; // si tu as un service GPU, remplace ici
+            double gpu = 0; // si tu as un compteur GPU, injecte-le ici
 
             return (Clamp(cpu), Clamp(gpu), Clamp(memUsed), Clamp(disk));
         }
