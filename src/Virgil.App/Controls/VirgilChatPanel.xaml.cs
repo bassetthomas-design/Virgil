@@ -2,113 +2,93 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Shapes;
-using System.Windows.Threading;
+using System.Windows.Controls;                // WPF
+using System.Windows.Media;                   // CompositionTarget, Brushes, Color, VisualTreeHelper
+using System.Windows.Media.Animation;         // Storyboard, DoubleAnimation, Easing
+using System.Windows.Shapes;                  // Ellipse
 
 namespace Virgil.App.Controls
 {
-    public class ChatMessage
+    public class ChatBubble
     {
         public string Text { get; set; } = "";
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-        public int TtlMs { get; set; } = 5000;
-        public FrameworkElement? Container { get; set; }
+        public int TtlMs { get; set; } = 60000;
+        public FrameworkElement? Container { get; set; } // bulle réelle dans l’ItemsControl
     }
 
     public partial class VirgilChatPanel : System.Windows.Controls.UserControl
     {
-        public ObservableCollection<ChatMessage> Messages { get; } = new();
+        public ObservableCollection<ChatBubble> Items { get; } = new();
 
         public VirgilChatPanel()
         {
             InitializeComponent();
-            DataContext = this;
 
-            // autoscroll à chaque rendu (léger mais efficace)
+            // Si l’ItemsControl s’appelle MessageList dans ton XAML, on lui donne la source :
+            if (FindName("MessageList") is ItemsControl ic)
+                ic.ItemsSource = Items;
+
+            // Autoscroll fluide à chaque frame rendue
             CompositionTarget.Rendering += (_, __) => ScrollToEnd();
         }
 
-        private void ScrollToEnd()
-        {
-            if (MessageList == null) return;
-
-            // 1) Si c'est un ListBox → ScrollIntoView dispo
-            if (MessageList is ListBox lb && lb.Items.Count > 0)
-            {
-                try { lb.ScrollIntoView(lb.Items[lb.Items.Count - 1]); }
-                catch { /* ignore */ }
-                return;
-            }
-
-            // 2) Sinon on cherche le ScrollViewer parent et on scrolle en bas
-            var sv = FindScrollViewer(MessageList);
-            if (sv != null)
-            {
-                sv.ScrollToEnd();
-            }
-        }
-
-        private static ScrollViewer? FindScrollViewer(DependencyObject root)
-        {
-            if (root is ScrollViewer sv) return sv;
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-            {
-                var child = VisualTreeHelper.GetChild(root, i);
-                var found = FindScrollViewer(child);
-                if (found != null) return found;
-            }
-            return null;
-        }
-
-        public void Post(string text, string? mood = null, int? ttlMs = null)
+        /// <summary>Affiche un message + planifie sa disparition.</summary>
+        public void Post(string text, string? mood = null, int ttlMs = 60000)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
 
-            var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 5000 };
-            Messages.Add(msg);
-            ScrollToEnd();
+            var m = new ChatBubble { Text = text, TtlMs = ttlMs };
+            Items.Add(m);
 
+            // Attendre que le conteneur visuel soit créé
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                var container = FindContainerFor(msg);
-                if (container != null)
-                {
-                    msg.Container = container;
-                    ScheduleVanish(msg);
-                }
-            }), DispatcherPriority.Loaded);
+                m.Container = GetContainerForLastItem();
+                if (m.Container != null)
+                    _ = ScheduleVanishAsync(m);
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
-        private FrameworkElement? FindContainerFor(ChatMessage msg)
+        // ===== utilitaires =====
+
+        private FrameworkElement? GetContainerForLastItem()
         {
-            if (MessageList == null || MessageList.Items.Count == 0) return null;
+            if (FindName("MessageList") is not ItemsControl ic) return null;
+            var idx = Items.Count - 1;
+            if (idx < 0) return null;
 
-            var idx = MessageList.Items.Count - 1;
-            var itemContainer = MessageList.ItemContainerGenerator.ContainerFromIndex(idx) as FrameworkElement;
-            return itemContainer?.FindName("Bubble") as FrameworkElement ?? itemContainer;
+            var container = ic.ItemContainerGenerator.ContainerFromIndex(idx) as FrameworkElement;
+            if (container == null) return null;
+
+            // si ton DataTemplate nomme l’élément bulle "Bubble", on le récupère, sinon on garde le container
+            var bubble = container.FindName("Bubble") as FrameworkElement;
+            return bubble ?? container;
         }
 
-        private async void ScheduleVanish(ChatMessage msg)
+        private async Task ScheduleVanishAsync(ChatBubble msg)
         {
             try
             {
-                await System.Threading.Tasks.Task.Delay(msg.TtlMs);
-                if (!Messages.Contains(msg) || msg.Container == null) return;
+                await Task.Delay(Math.Max(1000, msg.TtlMs)); // garde un minimum d’1s
+                if (!Items.Contains(msg) || msg.Container == null) return;
 
+                // petit effet “Thanos”
                 PlayThanos(msg.Container);
-                FadeShrink(msg.Container, 240, () => Messages.Remove(msg));
+
+                // fondu + léger shrink puis suppression de l’item
+                FadeShrink(msg.Container, 240, () =>
+                {
+                    Items.Remove(msg);
+                });
             }
             catch { /* ignore */ }
         }
 
         private void FadeShrink(FrameworkElement target, int ms, Action onDone)
         {
-            if (target == null) { onDone?.Invoke(); return; }
-
             var sb = new Storyboard();
 
             var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(ms))
@@ -119,32 +99,33 @@ namespace Virgil.App.Controls
             Storyboard.SetTargetProperty(fade, new PropertyPath("Opacity"));
             sb.Children.Add(fade);
 
-            var scale = new ScaleTransform(1, 1);
-            target.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
-            target.RenderTransform = scale;
+            var st = new ScaleTransform(1, 1);
+            target.RenderTransformOrigin = new Point(0.5, 0.5);
+            target.RenderTransform = st;
 
-            var sx = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
-            Storyboard.SetTarget(sx, target);
-            Storyboard.SetTargetProperty(sx, new PropertyPath("RenderTransform.ScaleX"));
-            sb.Children.Add(sx);
+            var s1 = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
+            Storyboard.SetTarget(s1, target);
+            Storyboard.SetTargetProperty(s1, new PropertyPath("RenderTransform.ScaleX"));
+            sb.Children.Add(s1);
 
-            var sy = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
-            Storyboard.SetTarget(sy, target);
-            Storyboard.SetTargetProperty(sy, new PropertyPath("RenderTransform.ScaleY"));
-            sb.Children.Add(sy);
+            var s2 = s1.Clone();
+            Storyboard.SetTargetProperty(s2, new PropertyPath("RenderTransform.ScaleY"));
+            sb.Children.Add(s2);
 
-            sb.Completed += (_, __) => onDone?.Invoke();
+            sb.Completed += (_, __) => onDone();
             sb.Begin();
         }
 
+        /// <summary>Effet “Thanos” sans shader : particules blanches qui se dissipent.</summary>
         private void PlayThanos(FrameworkElement source)
         {
-            if (DustLayer == null || source.ActualWidth < 10 || source.ActualHeight < 10) return;
+            if (FindName("DustLayer") is not Canvas dust) return;
+            if (source.ActualWidth < 8 || source.ActualHeight < 8) return;
 
-            var origin = source.TranslatePoint(new System.Windows.Point(0, 0), DustLayer);
+            var origin = source.TranslatePoint(new Point(0, 0), dust);
             var rnd = new Random();
 
-            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 40);
+            int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 42);
             for (int i = 0; i < count; i++)
             {
                 var dot = new Ellipse
@@ -157,7 +138,7 @@ namespace Virgil.App.Controls
 
                 Canvas.SetLeft(dot, origin.X + rnd.NextDouble() * source.ActualWidth);
                 Canvas.SetTop(dot, origin.Y + rnd.NextDouble() * source.ActualHeight);
-                DustLayer.Children.Add(dot);
+                dust.Children.Add(dot);
 
                 var dx = (rnd.NextDouble() - 0.2) * 120;
                 var dy = -(20 + rnd.NextDouble() * 80);
@@ -168,16 +149,45 @@ namespace Virgil.App.Controls
                 var ay = new DoubleAnimation(Canvas.GetTop(dot), Canvas.GetTop(dot) + dy, dur)
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
 
-                var aoIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
-                var aoOut = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
+                var ao = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(80));
+                var ao2 = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(80) };
 
-                dot.BeginAnimation(UIElement.OpacityProperty, aoIn);
-                dot.BeginAnimation(UIElement.OpacityProperty, aoOut);
+                dot.BeginAnimation(UIElement.OpacityProperty, ao);
+                dot.BeginAnimation(UIElement.OpacityProperty, ao2);
                 dot.BeginAnimation(Canvas.LeftProperty, ax);
                 dot.BeginAnimation(Canvas.TopProperty, ay);
 
-                aoOut.Completed += (_, __) => DustLayer.Children.Remove(dot);
+                ao2.Completed += (_, __) => dust.Children.Remove(dot);
             }
+        }
+
+        private void ScrollToEnd()
+        {
+            if (FindName("MessageList") is not ItemsControl ic) return;
+
+            // 1) Si c’est un ListBox → ScrollIntoView du dernier item
+            if (ic is ListBox lb && lb.Items.Count > 0)
+            {
+                try { lb.ScrollIntoView(lb.Items[lb.Items.Count - 1]); }
+                catch { /* ignore */ }
+                return;
+            }
+
+            // 2) Sinon, on récupère le ScrollViewer parent et on ScrollToEnd
+            var sv = FindScrollViewer(ic);
+            sv?.ScrollToEnd();
+        }
+
+        private static ScrollViewer? FindScrollViewer(DependencyObject root)
+        {
+            if (root is ScrollViewer sv) return sv;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                var found = FindScrollViewer(child);
+                if (found != null) return found;
+            }
+            return null;
         }
     }
 }
