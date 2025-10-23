@@ -104,7 +104,7 @@
                 <!-- Chat -->
                 <Border CornerRadius="12" Background="#151821" Padding="10" Margin="0,0,0,10">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ListBox x:Name="ChatList"
+                        <ListBox x:Name="MessageList"
                                  ItemsSource="{Binding ChatMessages}"
                                  ItemContainerStyle="{StaticResource ChatItemContainer}"
                                  Background="Transparent"
