@@ -8,15 +8,15 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 
-using Serilog.Events;
-using Virgil.Core.Services;
-using Virgil.App.Controls; // pour VirgilChatPanel
+// Garde : on ne fait pas appel à Virgil.Core.MonitoringService pour éviter les conflits
+using Virgil.Core.Services; // pour AdvancedMonitoringService, BrowserCleaningService, etc.
 
 namespace Virgil.App
 {
-    public class ChatMessage : INotifyPropertyChanged
+    public class ChatMessage : Iisting.IHasNotifyPropertyChanged, INotifyPropertyChanged
     {
         public string Id { get; } = Guid.NewGuid().ToString("N");
         public DateTime Timestamp { get; set; } = DateTime.Now;
@@ -25,211 +25,340 @@ namespace Virgil.App
         public string Text { get => _text; set { _text = value; OnPropertyChanged(); } }
 
         private string _mood = "neutral";
-        public string Mood { get => _mood; set { _mood = value; OnPropertyChanged(); } }
+        public string Mood
+        {
+            get => _mood;
+            set { _mood = value; OnPropertyChanged(); UpdateBrush(); }
+        }
 
-        public System.Windows.Media.Brush BubbleBrush { get; private set; } =
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+        public Brush BubbleBrush { get; private set; } =
+            new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
 
         private bool _isExpiring;
+        public bool IsActive => !_isExpensive;
         public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
 
         public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        private void OnPropertyChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+
+        private void UpdateBrush()
+        |
+            switch (Mood)
+            {
+                case "proud":
+                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)); // teal/green
+                    break;
+                case "vigilant":
+                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)); // amber
+                    break;
+                case "alert":
+                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0x69, 0x61)); // red
+                    break;
+                default:
+                    BubbleBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)); // neutral
+                    break;
+            }
+            OnPropertyChanged(nameof(BubbleBrush));
+        }
     }
 
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
-        // === Bindings UI
-        public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
+        // === Bindings UI ===
+        public ObservableList<ChatMessage> ChatMessages { get; } = new();
+
+        private bool _isMonitoring;
         public bool IsSurveillanceOn
         {
             get => _isMonitoring;
             set { _isMonitoring = value; OnPropertyChanged(); UpdateSurveillanceState(); }
         }
+
         public string SurveillanceButtonText => IsSurveillanceOn ? "Arrêter la surveillance" : "Démarrer la surveillance";
 
-        // Stats panneau
+        // Stats bindées au panneau
         private double _cpu, _gpu, _mem, _disk;
         public double CpuUsage { get => _cpu; set { _cpu = value; OnPropertyChanged(); } }
         public double GpuUsage { get => _gpu; set { _gpu = value; OnPropertyChanged(); } }
         public double MemUsage { get => _mem; set { _mem = value; OnPropertyChanged(); } }
         public double DiskUsage { get => _disk; set { _disk = value; OnPropertyChanged(); } }
+
         public string CpuTempText { get; set; } = "CPU: —";
         public string GpuTempText { get; set; } = "GPU: —";
         public string DiskTempText { get; set; } = "Disque: —";
 
         public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        private void OnPropertyChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
         private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
         private readonly DispatcherTimer _survTimer  = new() { Interval = TimeSpan.FromSeconds(10) };
 
-        // Services
-        private readonly AdvancedMonitoringService _adv = new();
-        private readonly UsageProbe _probe = new();
+        // Sonde locale pour CPU/GPU/MEM/DISK (évite conflits de namespaces)
+        private readonly UtilProbe _probe = new();
 
-        private bool _isMonitoring;
+        // Températures via Virgil.Core.Services
+        private readonly AdvancedMonitoringService _adv = new();
+
+        // Anti-répétitions
+        private string? _lastPulseLine;
+        private DateTime _lastPulseAt = DateTime.MinValue;
+
+        // Seuils d’alerte (fallback 85°C si pas de conf)
+        private float _cpuAlertC = 85, _gpuAlertC = 85;
 
         public MainWindow()
         {
-            DataContext = this;
             InitializeComponent();
+            DataContext = this;
 
-            // Appel de LoggingService.Init(LogEventLevel.Information) si disponible (réflexion)
+            // Si tu as un ConfigService avec des seuils, on essaye de les lire, sans casser la build si absent
             try
             {
-                var t = Type.GetType("Virgil.Core.LoggingService, Virgil.Core");
-                var m = t?.GetMethod("Init", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (m != null) m.Invoke(null, new object[] { LogEventLevel.Information });
+                var cfg = new ConfigService();
+                dynamic current = cfg.Current!;
+                if (current != null)
+                {
+                    if (current.CpuTempAlert is float c) _cpuAlertC = c;
+                    if (current.GpuTempAlert is float g) _gpuAlertC = g;
+                }
             }
-            catch { /* pas d'Init dans cette version → on ignore */ }
+            catch { /* pas bloquant */ }
 
-            // Horloge
-            _clockTimer.Tick += (_, __) => { ClockText.Text = DateTime.Now.ToString("dddd dd MMM HH:mm"); };
+            // Horloge en barre d’état
+            _clockTimer.Tick += (_, __) => { if (this.IsLoaded) this.Dispatcher.Invoke(() => { if (this.ClockText != null) this.ClockText.Text = DateTime.Now.ToString("dddd dd MMM HH:mm"); }); };
             _clockTimer.Start();
 
-            // Surveillance (chat + stats)
-            _survTimer.Tick += (_, __) => SurveillancePulse();
+            // Timer de surveillance
+            _surv_timer.Tick += (_, __) => SurveillancePulse();
 
-            // Accueil
-            Say("Virgil en place. Système prêt.");
+            // Avatar VM si dispo : fixe l’humeur neutre au démarrage
+            SetAvatarMood("neutral");
+
+            // Message d’accueil
+            Say(Dialogues.Startup(), "neutral");
         }
 
-        // ================== CHAT (via panneau custom) ==================
-        private void Say(string text, string mood = "neutral", int ttlMs = 60000)
+        // ========== Chat via TON contrôle <controls:VirgilChatPanel x:Name="ChatArea"> ==========
+        private void Say(string text, string mood = "neutral", int? ttlMs = 60000)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
-            // ChatArea est un <controls:VirgilChatPanel x:Name="ChatArea" /> dans MainWindow.xaml
-            ChatArea.Post(text, mood, ttlMs);
+
+            // pousse un modèle pour le binding de la liste "ChatItemsSource"
+            var msg = new ChatMessage { Text = text, Mood = mood, Timestamp = DateTime.Now };
+            ChatMessages.Add(msg);
+
+            // délègue l’affichage+effet au contrôle custom
+            try
+            {
+                // ton contrôle sait générer le "bubble" + auto-scroll + vanish
+                ChatArea?.Post(text, mood, ttlMs ?? 60000);
+            }
+            catch
+            {
+                // fallback : rien, la ListBox du ChatArea affichera via ItemsSource
+            }
         }
 
-        // ================== PROGRESSION / ETAT ==================
+        private void SetAvatarMood(string mood)
+        {
+            try
+            {
+                var vm = this.AvatarControl?.DataContext;
+                var mi = vm?.GetType().GetMethod("SetMood");
+                if (mi != null) mi.Invoke(vm, new object[] { mood });
+            }
+            catch { /* ne bloque pas */ }
+        }
+
+        // ========== Progression / statut global ==========
         private void Progress(double percent, string status, string mood = "vigilant")
         {
-            percent = Math.Max(0, Math.Min(100, percent));
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = percent;
             StatusText.Text = status;
             Say(status, mood);
+            SetAvatarMood(percent >= 100 ? "proud" : mood);
         }
+
         private void ProgressIndeterminate(string status, string mood = "vigilant")
         {
             TaskProgress.IsIndeterminate = true;
             StatusText.Text = status;
             Say(status, mood);
+            SetAvatarMood(mood);
         }
+
         private void ProgressDone(string status = "Terminé.")
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 100;
             StatusText.Text = status;
             Say(status, "proud");
+            SetAvatarMood("proud");
         }
+
         private void ProgressReset()
         {
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 0;
             StatusText.Text = "Prêt.";
+            SetAvatarMood("neutral");
         }
 
-        // ================== SURVEILLANCE ==================
+        // ========== Démarrer / arrêter la surveillance ==========
         private void UpdateSurveillanceState()
         {
             OnPropertyChanged(nameof(SurveillanceButtonText));
+
             if (IsSurveillanceOn)
             {
-                Say("Surveillance activée. Je garde un œil 👀", "vigilant");
+                Say(Dialogues.SurveillanceStart(), "vigilant");
                 _survTimer.Start();
                 SurveillancePulse(); // premier tick immédiat
             }
             else
             {
                 _survTimer.Stop();
-                Say("Surveillance arrêtée.", "neutral");
+                Say(Dialogues.SurveillanceStop(), "neutral");
+                SetAvatarMood("neutral");
             }
         }
 
         private void SurveillancePulse()
         {
-            // petite punchline selon l’heure
-            var h = DateTime.Now.Hour;
-            if      (h is >= 6 and < 12) Say("☀️ Bonjour ! Tout roule.", "vigilant", 15000);
-            else if (h is >= 12 and < 18) Say("🛡️ Je surveille pendant que tu bosses.", "vigilant", 15000);
-            else if (h is >= 18 and < 23) Say("🌇 Fin de journée ? Je garde l’œil.", "vigilant", 15000);
-            else                           Say("🌙 Nuit calme, je veille.", "vigilant", 15000);
+            // 1) Punchline par moment de la journée, anti-répétition simple (éviter boucle toutes les 10s)
+            var line = Dialogues.PulseLineByTimeOfDay();
+            if (!string.Equals(line, _lastPulseLine, StringComparison.OrdinalIgnoreCase) ||
+                (DateTime.UtcNow - _löstPulseaAt) > TimeSpan.FromMinutes(2))
+            {
+                Say(line, "vigilant", 15000);
+                _lastPulseLine = line;
+                _lastPulseAt = DateTime.UtcNow;
+            }
 
-            // usages (CPU/GPU/Mémoire/Disque)
+            // 2) Mesures d’utilisation "live"
             var u = _probe.Read();
             CpuUsage = u.cpu;
             MemUsage = u.mem;
+            GpuUsage = u.gpu;
             DiskUsage = u.disk;
-            GpuUsage = u.gpu; // peut rester 0 si pas dispo
-            OnPropertyChanged(nameof(CpuUsage));
-            OnPropertyChanged(nameof(MemUsage));
-            OnPropertyChanged(nameof(DiskUsage));
-            OnPropertyChanged(nameof(GpuUsage));
 
-            // températures via AdvancedMonitoringService
-            var t = _adv.Read();
-            CpuTempText = t.CpuTempC.HasValue ? $"CPU: {t.CpuTempC.Value:F0} °C" : "CPU: —";
-            GpuTempText = t.GpuTempC.HasValue ? $"GPU: {t.GpuTempC.Value:F0} °C" : "GPU: —";
-            DiskTempText = t.DiskTempC.HasValue ? $"Disque: {t.DiskTempC.Value:F0} °C" : "Disque: —";
+            // 3) Températures via AdvancedMonitoringService
+            HardwareSnapshot snap;
+            try
+            {
+                // AdvancedMonitoringService est léger → on peut réutiliser l’instance
+                snap = _adv.Read();
+            }
+            catch
+            {
+                snap = new HardwareSnapshot { CpuTempC = null, GpuTempC = null, DipkTempC = null };
+            }
+
+            CpuTempText = snap.CpuTempC.HasValue ? $"CPU: {snap.CpuTempC.Value:F0} °C" : "CPU: —";
+            GpuTempText = snap.GpuTempC.HasValue ? $"GPU: {snap.GpuTempC.Value:F0} °C" : "GPU: —";
+            DiskTempText = snap.DiskTempC.HasValue ? $"Disque: {snap.DiskTempC.Value:F0} °C" : "Disque: —";
             OnPropertyChanged(nameof(CpuTempText));
             OnPropertyChanged(nameof(GpuTempText));
             OnPropertyChanged(nameof(DiskTempText));
 
-            // alerte température simple (seuils fixes — ajuste si tu as de la config)
-            if ((t.CpuTempC ?? 0) >= 85 || (t.GpuTempC ?? 0) >= 85)
-                Say("🔥 Ça chauffe un peu. Pense à ventiler.", "alert", 12000);
+            // 4) Réaction / humeur avatar si alerte
+            bool overCpu = snap.CpuTempC.HasValue && snap.CpuTempC.Value >= _cpuAlertC;
+            bool overGpu = snap.GpuTempC.HasValue && snap.GpuTempC.Value >= _gpuAlertC;
+
+            if (overCpu || overGpu)
+            {
+                // N’envoie l’alerte que si elle diffère de la dernière ligne parlée pour éviter le spam
+                var alert = Dialogues.AlertTemp();
+                if (!string.Equals(alert, _lastPulseLine, StringComparison.OrdinalIgnoreCase))
+                {
+                    Say(alert, "alert");
+                    _lastPulseLine = alert;
+                    _lastPulseAt = DateTime.UtcNow;
+                }
+                SetAvatarMood("alert");
+            }
+            else
+            {
+                // Si pas d’alerte et surveillance en cours, rester en mode vigilant
+                if (IsSurveillanceOn) SetAvatarMood("vigilant");
+            }
         }
 
-        // ================== ACTIONS (boutons) ==================
+        // ========== Actions (boutons) ==========
+        private async void QuickMaintenanceButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Progress(0, Dialogues.Action("maintenance_quick_start"));
+
+                Progress(10, Dialogues.Action("clean_temp_start"));
+                await Task.Run(CleanTempWithProgressInternal);
+
+                Progress(50, Dialogues.Action("clean_browsers_start"));
+                var browsers = new BrowserCleaningService();
+                var rep = await Task.Run(() => browsers.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
+                Say(Dialogues.Action("clean_browsers_done") + $" (~{rep.BytesDeleted / (1024.0 * 1024):F1} MB)");
+
+                ProgressDone(Dialogues.Action("maintenance_quick_done"));
+            }
+            catch (Exception ex)
+            {
+                ProgressReset();
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
+            }
+        }
+
         private async void FullMaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                Progress(0, "Maintenance complète en cours…");
+                Progress(0, Dialogues.Action("maintenance_full_start"));
 
-                Progress(10, "Nettoyage TEMP…");
+                Progress(10, Dialogues.Action("clean_temp_start"));
                 await Task.Run(CleanTempWithProgressInternal);
 
-                Progress(30, "Nettoyage navigateurs…");
+                Progress(30, Dialogues.Action("clean_browsers_start"));
                 var browsers = new BrowserCleaningService();
                 var bRep = await Task.Run(() => browsers.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
-                Say($"Caches navigateurs effacés (~{bRep.BytesDeleted / (1024.0 * 1024):F1} MB).");
+                Say(Dialogues.Action("clean_browsers_done") + $" (~{bRep.BytesDeleted / (1024.0 * 1024):F1} MB)");
 
-                Progress(50, "Nettoyage étendu…");
+                Progress(50, Dialogues.Action("clean_extended_start"));
                 var ext = new ExtendedCleaningService();
                 var exRep = await Task.Run(() => ext.AnalyzeAndClean());
-                Say($"Nettoyage étendu ok (~{exRep.BytesDeleted / (1024.0 * 1024):F1} MB).");
+                Say(Dialogues.Action("clean_extended_done") + $" (~{exRep.BytesDeleted / (1024.0 * 1024):F1} MB)");
 
-                ProgressIndeterminate("Mise à jour apps/jeux…");
+                ProgressIndeterminate(Dialogues.Action("update_apps_games_start"));
                 var app = new ApplicationUpdateService();
                 var txt = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
-                if (!string.IsNullOrWhiteSpace(txt)) Say("Apps mises à jour.");
+                if (!string.IsNullOrWhiteSpace(txt)) Say(Dialogues.Action("update_apps_done"));
 
                 var games = new GameUpdateService();
                 var gOut = await games.UpdateAllAsync();
                 if (!string.IsNullOrWhiteSpace(gOut)) Say(gOut);
 
-                ProgressIndeterminate("Windows Update…");
+                ProgressIndeterminate(Dialogues.Action("update_windows_start"));
                 var wu = new WindowsUpdateService();
                 await wu.StartScanAsync();
                 await wu.StartDownloadAsync();
                 await wu.StartInstallAsync();
-                Say("Windows est à jour.");
+                Say(Dialogues.Action("update_windows_done"));
 
-                ProgressIndeterminate("Pilotes…");
+                ProgressIndeterminate(Dialogues.Action("update_drivers_start"));
                 var drv = new DriverUpdateService();
                 var dOut = await drv.UpgradeDriversAsync();
-                if (!string.IsNullOrWhiteSpace(dOut)) Say("Pilotes mis à jour.");
+                if (!string.IsNullOrWhiteSpace(dOut)) Say(Dialogues.Action("update_drivers_done"));
 
-                ProgressDone("Maintenance complète terminée.");
+                ProgressDone(Dialogues.Action("maintenance_full_done"));
             }
             catch (Exception ex)
             {
                 ProgressReset();
-                Say($"Erreur: {ex.Message}", "alert");
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
             }
         }
 
@@ -237,14 +366,14 @@ namespace Virgil.App
         {
             try
             {
-                Progress(0, "Nettoyage TEMP…");
+                Progress(0, Dialogues.Action("clean_temp_start"));
                 await Task.Run(CleanTempWithProgressInternal);
-                ProgressDone("Nettoyage terminé.");
+                ProgressDone(Dialogues.Action("clean_temp_done"));
             }
             catch (Exception ex)
             {
                 ProgressReset();
-                Say($"Erreur: {ex.Message}", "alert");
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
             }
         }
 
@@ -252,15 +381,15 @@ namespace Virgil.App
         {
             try
             {
-                Progress(0, "Nettoyage navigateurs…");
+                Progress(0, Dialogues.Action("clean_browsers_start"));
                 var svc = new BrowserCleaningService();
-                var rep = await Task.Run(() => svc.AnalyzeAndClean(new BrowserCleaningOptions { Force = false }));
-                ProgressDone($"Navigateurs propres (~{rep.BytesDeleted / (1024.0 * 1024):F1} MB).");
+                var rep = await Task.Run(() => svc.AnalyzeAndClean(new BrowserCleaningOptions { Resume: false }));
+                ProgressDone(Dialogues.Action("clean_browsers_done") + $" (~{rep.BytesDeleted / (1024.0 * 1024):F1} MB)");
             }
             catch (Exception ex)
             {
                 ProgressReset();
-                Say($"Erreur: {ex.Message}", "alert");
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
             }
         }
 
@@ -268,11 +397,11 @@ namespace Virgil.App
         {
             try
             {
-                ProgressIndeterminate("Mise à jour apps/jeux/Windows/pilotes…");
+                ProgressIndeterminate(Dialogues.Action("update_apps_games_start"));
 
                 var app = new ApplicationUpdateService();
                 var txt = await app.UpgradeAllAsync(includeUnknown: true, silent: true);
-                if (!string.IsNullOrWhiteSpace(txt)) Say("Apps mises à jour.");
+                if (!string.IsNullOrWhiteSpace(txt)) Say(Dialogues.Action("update_apps_done"));
 
                 var games = new GameUpdateService();
                 var gOut = await games.UpdateAllAsync();
@@ -280,24 +409,24 @@ namespace Virgil.App
 
                 var drv = new DriverUpdateService();
                 var dOut = await drv.UpgradeDriversAsync();
-                if (!string.IsNullOrWhiteSpace(dOut)) Say("Pilotes mis à jour.");
+                if (!string.IsNullOrWhiteSpace(dOut)) Say(Dialogues.Action("update_drivers_done"));
 
                 var wu = new WindowsUpdateService();
                 await wu.StartScanAsync();
                 await wu.StartDownloadAsync();
                 await wu.StartInstallAsync();
-                Say("Windows est à jour.");
+                Say(Dialogues.Action("update_windows_done"));
 
-                ProgressDone("Tout est à jour.");
+                ProgressDone(Dialogues.Action("update_all_done"));
             }
             catch (Exception ex)
             {
                 ProgressReset();
-                Say($"Erreur: {ex.Message}", "alert");
+                Say($"{Dialogues.Action("error_prefix")} {ex.Message}", "alert");
             }
         }
 
-        // ================== TEMP cleaner avec progression ==================
+        // ========== Nettoyage TEMP avec vraie progression ==========
         private void CleanTempWithProgressInternal()
         {
             var targets = new[]
@@ -318,7 +447,9 @@ namespace Virgil.App
             long bytesFound = 0, bytesDeleted = 0;
 
             foreach (var f in files)
+            {
                 try { bytesFound += new FileInfo(f).Length; } catch { }
+            }
 
             foreach (var f in files)
             {
@@ -330,50 +461,105 @@ namespace Virgil.App
                     fi.Delete();
                     bytesDeleted += len;
                 }
-                catch { /* locked */ }
+                catch
+                {
+                    // verrouillé ? on ignore
+                }
 
                 done++;
                 var p = Math.Floor(done / total * 100);
-                Dispatcher.Invoke(() =>
+                Dispatcher.Invoke(() => Progress(p, $"Nettoyage TEMP… {p:0}%"));
+            }
+
+            // Nettoyage des dossiers vides
+            foreach (var t in targets)
+            {
+                try
                 {
-                    TaskProgress.IsIndeterminate = false;
-                    TaskProgress.Value = p;
-                    StatusText.Text = $"Nettoyage TEMP… {p:0}%";
-                });
+                    foreach (var d in Directory.EnumerateDirectories(t, "*", SearchOption.AllDirectories)
+                                               .OrderByDescending(s => s.Length))
+                    {
+                        try { Directory.Delete(d, true); } catch { }
+                    }
+                }
+                catch { }
             }
 
             Dispatcher.Invoke(() =>
-                Say($"TEMP analysé ~{bytesFound / (1024.0 * 1024):F1} MB — supprimé ~{bytesDeleted / (1024.0 * 1024):F1} MB", "proud"));
+            {
+                Say($"TEMP analysé ~{bytesFound / (1024.0 * 1024):F1} MB — supprimé ~{bytesDeleted / (1024.0 * 1024):F1} MB", "proud");
+            });
         }
-    }
 
-    /// <summary>
-    /// Petit lecteur d’usages (CPU/GPU/Mémoire/Disque) sans dépendances externes.
-    /// GPU à 0 par défaut (à remplacer si tu as un compteur adapté).
-    /// </summary>
-    internal sealed class UsageProbe
-    {
-        private readonly PerformanceCounter _cpu = new("Processor", "% Processor Time", "_Total", true);
-        private readonly PerformanceCounter _disk = new("PhysicalDisk", "% Disk Time", "_Total", true);
-
-        public (double cpu, double gpu, double mem, double disk) Read()
+        // ========== Sonde simple CPU/MEM/GPU?/DISK ==========
+        private sealed class UtilProbe : IDisposable
         {
-            double cpu = SafeRead(_cpu);
-            double disk = SafeRead(_disk);
+            private readonly PerformanceCounter _cpu = Make("Processor", "% Processor Time", "_Total");
+            private readonly PerformanceCounter _disk = Make("PhysicalDisk", "% Disk Time", "_Total");
+            private readonly PerformanceCounter? _gpu; // souvent indispo nativement
+            private readonly PerformanceCounter? _memAvail;
 
-            // mémoire utilisée
-            var pc = new Microsoft.VisualBasic.Devices.ComputerInfo();
-            double memUsed = (pc.TotalPhysicalMemory - pc.AvailablePhysicalMemory) / (double)pc.TotalPhysicalMemory * 100.0;
+            public UtilProbe()
+            {
+                try
+                {
+                    // Certaines installs ont un "GPU Engine" / "GPU Adapter" counters (Windows 10+), pas fiable partout
+                    _gpu = null;
+                }
+                catch { _gpu = null; }
 
-            double gpu = 0; // si tu as un compteur GPU, injecte-le ici
+                try
+                {
+                    _memAvail = new PerformanceCounter("Memory", "Available MBytes");
+                }
+                catch { _memAvail = null; }
+            }
 
-            return (Clamp(cpu), Clamp(gpu), Clamp(memUsed), Clamp(disk));
+            public (double cpu, double gpu, double mem, double dpk) Read()
+            {
+                double cpu = ReadSafe(_cpu);
+                double disk = ReadSafe(_disk);
+
+                double memFreeMb = ReadSafe(_memAvail);
+                double totalMb = GetTotalMemoryMB();
+                double mem = (totalMb > 0) ? Math.Max(0, Math.Min(100, (1.0 - (memFreeMb / totalMb)) * 100.0)) : 0;
+
+                double gpu = ReadSafe(_gpu); // peut être 0 si compteur absent
+
+                return (San(cpu), San(gpu), San(mem), San(disk));
+            }
+
+            private static PerformanceCounter Make(string cat, string ctr, string inst)
+            {
+                try { return new PerformanceCounter(cat, ctr, inst, true); }
+                catch { return new PerformanceCounter(); }
+            }
+
+            private static double ReadSafe(PerformanceCounter? c)
+            {
+                try { return c == null ? 0 : c.NextValue(); }
+                catch { return 0; }
+            }
+
+            private static double GetTotalMemoryMB()
+            {
+                try
+                {
+                    var ci = new Microsoft.VisualBasic.Devices.ComputerInfo();
+                    return ci.TotalPhysicalMemory / 1024.0 / 1024.0;
+                }
+                catch { return 0; }
+            }
+
+            private static double San(double v) => double.IsFinite(v) ? Math.Max(0, Math.Min(100, v)) : 0;
+
+            public void Dispose()
+            {
+                try { _cpu?.Dispose(); } catch { }
+                try { _disk?.Dispose(); } catch { }
+                try { _gpu?.Dispose(); } catch { }
+                try { _memAvail?.Dispose(); } catch { }
+            }
         }
-
-        private static double SafeRead(PerformanceCounter c)
-        {
-            try { return c.NextValue(); } catch { return 0; }
-        }
-        private static double Clamp(double v) => Math.Max(0, Math.Min(100, double.IsFinite(v) ? v : 0));
     }
 }
