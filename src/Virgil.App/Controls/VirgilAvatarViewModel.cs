@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
+using System.Windows.Media; // Brush, Color, SolidColorBrush, Colors, etc.
+
 
 namespace Virgil.App.Controls
 {
