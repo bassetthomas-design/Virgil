@@ -6,6 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using System.Windows.Controls;
+public partial class VirgilChatPanel : System.Windows.Controls.UserControl
+
 
 namespace Virgil.App.Controls
 {
