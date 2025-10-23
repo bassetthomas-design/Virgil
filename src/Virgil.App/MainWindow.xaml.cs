@@ -12,47 +12,15 @@ using Serilog.Events;
 using Virgil.Core.Services;
 using CoreServices = Virgil.Core.Services;
 
+// évite toute ambiguïté avec System.Drawing
+using Media = System.Windows.Media;
+
 namespace Virgil.App
 {
-    public class ChatMessage : INotifyPropertyChanged
-    {
-        public string Id { get; } = Guid.NewGuid().ToString("N");
-        public DateTime Timestamp { get; set; } = DateTime.Now;
-
-        private string _text = "";
-        public string Text { get => _text; set { _text = value; OnPropertyChanged(); } }
-
-        private string _mood = "neutral";
-        public string Mood { get => _mood; set { _mood = value; OnPropertyChanged(); UpdateBrush(); } }
-
-        public System.Windows.Media.Brush BubbleBrush { get; private set; } =
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
-
-        private bool _isExpiring;
-        public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? p = null) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
-
-        private void UpdateBrush()
-        {
-            BubbleBrush = Mood switch
-            {
-                "proud"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
-                "vigilant" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
-                "alert"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
-                _          => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
-            };
-            OnPropertyChanged(nameof(BubbleBrush));
-        }
-    }
-
+    // NOTE: on n'utilise plus ChatMessage ici car le custom panel gère ses propres items.
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         // === Bindings UI ===
-        public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
-
         private bool _isMonitoring;
         public bool IsSurveillanceOn
         {
@@ -72,8 +40,7 @@ namespace Virgil.App
         public string DiskTempText { get; set; } = "Disque: —";
 
         public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? p = null) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
         private readonly CoreServices.ConfigService _config;
         private readonly MonitoringService? _monitoringService;
@@ -105,44 +72,22 @@ namespace Virgil.App
             try { _monitoringService = new MonitoringService(); }
             catch { _monitoringService = null; }
 
-            // Horloge en barre d’état
+            // Horloge
             _clockTimer.Tick += (_, __) => { ClockText.Text = DateTime.Now.ToString("dddd dd MMM HH:mm"); };
             _clockTimer.Start();
 
-            // Surveillance (chat + stats) — seulement si activé
+            // Surveillance (chat + stats)
             _surveillanceTimer.Tick += (_, __) => SurveillancePulse();
 
             // Message d’accueil
             Say(Dialogues.Startup(), "neutral");
         }
 
-        // ================== CHAT (messages + disparition 60s) ==================
-        private void Say(string text, string mood = "neutral")
+        // ================== CHAT (via custom panel) ==================
+        private void Say(string text, string mood = "neutral", int ttlMs = 60_000)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
-            var msg = new ChatMessage { Text = text, Mood = mood, Timestamp = DateTime.Now };
-            ChatMessages.Add(msg);
-            ScrollToEnd();
-
-            _ = ExpireMessageAsync(msg, TimeSpan.FromMinutes(1)); // effet “Thanos” côté UI/binding
-        }
-
-        private async Task ExpireMessageAsync(ChatMessage msg, TimeSpan delay)
-        {
-            try
-            {
-                await Task.Delay(delay);
-                msg.IsExpiring = true;
-                await Task.Delay(TimeSpan.FromMilliseconds(950));
-                ChatMessages.Remove(msg);
-            }
-            catch { /* ignore */ }
-        }
-
-        private void ScrollToEnd()
-        {
-            if (ChatList.Items.Count == 0) return;
-            ChatList.ScrollIntoView(ChatList.Items[^1]);
+            ChatPanel?.Post(text, mood, ttlMs);
         }
 
         private void SetAvatarMood(string mood)
@@ -163,14 +108,14 @@ namespace Virgil.App
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = percent;
             StatusText.Text = status;
-            Say(status, mood);
+            Say(status, mood, 15_000);
             SetAvatarMood(percent >= 100 ? "proud" : "vigilant");
         }
         private void ProgressIndeterminate(string status, string mood = "vigilant")
         {
             TaskProgress.IsIndeterminate = true;
             StatusText.Text = status;
-            Say(status, mood);
+            Say(status, mood, 15_000);
             SetAvatarMood(mood);
         }
         private void ProgressDone(string status = "Terminé.")
@@ -178,7 +123,7 @@ namespace Virgil.App
             TaskProgress.IsIndeterminate = false;
             TaskProgress.Value = 100;
             StatusText.Text = status;
-            Say(status, "proud");
+            Say(status, "proud", 20_000);
             SetAvatarMood("proud");
         }
         private void ProgressReset()
@@ -211,29 +156,97 @@ namespace Virgil.App
             // Punchline liée à l’heure
             Say(Dialogues.PulseLineByTimeOfDay(), "vigilant");
 
+            // Stats live via réflexion pour éviter les erreurs de compile si l’API change
             if (_monitoringService == null) return;
 
-            // Mesures “live”
-            var m = _monitoringService.ReadInstant(); // Assure-toi que cette méthode existe côté service
-            CpuUsage = m.CpuUsage;
-            MemUsage = m.MemoryUsage;
-            GpuUsage = m.GpuUsage;
-            DiskUsage = m.DiskUsage;
+            var snap = GetSnapshotDynamic(_monitoringService); // dynamic object si possible
+            if (snap == null) return;
 
-            CpuTempText = m.CpuTempC.HasValue ? $"CPU: {m.CpuTempC.Value:F0} °C" : "CPU: —";
-            GpuTempText = m.GpuTempC.HasValue ? $"GPU: {m.GpuTempC.Value:F0} °C" : "GPU: —";
-            DiskTempText = m.DiskTempC.HasValue ? $"Disque: {m.DiskTempC.Value:F0} °C" : "Disque: —";
+            CpuUsage = snap.cpuUsage;
+            MemUsage = snap.memUsage;
+            GpuUsage = snap.gpuUsage;
+            DiskUsage = snap.diskUsage;
+
+            CpuTempText = snap.cpuTemp.HasValue ? $"CPU: {snap.cpuTemp.Value:F0} °C" : "CPU: —";
+            GpuTempText = snap.gpuTemp.HasValue ? $"GPU: {snap.gpuTemp.Value:F0} °C" : "GPU: —";
+            DiskTempText = snap.diskTemp.HasValue ? $"Disque: {snap.diskTemp.Value:F0} °C" : "Disque: —";
             OnPropertyChanged(nameof(CpuTempText));
             OnPropertyChanged(nameof(GpuTempText));
             OnPropertyChanged(nameof(DiskTempText));
 
-            // Réactions température
             var c = _config.Current;
-            if ((m.CpuTempC.HasValue && m.CpuTempC.Value >= c.CpuTempAlert) ||
-                (m.GpuTempC.HasValue && m.GpuTempC.Value >= c.GpuTempAlert))
+            if ((snap.cpuTemp.HasValue && snap.cpuTemp.Value >= c.CpuTempAlert) ||
+                (snap.gpuTemp.HasValue && snap.gpuTemp.Value >= c.GpuTempAlert))
             {
                 Say(Dialogues.AlertTemp(), "alert");
                 SetAvatarMood("alert");
+            }
+        }
+
+        /// <summary>
+        /// Essaie d’appeler MonitoringService.ReadInstant() par réflexion.
+        /// À défaut, tente des propriétés usuelles. Retourne un "snapshot" dynamique.
+        /// </summary>
+        private static dynamic? GetSnapshotDynamic(MonitoringService svc)
+        {
+            // Par défaut
+            double cpu = 0, gpu = 0, mem = 0, disk = 0;
+            double? cpuT = null, gpuT = null, diskT = null;
+
+            try
+            {
+                var t = svc.GetType();
+
+                // Méthode ReadInstant ? (signature libre)
+                var m = t.GetMethod("ReadInstant");
+                if (m != null)
+                {
+                    var snap = m.Invoke(svc, null);
+                    if (snap != null)
+                    {
+                        // essaie d’extraire des propriétés usuelles
+                        cpu  = GetDoubleProp(snap, "CpuUsage");
+                        gpu  = GetDoubleProp(snap, "GpuUsage");
+                        mem  = GetDoubleProp(snap, "MemoryUsage");
+                        disk = GetDoubleProp(snap, "DiskUsage");
+
+                        cpuT = GetNullableDoubleProp(snap, "CpuTempC");
+                        gpuT = GetNullableDoubleProp(snap, "GpuTempC");
+                        diskT= GetNullableDoubleProp(snap, "DiskTempC");
+                        return new { cpuUsage = cpu, gpuUsage = gpu, memUsage = mem, diskUsage = disk, cpuTemp = cpuT, gpuTemp = gpuT, diskTemp = diskT };
+                    }
+                }
+
+                // Sinon : propriétés directes ?
+                cpu  = GetDoubleProp(svc, "CpuUsage");
+                gpu  = GetDoubleProp(svc, "GpuUsage");
+                mem  = GetDoubleProp(svc, "MemoryUsage");
+                disk = GetDoubleProp(svc, "DiskUsage");
+
+                cpuT = GetNullableDoubleProp(svc, "CpuTempC");
+                gpuT = GetNullableDoubleProp(svc, "GpuTempC");
+                diskT= GetNullableDoubleProp(svc, "DiskTempC");
+
+                return new { cpuUsage = cpu, gpuUsage = gpu, memUsage = mem, diskUsage = disk, cpuTemp = cpuT, gpuTemp = gpuT, diskTemp = diskT };
+            }
+            catch
+            {
+                return new { cpuUsage = cpu, gpuUsage = gpu, memUsage = mem, diskUsage = disk, cpuTemp = cpuT, gpuTemp = gpuT, diskTemp = diskT };
+            }
+
+            static double GetDoubleProp(object obj, string name)
+            {
+                var p = obj.GetType().GetProperty(name);
+                if (p?.GetValue(obj) is double d) return d;
+                return 0;
+            }
+            static double? GetNullableDoubleProp(object obj, string name)
+            {
+                var p = obj.GetType().GetProperty(name);
+                var v = p?.GetValue(obj);
+                if (v is double d) return d;
+                if (v is float f) return (double)f;
+                return null;
             }
         }
 
@@ -439,7 +452,8 @@ namespace Virgil.App
                 if (arr == null) return "…";
                 var list = ((System.Text.Json.Nodes.JsonArray)arr)
                            .Select(x => x?.ToString() ?? "")
-                           .Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                           .Where(s => !string.IsNullOrWhiteSpace(s))
+                           .ToList();
                 if (list.Count == 0) return "…";
                 return list[R.Next(list.Count)];
             }
