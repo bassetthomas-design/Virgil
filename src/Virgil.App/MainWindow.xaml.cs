@@ -9,8 +9,6 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media.Brush _myBrush; // (optionnel)
 using System.Windows.Threading;
 
 using Serilog.Events;
@@ -31,7 +29,8 @@ namespace Virgil.App
         private string _mood = "neutral";
         public string Mood { get => _mood; set { _mood = value; OnPropertyChanged(); UpdateBrush(); } }
 
-        public Brush BubbleBrush { get; private set; } = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+        public System.Windows.Media.Brush BubbleBrush { get; private set; } =
+            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
 
         private bool _isExpiring;
         public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
@@ -43,10 +42,10 @@ namespace Virgil.App
         {
             BubbleBrush = Mood switch
             {
-                "proud"    => new SolidColorBrush(Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
-                "vigilant" => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
-                "alert"    => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
-                _          => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+                "proud"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
+                "vigilant" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
+                "alert"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
+                _          => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
             };
             OnPropertyChanged(nameof(BubbleBrush));
         }
@@ -125,11 +124,12 @@ namespace Virgil.App
         // ================== CHAT (messages + disparition 60s) ==================
         private void Say(string text, string mood = "neutral")
         {
+            if (string.IsNullOrWhiteSpace(text)) return;
             var msg = new ChatMessage { Text = text, Mood = mood, Timestamp = DateTime.Now };
             ChatMessages.Add(msg);
             ScrollToEnd();
 
-            // disparition au bout d’1 minute + “effet Thanos”
+            // disparition au bout d’1 minute (effet Thanos côté panel/binding XAML)
             _ = ExpireMessageAsync(msg, TimeSpan.FromMinutes(1));
         }
 
@@ -209,7 +209,7 @@ namespace Virgil.App
             {
                 _surveillanceTimer.Stop();
                 Say(Dialogues.SurveillanceStop(), "neutral");
-                // On ne montre LES STATS que pendant la surveillance — rien à faire ici, le panneau se masque via binding.
+                // Les stats ne s’affichent que pendant la surveillance (via bindings côté XAML).
             }
         }
 
@@ -221,7 +221,7 @@ namespace Virgil.App
             if (_monitoringService == null) return;
 
             // Mesures “live”
-            var m = _monitoringService.ReadInstant(); // méthode courte (ajoute si besoin dans ton service)
+            var m = _monitoringService.ReadInstant(); // assure-toi que cette méthode existe (sinon utilise la tienne)
             CpuUsage = m.CpuUsage;
             MemUsage = m.MemoryUsage;
             GpuUsage = m.GpuUsage;
@@ -295,7 +295,7 @@ namespace Virgil.App
                 // Jeux (Steam/Epic)
                 var games = new GameUpdateService();
                 var gOut = await games.UpdateAllAsync();
-                Say(gOut);
+                if (!string.IsNullOrWhiteSpace(gOut)) Say(gOut);
 
                 // Windows Update
                 ProgressIndeterminate(Dialogues.Action("update_windows_start"));
@@ -363,7 +363,7 @@ namespace Virgil.App
 
                 var games = new GameUpdateService();
                 var gOut = await games.UpdateAllAsync();
-                Say(gOut);
+                if (!string.IsNullOrWhiteSpace(gOut)) Say(gOut);
 
                 var drv = new DriverUpdateService();
                 var dOut = await drv.UpgradeDriversAsync();
