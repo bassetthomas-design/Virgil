@@ -77,25 +77,49 @@ namespace Virgil.App.Controls
         /// Applique les transformations sur les yeux (scale/rotation/déplacement),
         /// sans timer custom : on utilise DoubleAnimation (WPF natif).
         /// </summary>
-        private void ApplyTransforms(bool animated)
+      private void ApplyTransforms(bool animated)
+{
+    void Lerp(Action<double> set, double from, double to, int ms = 220)
+    {
+        var t0 = from; var t1 = to;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var timer = new SW.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += (_, __) =>
         {
-            // Raccourci animation : anime une DP double si l’élément et la prop existent
-            void Anim(DependencyObject target, DependencyProperty dp, double to, int ms = 220)
-            {
-                if (target is null || dp is null) return;
-                if (!animated)
-                {
-                    target.SetValue(dp, to);
-                    return;
-                }
-                var da = new DoubleAnimation
-                {
-                    To = to,
-                    Duration = TimeSpan.FromMilliseconds(ms),
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-                };
-                (target as IAnimatable)?.BeginAnimation(dp, da);
-            }
+            var p = Math.Min(1.0, sw.Elapsed.TotalMilliseconds / ms);
+            var eased = 1 - Math.Pow(1 - p, 2);
+            set(t0 + (t1 - t0) * eased);
+            if (p >= 1) timer.Stop();
+        };
+        timer.Start();
+    }
+
+    // Ici on référence directement les champs générés par XAML : LE_S, LE_R, LE_T, RE_S, RE_R, RE_T
+    if (!animated)
+    {
+        LE_S.ScaleX = VM.EyeScale;  LE_S.ScaleY = VM.EyeScale;
+        RE_S.ScaleX = -VM.EyeScale; RE_S.ScaleY = VM.EyeScale;
+
+        LE_R.Angle = -VM.EyeTilt;   RE_R.Angle = VM.EyeTilt;
+        LE_T.X = -VM.EyeSeparation; RE_T.X = VM.EyeSeparation;
+        LE_T.Y = VM.EyeY;           RE_T.Y = VM.EyeY;
+    }
+    else
+    {
+        Lerp(v => LE_S.ScaleX = v, LE_S.ScaleX, VM.EyeScale);
+        Lerp(v => LE_S.ScaleY = v, LE_S.ScaleY, VM.EyeScale);
+        Lerp(v => RE_S.ScaleX = v, RE_S.ScaleX, -VM.EyeScale);
+        Lerp(v => RE_S.ScaleY = v, RE_S.ScaleY, VM.EyeScale);
+
+        Lerp(v => LE_R.Angle = v, LE_R.Angle, -VM.EyeTilt);
+        Lerp(v => RE_R.Angle = v, RE_R.Angle,  VM.EyeTilt);
+
+        Lerp(v => LE_T.X = v, LE_T.X, -VM.EyeSeparation);
+        Lerp(v => RE_T.X = v, RE_T.X,  VM.EyeSeparation);
+        Lerp(v => LE_T.Y = v, LE_T.Y,  VM.EyeY);
+        Lerp(v => RE_T.Y = v, RE_T.Y,  VM.EyeY);
+    }
+}
 
             // Les transforms doivent exister dans le XAML :
             // LE_S / RE_S : ScaleTransform
