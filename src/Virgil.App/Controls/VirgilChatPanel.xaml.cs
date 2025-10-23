@@ -8,6 +8,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using Media = System.Windows.Media;                 // Brush/Color/etc.
 using WpfControls = System.Windows.Controls;       // ListBox, UserControl
+using Wpf = System.Windows; // pour forcer Point de WPF
 
 namespace Virgil.App.Controls
 {
@@ -110,7 +111,7 @@ namespace Virgil.App.Controls
             sb.Children.Add(fade);
 
             var scale = new Media.ScaleTransform(1, 1);
-            target.RenderTransformOrigin = new Point(0.5, 0.5);
+            target.RenderTransformOrigin = new Wpf.Point(0.5, 0.5);
             target.RenderTransform = scale;
 
             var sx = new DoubleAnimation(1, 0.85, TimeSpan.FromMilliseconds(ms));
@@ -131,7 +132,7 @@ namespace Virgil.App.Controls
         {
             if (source.ActualWidth < 10 || source.ActualHeight < 10) return;
 
-            var origin = source.TranslatePoint(new Point(0, 0), DustLayer);
+            var origin = source.TranslatePoint(new Wpf.Point(0, 0), DustLayer);
             var rnd = new Random();
 
             int count = Math.Clamp((int)(source.ActualWidth * source.ActualHeight / 550), 14, 40);
