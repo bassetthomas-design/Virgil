@@ -1,10 +1,11 @@
 #nullable enable
 using System;
+using System.Collections;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;                // WPF
+using System.Windows.Controls;                // WPF controls
 using System.Windows.Media;                   // CompositionTarget, Brushes, Color, VisualTreeHelper
 using System.Windows.Media.Animation;         // Storyboard, DoubleAnimation, Easing
 using System.Windows.Shapes;                  // Ellipse
@@ -16,26 +17,49 @@ namespace Virgil.App.Controls
         public string Text { get; set; } = "";
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
         public int TtlMs { get; set; } = 60000;
-        public FrameworkElement? Container { get; set; } // bulle réelle dans l’ItemsControl
+        public FrameworkElement? Container { get; set; }
     }
 
     public partial class VirgilChatPanel : System.Windows.Controls.UserControl
     {
+        // Source interne (utilisée par Post()) si aucune source externe n’est fournie
         public ObservableCollection<ChatBubble> Items { get; } = new();
+
+        // Option : binder une source externe (ex: ChatMessages) si tu ne veux pas utiliser Post()
+        public static readonly DependencyProperty ChatItemsSourceProperty =
+            DependencyProperty.Register(
+                nameof(ChatItemsSource),
+                typeof(IEnumerable),
+                typeof(VirgilChatPanel),
+                new PropertyMetadata(null, OnChatItemsSourceChanged));
+
+        public IEnumerable? ChatItemsSource
+        {
+            get => (IEnumerable?)GetValue(ChatItemsSourceProperty);
+            set => SetValue(ChatItemsSourceProperty, value);
+        }
+
+        private static void OnChatItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is VirgilChatPanel p && p.FindName("MessageList") is ListBox lb)
+            {
+                lb.ItemsSource = e.NewValue as IEnumerable;
+            }
+        }
 
         public VirgilChatPanel()
         {
             InitializeComponent();
 
-            // Si l’ItemsControl s’appelle MessageList dans ton XAML, on lui donne la source :
-            if (FindName("MessageList") is ItemsControl ic)
-                ic.ItemsSource = Items;
+            // Si aucune source externe n’est bindée, on alimente la liste avec Items
+            if (FindName("MessageList") is ListBox lb && ChatItemsSource is null)
+                lb.ItemsSource = Items;
 
             // Autoscroll fluide à chaque frame rendue
             CompositionTarget.Rendering += (_, __) => ScrollToEnd();
         }
 
-        /// <summary>Affiche un message + planifie sa disparition.</summary>
+        /// <summary>Affiche un message + planifie sa disparition (utilise la collection interne).</summary>
         public void Post(string text, string? mood = null, int ttlMs = 60000)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
@@ -56,14 +80,13 @@ namespace Virgil.App.Controls
 
         private FrameworkElement? GetContainerForLastItem()
         {
-            if (FindName("MessageList") is not ItemsControl ic) return null;
-            var idx = Items.Count - 1;
+            if (FindName("MessageList") is not ListBox lb) return null;
+            var idx = lb.Items.Count - 1;
             if (idx < 0) return null;
 
-            var container = ic.ItemContainerGenerator.ContainerFromIndex(idx) as FrameworkElement;
+            var container = lb.ItemContainerGenerator.ContainerFromIndex(idx) as FrameworkElement;
             if (container == null) return null;
 
-            // si ton DataTemplate nomme l’élément bulle "Bubble", on le récupère, sinon on garde le container
             var bubble = container.FindName("Bubble") as FrameworkElement;
             return bubble ?? container;
         }
@@ -72,10 +95,10 @@ namespace Virgil.App.Controls
         {
             try
             {
-                await Task.Delay(Math.Max(1000, msg.TtlMs)); // garde un minimum d’1s
+                await Task.Delay(Math.Max(1000, msg.TtlMs)); // minimum 1s
                 if (!Items.Contains(msg) || msg.Container == null) return;
 
-                // petit effet “Thanos”
+                // effet “Thanos”
                 PlayThanos(msg.Container);
 
                 // fondu + léger shrink puis suppression de l’item
@@ -163,31 +186,10 @@ namespace Virgil.App.Controls
 
         private void ScrollToEnd()
         {
-            if (FindName("MessageList") is not ItemsControl ic) return;
-
-            // 1) Si c’est un ListBox → ScrollIntoView du dernier item
-            if (ic is ListBox lb && lb.Items.Count > 0)
-            {
-                try { lb.ScrollIntoView(lb.Items[lb.Items.Count - 1]); }
-                catch { /* ignore */ }
-                return;
-            }
-
-            // 2) Sinon, on récupère le ScrollViewer parent et on ScrollToEnd
-            var sv = FindScrollViewer(ic);
-            sv?.ScrollToEnd();
-        }
-
-        private static ScrollViewer? FindScrollViewer(DependencyObject root)
-        {
-            if (root is ScrollViewer sv) return sv;
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-            {
-                var child = VisualTreeHelper.GetChild(root, i);
-                var found = FindScrollViewer(child);
-                if (found != null) return found;
-            }
-            return null;
+            if (FindName("MessageList") is not ListBox lb) return;
+            if (lb.Items.Count == 0) return;
+            try { lb.ScrollIntoView(lb.Items[lb.Items.Count - 1]); }
+            catch { /* ignore */ }
         }
     }
 }
