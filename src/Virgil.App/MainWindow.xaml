@@ -110,7 +110,7 @@
 
                 <!-- CHAT: panneau custom avec auto-effacement + effet "Thanos" -->
                 <Border CornerRadius="12" Background="#151821" Padding="10" Margin="0,0,0,10">
-                    <controls:VirgilChatPanel x:Name="ChatPanel"/>
+                    <controls:VirgilChatPanel x:Name="ChatArea" />
                 </Border>
 
                 <!-- ACTION BUTTONS -->
