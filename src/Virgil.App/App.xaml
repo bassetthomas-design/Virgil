@@ -5,3 +5,11 @@
     <Application.Resources>
     </Application.Resources>
 </Application>
+<Application.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    <DropShadowEffect x:Key="DropShadowEffect" Color="#001020" ShadowDepth="0" BlurRadius="25" Opacity="0.6"/>
+    <!-- Convertit Color -> SolidColorBrush -->
+    <SolidColorBrush x:Key="__tmp" />
+    <local:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+    <local:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter"/>
+</Application.Resources>
