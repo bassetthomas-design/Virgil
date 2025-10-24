@@ -8,12 +8,14 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;            // WPF media
 using System.Windows.Threading;
 
-using Virgil.Core.Services; // AdvancedMonitoringService, BrowserCleaningService, etc.
+using Virgil.Core.Services;            // AdvancedMonitoringService, ConfigService, BrowserCleaningService, etc.
 
 namespace Virgil.App
 {
+    // ============ Modèle de message (utile pour le binding & fallback visuel) ============
     public class ChatMessage : INotifyPropertyChanged
     {
         public string Id { get; } = Guid.NewGuid().ToString("N");
@@ -30,7 +32,7 @@ namespace Virgil.App
         }
 
         public System.Windows.Media.Brush BubbleBrush { get; private set; } =
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+            new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
 
         private bool _isExpiring;
         public bool IsExpiring { get => _isExpiring; set { _isExpiring = value; OnPropertyChanged(); } }
@@ -43,15 +45,16 @@ namespace Virgil.App
         {
             BubbleBrush = Mood switch
             {
-                "proud"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
-                "vigilant" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
-                "alert"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
-                _          => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+                "proud"    => new SolidColorBrush(Color.FromArgb(0x22, 0x46, 0xFF, 0x7A)),
+                "vigilant" => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xE4, 0x6B)),
+                "alert"    => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0x69, 0x61)),
+                _          => new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
             };
             OnPropertyChanged(nameof(BubbleBrush));
         }
     }
 
+    // =================================== Fenêtre ===================================
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         // === Bindings UI ===
@@ -81,37 +84,44 @@ namespace Virgil.App
         private void OnPropertyChanged([CallerMemberName] string? p = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
+        // Timers
         private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
         private readonly DispatcherTimer _survTimer  = new() { Interval = TimeSpan.FromSeconds(10) };
 
-        // Services/sondes
-        private readonly ConfigService _config = new();
+        // Sondes & services
         private readonly UtilProbe _probe = new();
         private readonly AdvancedMonitoringService _adv = new();
+        private readonly ConfigService _config = new();
 
-        // Anti-répétitions (phrases)
+        // Anti-répétitions de punchlines
         private string? _lastPulseLine;
         private DateTime _lastPulseAt = DateTime.MinValue;
 
-        // Seuils d’alerte
-        private float _cpuAlertC = 85, _gpuAlertC = 85;
+        // Seuils d’alerte (peuvent être surchargés via config)
+        private float _cpuAlertC = 85f, _gpuAlertC = 85f;
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
 
-            // Charger seuils depuis la conf si disponibles
+            // Charger seuils depuis la conf si disponibles (gère float? -> float)
             try
             {
                 var cur = _config.Current;
                 if (cur != null)
                 {
-                    _cpuAlertC = cur.CpuTempAlert;
-                    _gpuAlertC = cur.GpuTempAlert;
+                    float? c = cur.CpuTempAlert;
+                    float? g = cur.GpuTempAlert;
+
+                    if (c.HasValue) _cpuAlertC = c.Value;
+                    if (g.HasValue) _gpuAlertC = g.Value;
                 }
             }
-            catch { /* non bloquant */ }
+            catch
+            {
+                // Non bloquant si la config n'est pas lisible
+            }
 
             // Horloge
             _clockTimer.Tick += (_, __) =>
@@ -124,22 +134,22 @@ namespace Virgil.App
             // Surveillance
             _survTimer.Tick += (_, __) => SurveillancePulse();
 
-            // Avatar en neutre
+            // Avatar neutre au démarrage
             SetAvatarMood("neutral");
 
-            // Message d’accueil
-            Say(Dialogues.Startup(), "neutral");
+            // Message d’accueil (via Dialogues.cs)
+            try { Say(Dialogues.Startup(), "neutral"); } catch { Say("Virgil en place. Système prêt.", "neutral"); }
         }
 
-        // ========= Chat via VirgilChatPanel (ChatArea) =========
+        // ================== Chat (via ton VirgilChatPanel) ==================
         private void Say(string text, string mood = "neutral", int ttlMs = 60000)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
 
-            // Pour le binding (si tu affiches aussi la ListBox)
+            // Ajout au binding (utile si tu affiches aussi ChatMessages)
             ChatMessages.Add(new ChatMessage { Text = text, Mood = mood, Timestamp = DateTime.Now });
 
-            // Envoie au panneau custom (effets/TTL/autoscroll)
+            // Envoi au panneau custom (effet, TTL, autoscroll)
             try { ChatArea?.Post(text, mood, ttlMs); } catch { /* fallback silencieux */ }
         }
 
@@ -147,13 +157,16 @@ namespace Virgil.App
         {
             try
             {
-                var vm = AvatarControl?.DataContext;
+                var vm = AvatarControl?.DataContext; // si tu as VirgilAvatarViewModel bindé en XAML
                 vm?.GetType().GetMethod("SetMood")?.Invoke(vm, new object[] { mood });
             }
-            catch { /* non bloquant */ }
+            catch
+            {
+                // non bloquant
+            }
         }
 
-        // ========= Progression / statut =========
+        // ================== Progression / Statut ==================
         private void Progress(double percent, string status, string mood = "vigilant")
         {
             percent = Math.Max(0, Math.Min(100, percent));
@@ -186,29 +199,42 @@ namespace Virgil.App
             SetAvatarMood("neutral");
         }
 
-        // ========= Surveillance =========
+        // ================== Surveillance ==================
         private void UpdateSurveillanceState()
         {
             OnPropertyChanged(nameof(SurveillanceButtonText));
 
             if (IsSurveillanceOn)
             {
-                Say(Dialogues.SurveillanceStart(), "vigilant");
+                try { Say(Dialogues.SurveillanceStart(), "vigilant"); } catch { Say("Surveillance activée. Je garde un œil 👀", "vigilant"); }
                 _survTimer.Start();
-                SurveillancePulse(); // tick immédiat
+                SurveillancePulse(); // premier tick immédiat
             }
             else
             {
                 _survTimer.Stop();
-                Say(Dialogues.SurveillanceStop(), "neutral");
+                try { Say(Dialogues.SurveillanceStop(), "neutral"); } catch { Say("Surveillance arrêtée.", "neutral"); }
                 SetAvatarMood("neutral");
             }
         }
 
         private void SurveillancePulse()
         {
-            // Punchline par moment de la journée (anti-répétition)
-            var line = Dialogues.PulseLineByTimeOfDay();
+            // Punchline (anti-répétition 2 min)
+            string line;
+            try { line = Dialogues.PulseLineByTimeOfDay(); }
+            catch
+            {
+                var h = DateTime.Now.Hour;
+                line = h switch
+                {
+                    >= 6 and < 12  => "☀️ Bonjour ! Tout roule.",
+                    >= 12 and < 18 => "🛡️ Je surveille pendant que tu bosses.",
+                    >= 18 and < 23 => "🌇 Fin de journée ? Je garde l’œil.",
+                    _              => "🌙 Nuit calme, je veille.",
+                };
+            }
+
             if (!string.Equals(line, _lastPulseLine, StringComparison.OrdinalIgnoreCase) ||
                 (DateTime.UtcNow - _lastPulseAt) > TimeSpan.FromMinutes(2))
             {
@@ -221,7 +247,7 @@ namespace Virgil.App
             var u = _probe.Read();
             CpuUsage = u.cpu;
             MemUsage = u.mem;
-            GpuUsage = u.gpu;   // 0 si non disponible
+            GpuUsage = u.gpu;
             DiskUsage = u.disk;
 
             // Températures
@@ -242,7 +268,9 @@ namespace Virgil.App
 
             if (overCpu || overGpu)
             {
-                var alert = Dialogues.AlertTemp();
+                string alert;
+                try { alert = Dialogues.AlertTemp(); } catch { alert = "🔥 Ça chauffe un peu. Pense à ventiler."; }
+
                 if (!string.Equals(alert, _lastPulseLine, StringComparison.OrdinalIgnoreCase))
                 {
                     Say(alert, "alert");
@@ -257,7 +285,7 @@ namespace Virgil.App
             }
         }
 
-        // ========= Actions (boutons) =========
+        // ================== Actions (boutons) ==================
         private async void FullMaintenanceButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -371,7 +399,7 @@ namespace Virgil.App
             }
         }
 
-        // ========= Nettoyage TEMP avec progression =========
+        // ================== Nettoyage TEMP avec progression ==================
         private void CleanTempWithProgressInternal()
         {
             var targets = new[]
@@ -411,7 +439,7 @@ namespace Virgil.App
                 Dispatcher.Invoke(() => Progress(p, $"Nettoyage TEMP… {p:0}%"));
             }
 
-            // Vider dossiers restants
+            // Dossiers (vider en profondeur)
             foreach (var t in targets)
             {
                 try
@@ -429,7 +457,7 @@ namespace Virgil.App
                 Say($"TEMP analysé ~{bytesFound / (1024.0 * 1024):F1} MB — supprimé ~{bytesDeleted / (1024.0 * 1024):F1} MB", "proud"));
         }
 
-        // ========= Sonde simple CPU/MEM/DISK (GPU=0 par défaut) =========
+        // ================== Sonde simple CPU/MEM/DISK (GPU=0 par défaut) ==================
         private sealed class UtilProbe : IDisposable
         {
             private readonly PerformanceCounter? _cpu;
@@ -457,7 +485,7 @@ namespace Virgil.App
                 }
                 catch { memUsed = 0; }
 
-                double gpu = 0; // pas de sonde GPU générique ici
+                double gpu = 0; // à 0 par défaut (pas de compteur standard)
 
                 return (Clamp(cpu), Clamp(gpu), Clamp(memUsed), Clamp(disk));
             }
