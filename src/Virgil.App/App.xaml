@@ -3,13 +3,19 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Virgil.App.Controls"
              StartupUri="MainWindow.xaml">
-  <Application.Resources>
-    <ResourceDictionary>
-      <ResourceDictionary.MergedDictionaries/>
-      <!-- Converters globaux -->
-      <BooleanToVisibilityConverter x:Key="BoolToVis" />
-      <controls:ColorToBrushConverter x:Key="ColorToBrushConverter" />
-      <controls:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter" />
-    </ResourceDictionary>
-  </Application.Resources>
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- Converters globaux -->
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <controls:ColorToBrushConverter x:Key="ColorToBrushConverter" />
+            <controls:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter" />
+
+            <!-- Effet ombre pour l’avatar -->
+            <DropShadowEffect x:Key="DropShadowEffect"
+                              Color="#001020"
+                              ShadowDepth="0"
+                              BlurRadius="25"
+                              Opacity="0.6"/>
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>
