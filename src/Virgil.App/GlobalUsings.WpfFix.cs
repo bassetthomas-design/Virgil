@@ -4,10 +4,8 @@
 global using Application = System.Windows.Application;
 global using UserControl = System.Windows.Controls.UserControl;
 
-// Media shortcuts for ambiguous types
+// Prefer WPF for ambiguous types
 global using Brush = System.Windows.Media.Brush;
-global using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 global using Color = System.Windows.Media.Color;
 
-// Optional namespace alias used by some files
-global using Media = System.Windows.Media;
+// (No global alias for Media or SolidColorBrush to avoid CS1537 with local aliases)
