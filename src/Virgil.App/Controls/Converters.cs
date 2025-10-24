@@ -3,10 +3,9 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
-using System.Windows.Media;
+// On alias tout le namespace Media pour lever les ambiguïtés (Color, Brush, Brushes…)
+using WMedia = System.Windows.Media;
 
-// IMPORTANT : ce namespace doit correspondre à celui que tu utilises dans XAML :
-// xmlns:controls="clr-namespace:Virgil.App.Controls"
 namespace Virgil.App.Controls
 {
     /// <summary>
@@ -16,37 +15,36 @@ namespace Virgil.App.Controls
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            // Déjà un Brush -> on renvoie tel quel
-            if (value is Brush b) return b;
+            // Déjà un Brush -> renvoyer tel quel
+            if (value is WMedia.Brush b) return b;
 
-            // Color WPF
-            if (value is Color c) return new SolidColorBrush(c);
+            // Color WPF -> SolidColorBrush
+            if (value is WMedia.Color c) return new WMedia.SolidColorBrush(c);
 
             // String -> Color (ex: "#FF00FF" ou "White")
             if (value is string s && !string.IsNullOrWhiteSpace(s))
             {
                 try
                 {
-                    var obj = ColorConverter.ConvertFromString(s);
-                    if (obj is Color cc) return new SolidColorBrush(cc);
+                    var obj = WMedia.ColorConverter.ConvertFromString(s);
+                    if (obj is WMedia.Color cc) return new WMedia.SolidColorBrush(cc);
                 }
                 catch { /* ignore parsing errors */ }
             }
 
             // Valeur par défaut
-            return Brushes.Transparent;
+            return WMedia.Brushes.Transparent;
         }
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (value is SolidColorBrush sb) return sb.Color;
+            if (value is WMedia.SolidColorBrush sb) return sb.Color;
             return DependencyProperty.UnsetValue;
         }
     }
 
     /// <summary>
-    /// Décale chaque œil vers la gauche ou la droite via une Margin,
-    /// en fonction de la séparation (double) et du ConverterParameter "left"/"right".
+    /// Décale chaque œil via la Margin selon la séparation (double) et le paramètre "left"/"right".
     /// </summary>
     public sealed class EyeSeparationToMarginConverter : IValueConverter
     {
@@ -58,8 +56,6 @@ namespace Virgil.App.Controls
 
             string side = (parameter as string ?? "left").Trim().ToLowerInvariant();
 
-            // On renvoie une Thickness différente selon le côté.
-            // (AUCUN opérateur '?:' ici → pas d'erreur de syntaxe)
             if (side == "left")
             {
                 // œil gauche : marge négative à gauche, positive à droite
