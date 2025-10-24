@@ -3,107 +3,57 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d"
-             Width="210" Height="230" Background="Transparent">
+             mc:Ignorable="d" d:DesignHeight="260" d:DesignWidth="260">
     <Grid>
-        <!-- fond -->
-        <Border CornerRadius="14" Background="#101014"/>
+        <!-- Glow -->
+        <Ellipse x:Name="Glow"
+                 Width="210" Height="210"
+                 Fill="{Binding GlowColor, Converter={StaticResource ColorToBrushConverter}, FallbackValue=#33FFFFFF}"
+                 Opacity="{Binding GlowOpacity}" />
 
-        <!-- disque + glow -->
-        <Grid VerticalAlignment="Center" Margin="0,10,0,34">
-            <Ellipse Width="160" Height="160"
-                     Fill="{Binding FaceBrush}"
-                     Stroke="White" StrokeThickness="9">
-                <Ellipse.Effect>
-                    <DropShadowEffect BlurRadius="28" ShadowDepth="0"
-                                      Opacity="{Binding GlowOpacity}"
-                                      Color="{Binding GlowColor}"/>
-                </Ellipse.Effect>
-            </Ellipse>
+        <!-- Face -->
+        <Ellipse Width="200" Height="200"
+                 Fill="{Binding FaceBrush}"
+                 Stroke="#304050" StrokeThickness="2"
+                 Effect="{DynamicResource DropShadowEffect}"/>
 
-            <!-- yeux par défaut -->
-            <Path x:Name="LeftEye" Fill="{Binding EyeBrush}" Width="44" Height="30"
-                  Data="M 0,14 C 0,4 20,0 20,14 20,28 0,24 0,14 Z">
-                <Path.RenderTransform>
+        <!-- Eyes group -->
+        <Grid>
+            <Grid.RenderTransform>
+                <TranslateTransform Y="{Binding EyeY}"/>
+            </Grid.RenderTransform>
+
+            <!-- Left eye -->
+            <Grid Width="60" Height="46"
+                  HorizontalAlignment="Left"
+                  Margin="{Binding EyeSeparation, ConverterParameter=left, Converter={StaticResource EyeSeparationToMarginConverter}}">
+                <Grid.RenderTransform>
                     <TransformGroup>
-                        <ScaleTransform x:Name="LE_S" ScaleX="1" ScaleY="1"/>
-                        <RotateTransform x:Name="LE_R" Angle="-12" CenterX="20" CenterY="14"/>
-                        <TranslateTransform x:Name="LE_T" X="-34" Y="0"/>
+                        <ScaleTransform ScaleX="{Binding EyeScale}" ScaleY="{Binding EyeScale}"/>
+                        <SkewTransform AngleX="{Binding EyeTilt}"/>
                     </TransformGroup>
-                </Path.RenderTransform>
-            </Path>
+                </Grid.RenderTransform>
+                <Ellipse Fill="{Binding EyeBrush}" />
+            </Grid>
 
-            <Path x:Name="RightEye" Fill="{Binding EyeBrush}" Width="44" Height="30"
-                  Data="M 0,14 C 0,4 20,0 20,14 20,28 0,24 0,14 Z">
-                <Path.RenderTransform>
+            <!-- Right eye -->
+            <Grid Width="60" Height="46"
+                  HorizontalAlignment="Right"
+                  Margin="{Binding EyeSeparation, ConverterParameter=right, Converter={StaticResource EyeSeparationToMarginConverter}}">
+                <Grid.RenderTransform>
                     <TransformGroup>
-                        <ScaleTransform x:Name="RE_S" ScaleX="-1" ScaleY="1"/>
-                        <RotateTransform x:Name="RE_R" Angle="12" CenterX="20" CenterY="14"/>
-                        <TranslateTransform x:Name="RE_T" X="34" Y="0"/>
+                        <ScaleTransform ScaleX="{Binding EyeScale}" ScaleY="{Binding EyeScale}"/>
+                        <SkewTransform AngleX="-{Binding EyeTilt}"/>
                     </TransformGroup>
-                </Path.RenderTransform>
-            </Path>
-
-            <!-- variantes : yeux ronds (surpris/neutral doux) -->
-            <Grid x:Name="RoundEyes" Visibility="Collapsed" IsHitTestVisible="False">
-                <Ellipse Width="24" Height="24" Fill="{Binding EyeBrush}" Margin="0,0,62,0" HorizontalAlignment="Center"/>
-                <Ellipse Width="24" Height="24" Fill="{Binding EyeBrush}" Margin="62,0,0,0" HorizontalAlignment="Center"/>
-            </Grid>
-
-            <!-- larmichette (sad) -->
-            <Ellipse x:Name="Tear" Width="8" Height="12" Fill="#C0E8FF" Stroke="#80FFFFFF" StrokeThickness="1.2"
-                     RenderTransformOrigin="0.5,0.0" Visibility="Collapsed">
-                <Ellipse.RenderTransform>
-                    <TranslateTransform X="30" Y="16"/>
-                </Ellipse.RenderTransform>
-            </Ellipse>
-
-            <!-- cœurs (love) -->
-            <Grid x:Name="Hearts" Visibility="Collapsed" IsHitTestVisible="False">
-                <Path Fill="#FFFFFFFF" Data="M 10,0 C 12,-2 16,-2 18,0 C 22,4 18,10 10,16 C 2,10 -2,4 2,0 C 4,-2 8,-2 10,0 Z"
-                      RenderTransformOrigin="0.5,0.5">
-                    <Path.RenderTransform><TranslateTransform X="-30" Y="-4"/></Path.RenderTransform>
-                </Path>
-                <Path Fill="#FFFFFFFF" Data="M 10,0 C 12,-2 16,-2 18,0 C 22,4 18,10 10,16 C 2,10 -2,4 2,0 C 4,-2 8,-2 10,0 Z"
-                      RenderTransformOrigin="0.5,0.5">
-                    <Path.RenderTransform><TranslateTransform X="30" Y="-4"/></Path.RenderTransform>
-                </Path>
-            </Grid>
-
-            <!-- oreilles/whiskers (cat) -->
-            <Grid x:Name="CatAddons" Visibility="Collapsed" IsHitTestVisible="False">
-                <Polygon Fill="White" Points="-62,-40 -38,-24 -62,-12" />
-                <Polygon Fill="White" Points="62,-40 38,-24 62,-12" />
-                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
-                    <Rectangle.RenderTransform><TranslateTransform X="-70" Y="0"/></Rectangle.RenderTransform>
-                </Rectangle>
-                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
-                    <Rectangle.RenderTransform><TranslateTransform X="70" Y="0"/></Rectangle.RenderTransform>
-                </Rectangle>
-                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
-                    <Rectangle.RenderTransform><TranslateTransform X="-70" Y="16"/></Rectangle.RenderTransform>
-                </Rectangle>
-                <Rectangle Fill="White" Width="24" Height="6" RenderTransformOrigin="0.5,0.5">
-                    <Rectangle.RenderTransform><TranslateTransform X="70" Y="16"/></Rectangle.RenderTransform>
-                </Rectangle>
-            </Grid>
-
-            <!-- cornes (devil) -->
-            <Grid x:Name="DevilHorns" Visibility="Collapsed" IsHitTestVisible="False">
-                <Path Fill="#FFFFFF" Data="M 0,0 C 10,-22 36,-28 42,-10 L 18,0 Z">
-                    <Path.RenderTransform><TranslateTransform X="-54" Y="-56"/></Path.RenderTransform>
-                </Path>
-                <Path Fill="#FFFFFF" Data="M 0,0 C -10,-22 -36,-28 -42,-10 L -18,0 Z">
-                    <Path.RenderTransform><TranslateTransform X="54" Y="-56"/></Path.RenderTransform>
-                </Path>
+                </Grid.RenderTransform>
+                <Ellipse Fill="{Binding EyeBrush}" />
             </Grid>
         </Grid>
 
-        <!-- barre de progression sous l’avatar -->
-        <ProgressBar x:Name="AvatarProgress" Height="8"
-                     Minimum="0" Maximum="100" Margin="12"
-                     VerticalAlignment="Bottom"
-                     Foreground="#27D7FF" Background="#1A2230"
-                     Visibility="Collapsed"/>
+        <!-- Décors optionnels (coeurs/larme/oreilles...) : à conditionner à tes assets -->
+        <TextBlock Text="❤" FontSize="28" Foreground="#FF66A3" Visibility="{Binding ShowHearts, Converter={StaticResource BoolToVis}}"
+                   HorizontalAlignment="Right" VerticalAlignment="Top" Margin="20"/>
+        <TextBlock Text="💧" FontSize="24" Foreground="#99D8FF" Visibility="{Binding ShowTear, Converter={StaticResource BoolToVis}}"
+                   HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20"/>
     </Grid>
 </UserControl>
