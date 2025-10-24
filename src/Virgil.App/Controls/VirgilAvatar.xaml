@@ -1,59 +1,133 @@
 <UserControl x:Class="Virgil.App.Controls.VirgilAvatar"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignHeight="260" d:DesignWidth="260">
-    <Grid>
-        <!-- Glow -->
-        <Ellipse x:Name="Glow"
-                 Width="210" Height="210"
-                 Fill="{Binding GlowColor, Converter={StaticResource ColorToBrushConverter}, FallbackValue=#33FFFFFF}"
-                 Opacity="{Binding GlowOpacity}" />
+             xmlns:local="clr-namespace:Virgil.App.Controls"
+             x:Name="Root"
+             MinWidth="140" MinHeight="140"
+             Background="Transparent">
 
-        <!-- Face -->
-        <Ellipse Width="200" Height="200"
-                 Fill="{Binding FaceBrush}"
-                 Stroke="#304050" StrokeThickness="2"
-                 Effect="{DynamicResource DropShadowEffect}"/>
+    <!-- ========== RESSOURCES LOCALES (AUCUNE DEP. EXTERNE) ========== -->
+    <UserControl.Resources>
+        <!-- Ombre portée locale (évite les Freezable partagés / App.xaml) -->
+        <DropShadowEffect x:Key="LocalDropShadow"
+                          x:Shared="False"
+                          Color="#001020"
+                          ShadowDepth="0"
+                          BlurRadius="25"
+                          Opacity="0.6" />
 
-        <!-- Eyes group -->
-        <Grid>
-            <Grid.RenderTransform>
-                <TranslateTransform Y="{Binding EyeY}"/>
-            </Grid.RenderTransform>
+        <!-- Converters locaux (définis dans Controls/Converters.cs) -->
+        <local:ColorToBrushConverter x:Key="ColorToBrushConverter" />
+        <local:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter" />
+    </UserControl.Resources>
 
-            <!-- Left eye -->
-            <Grid Width="60" Height="46"
-                  HorizontalAlignment="Left"
-                  Margin="{Binding EyeSeparation, ConverterParameter=left, Converter={StaticResource EyeSeparationToMarginConverter}}">
-                <Grid.RenderTransform>
-                    <TransformGroup>
-                        <ScaleTransform ScaleX="{Binding EyeScale}" ScaleY="{Binding EyeScale}"/>
-                        <SkewTransform AngleX="{Binding EyeTilt}"/>
-                    </TransformGroup>
-                </Grid.RenderTransform>
-                <Ellipse Fill="{Binding EyeBrush}" />
-            </Grid>
+    <!-- ========== LAYOUT ========== -->
+    <Grid RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform>
+            <!-- petit "breathing" vertical, animé plus bas -->
+            <TranslateTransform x:Name="BreathTranslate" Y="0"/>
+        </Grid.RenderTransform>
 
-            <!-- Right eye -->
-            <Grid Width="60" Height="46"
-                  HorizontalAlignment="Right"
-                  Margin="{Binding EyeSeparation, ConverterParameter=right, Converter={StaticResource EyeSeparationToMarginConverter}}">
-                <Grid.RenderTransform>
-                    <TransformGroup>
-                        <ScaleTransform ScaleX="{Binding EyeScale}" ScaleY="{Binding EyeScale}"/>
-                        <SkewTransform AngleX="-{Binding EyeTilt}"/>
-                    </TransformGroup>
-                </Grid.RenderTransform>
-                <Ellipse Fill="{Binding EyeBrush}" />
+        <!-- Cercle de fond (halo) -->
+        <Ellipse Width="{Binding ActualWidth, ElementName=Root}"
+                 Height="{Binding ActualHeight, ElementName=Root}"
+                 Fill="#0D7AC6FF"
+                 StrokeThickness="0"
+                 Effect="{StaticResource LocalDropShadow}"/>
+
+        <!-- Tête -->
+        <Grid Width="{Binding ActualWidth, ElementName=Root}"
+              Height="{Binding ActualHeight, ElementName=Root}">
+            <Ellipse x:Name="Face"
+                     Margin="18"
+                     Fill="{Binding FaceColor, Converter={StaticResource ColorToBrushConverter},
+                                    FallbackValue=#17212B}"
+                     Stroke="{Binding GlowColor, Converter={StaticResource ColorToBrushConverter},
+                                      FallbackValue=#267AC6FF}"
+                     StrokeThickness="2"
+                     Effect="{StaticResource LocalDropShadow}"/>
+
+            <!-- Zone des yeux -->
+            <Grid Margin="30">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Ligne des yeux au centre -->
+                <Grid Grid.Row="1" Height="28">
+                    <!-- Œil gauche -->
+                    <Ellipse Width="14" Height="14"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Margin="{Binding EyeSeparation, Converter={StaticResource EyeSeparationToMarginConverter}, ConverterParameter=left,
+                                              FallbackValue=-8, TargetNullValue=-8}"
+                             Fill="{Binding EyeColor, Converter={StaticResource ColorToBrushConverter},
+                                            FallbackValue=White}">
+                        <Ellipse.RenderTransform>
+                            <!-- légère animation de "blink"/respiration -->
+                            <ScaleTransform x:Name="LeftEyeScale" ScaleY="1.0" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+
+                    <!-- Œil droit -->
+                    <Ellipse Width="14" Height="14"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Margin="{Binding EyeSeparation, Converter={StaticResource EyeSeparationToMarginConverter}, ConverterParameter=right,
+                                              FallbackValue=8, TargetNullValue=8}"
+                             Fill="{Binding EyeColor, Converter={StaticResource ColorToBrushConverter},
+                                            FallbackValue=White}">
+                        <Ellipse.RenderTransform>
+                            <ScaleTransform x:Name="RightEyeScale" ScaleY="1.0" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                </Grid>
             </Grid>
         </Grid>
-
-        <!-- Décors optionnels (coeurs/larme/oreilles...) : à conditionner à tes assets -->
-        <TextBlock Text="❤" FontSize="28" Foreground="#FF66A3" Visibility="{Binding ShowHearts, Converter={StaticResource BoolToVis}}"
-                   HorizontalAlignment="Right" VerticalAlignment="Top" Margin="20"/>
-        <TextBlock Text="💧" FontSize="24" Foreground="#99D8FF" Visibility="{Binding ShowTear, Converter={StaticResource BoolToVis}}"
-                   HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20"/>
     </Grid>
+
+    <!-- ========== ANIMATIONS (sans dépendance de VM) ========== -->
+    <UserControl.Triggers>
+        <!-- Souffle léger (bobbing) sur tout l’avatar -->
+        <EventTrigger RoutedEvent="Loaded">
+            <BeginStoryboard>
+                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                    <DoubleAnimation Storyboard.TargetName="BreathTranslate"
+                                     Storyboard.TargetProperty="Y"
+                                     From="0" To="-2"
+                                     Duration="0:0:2.2"
+                                     EasingFunction="{x:Null}"/>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+
+        <!-- Micro clignement (variation ScaleY des yeux) -->
+        <EventTrigger RoutedEvent="Loaded">
+            <BeginStoryboard>
+                <Storyboard RepeatBehavior="Forever">
+                    <!-- gauche -->
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LeftEyeScale"
+                                                   Storyboard.TargetProperty="ScaleY">
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:1.8" Value="1.0"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:1.86" Value="0.3"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:1.96" Value="1.0"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:4.8" Value="1.0"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:4.86" Value="0.3"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:4.96" Value="1.0"/>
+                    </DoubleAnimationUsingKeyFrames>
+
+                    <!-- droite -->
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RightEyeScale"
+                                                   Storyboard.TargetProperty="ScaleY">
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:2.0" Value="1.0"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:2.06" Value="0.3"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:2.16" Value="1.0"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:5.0" Value="1.0"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:5.06" Value="0.3"/>
+                        <DiscreteDoubleKeyFrame KeyTime="0:0:5.16" Value="1.0"/>
+                    </DoubleAnimationUsingKeyFrames>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </UserControl.Triggers>
 </UserControl>
