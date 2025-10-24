@@ -3,18 +3,17 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
 using System.Windows.Threading;
 
 namespace Virgil.App
 {
-    public partial class App : Application
+    public partial class App : System.Windows.Application
     {
         private const string LogFileName = "Virgil_crash.log";
 
         public App()
         {
-            // Crochets globaux AVANT toute UI
+            // Hook global handlers BEFORE any UI
             this.DispatcherUnhandledException += App_DispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
@@ -23,7 +22,7 @@ namespace Virgil.App
         private void App_DispatcherUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
         {
             LogAndShow("DispatcherUnhandledException", e.Exception);
-            e.Handled = true; // Empêche la fermeture silencieuse
+            e.Handled = true; // prevent silent shutdown
         }
 
         private void CurrentDomain_UnhandledException(object? sender, UnhandledExceptionEventArgs e)
@@ -50,14 +49,15 @@ namespace Virgil.App
                 var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LogFileName);
                 File.AppendAllText(path, sb.ToString(), Encoding.UTF8);
 
-                MessageBox.Show(
+                System.Windows.MessageBox.Show(
                     $"{source}\n\n{ex.Message}\n\nUn journal a été écrit ici :\n{path}",
                     "Virgil – erreur au démarrage",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
             }
             catch
             {
-                // Dernier filet : rien.
+                // last-resort: swallow
             }
         }
     }
