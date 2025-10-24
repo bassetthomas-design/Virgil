@@ -1,104 +1,139 @@
 #nullable enable
+using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Media = System.Windows.Media;
+using System.Windows.Media;
 
 namespace Virgil.App.Controls
 {
     /// <summary>
-    /// ViewModel de l'avatar : teintes/yeux/glow + états d'humeur.
-    /// Utilisé par VirgilAvatar.xaml (Bindings).
+    /// VM piloté par MainWindow via SetMood("neutral|happy|angry|sleepy|sad|love|cat|devil").
+    /// Expose uniquement des propriétés WPF (pas de System.Drawing).
     /// </summary>
-    public class VirgilAvatarViewModel : INotifyPropertyChanged
+    public sealed class VirgilAvatarViewModel : INotifyPropertyChanged
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? n = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+        private string _mood = "neutral";
+        public string Mood
+        {
+            get => _mood;
+            private set { _mood = value; OnPropertyChanged(); }
+        }
 
-        // Couleurs / glow
-        public Media.Brush FaceBrush { get => _faceBrush; set { _faceBrush = value; OnPropertyChanged(); } }
-        public Media.Brush EyeBrush  { get => _eyeBrush;  set { _eyeBrush = value;  OnPropertyChanged(); } }
-        public Media.Color GlowColor { get => _glowColor; set { _glowColor = value; OnPropertyChanged(); } }
-        public double GlowOpacity    { get => _glowOpacity; set { _glowOpacity = value; OnPropertyChanged(); } }
+        // Couleur du visage (convertie en Brush via ColorToBrushConverter côté XAML)
+        private Color _faceColor = Color.FromRgb(0x5E, 0x7A, 0x56); // vert doux
+        public Color FaceColor
+        {
+            get => _faceColor;
+            private set { _faceColor = value; OnPropertyChanged(); }
+        }
 
-        private Media.Brush _faceBrush = new Media.SolidColorBrush(Media.Color.FromRgb(98, 125, 78));
-        private Media.Brush _eyeBrush  = Media.Brushes.White;
-        private Media.Color _glowColor = Media.Color.FromRgb(39, 215, 255);
-        private double _glowOpacity = 0.40;
+        // Accents (oreilles chat, cœur, diable)
+        private bool _showHeart, _showCat, _showDevil;
+        public bool ShowHeart { get => _showHeart; private set { _showHeart = value; OnPropertyChanged(); } }
+        public bool ShowCat   { get => _showCat;   private set { _showCat   = value; OnPropertyChanged(); } }
+        public bool ShowDevil { get => _showDevil; private set { _showDevil = value; OnPropertyChanged(); } }
 
-        // Paramètres des yeux (pour l’animation)
-        public double EyeScale { get => _eyeScale; set { _eyeScale = value; OnPropertyChanged(); } }
-        public double EyeTilt { get => _eyeTilt; set { _eyeTilt = value; OnPropertyChanged(); } }
-        public double EyeSeparation { get => _eyeSeparation; set { _eyeSeparation = value; OnPropertyChanged(); } }
-        public double EyeY { get => _eyeY; set { _eyeY = value; OnPropertyChanged(); } }
+        // Paramétrage des yeux
+        // EyeOpen : 1 = grand ouvert, 0 = fermé
+        private double _eyeOpen = 1.0;
+        public double EyeOpen { get => _eyeOpen; private set { _eyeOpen = Clamp01(value); OnPropertyChanged(); } }
 
-        private double _eyeScale = 1.0;
-        private double _eyeTilt = 12;
-        private double _eyeSeparation = 34;
-        private double _eyeY = 0;
+        // Séparation des yeux (décalage latéral)
+        private double _eyeSeparation = 10.0;
+        public double EyeSeparation { get => _eyeSeparation; private set { _eyeSeparation = value; OnPropertyChanged(); } }
 
-        // Décors/états spéciaux
-        public bool UseRoundEyes { get => _round; set { _round = value; OnPropertyChanged(); } }
-        public bool ShowTear     { get => _tear;  set { _tear = value;  OnPropertyChanged(); } }
-        public bool ShowHearts   { get => _hearts;set { _hearts = value;OnPropertyChanged(); } }
-        public bool ShowCat      { get => _cat;   set { _cat = value;   OnPropertyChanged(); } }
-        public bool ShowDevil    { get => _devil; set { _devil = value; OnPropertyChanged(); } }
+        // Inclinaison par œil (angles en degrés)
+        private double _leftEyeAngle;
+        private double _rightEyeAngle;
+        public double LeftEyeAngle  { get => _leftEyeAngle;  private set { _leftEyeAngle  = value; OnPropertyChanged(); } }
+        public double RightEyeAngle { get => _rightEyeAngle; private set { _rightEyeAngle = value; OnPropertyChanged(); } }
 
-        private bool _round, _tear, _hearts, _cat, _devil;
+        // Bordure/traits
+        private Color _strokeColor = Colors.White;
+        public Color StrokeColor { get => _strokeColor; private set { _strokeColor = value; OnPropertyChanged(); } }
 
-        public string CurrentMood { get; private set; } = "neutral";
-
+        // Méthode pilotée par MainWindow
         public void SetMood(string mood)
         {
-            CurrentMood = (mood ?? "neutral").ToLowerInvariant();
+            mood = (mood ?? "neutral").Trim().ToLowerInvariant();
+            Mood = mood;
 
-            // reset
-            UseRoundEyes = ShowTear = ShowHearts = ShowCat = ShowDevil = false;
-            FaceBrush = new Media.SolidColorBrush(Media.Color.FromRgb(98, 125, 78));
-            EyeBrush  = Media.Brushes.White;
+            // Valeurs par défaut
+            FaceColor     = Color.FromRgb(0x5E, 0x7A, 0x56);
+            StrokeColor   = Colors.White;
+            EyeOpen       = 1.0;
+            EyeSeparation = 10.0;
+            LeftEyeAngle  = 0;
+            RightEyeAngle = 0;
+            ShowHeart     = ShowCat = ShowDevil = false;
 
-            switch (CurrentMood)
+            switch (mood)
             {
+                case "neutral":
+                    EyeOpen = 0.95;
+                    break;
+
                 case "happy":
-                    EyeScale = 1.10; EyeTilt = 6; EyeSeparation = 36; EyeY = 2;
-                    GlowColor = Media.Color.FromRgb(80, 220, 120); GlowOpacity = 0.5;
-                    break;
                 case "proud":
-                    EyeScale = 1.05; EyeTilt = 10; EyeSeparation = 35; EyeY = 0;
-                    GlowColor = Media.Color.FromRgb(39, 215, 255); GlowOpacity = 0.55;
+                    EyeOpen = 1.0;
+                    LeftEyeAngle = -10;
+                    RightEyeAngle = +10;
                     break;
+
                 case "vigilant":
-                    EyeScale = 0.95; EyeTilt = 18; EyeSeparation = 36; EyeY = -1;
-                    GlowColor = Media.Color.FromRgb(255, 210, 60); GlowOpacity = 0.6;
+                    EyeOpen = 0.85;
+                    LeftEyeAngle = -7;
+                    RightEyeAngle = +7;
                     break;
+
+                case "angry":
                 case "alert":
-                    EyeScale = 0.92; EyeTilt = 22; EyeSeparation = 36; EyeY = -2;
-                    GlowColor = Media.Color.FromRgb(255, 80, 80);  GlowOpacity = 0.7;
+                    EyeOpen = 0.65;
+                    LeftEyeAngle = +18;   // sourcils vers le centre
+                    RightEyeAngle = -18;
                     break;
+
                 case "sleepy":
-                    UseRoundEyes = true; GlowColor = Media.Color.FromRgb(120, 160, 255); GlowOpacity = 0.45;
+                    EyeOpen = 0.35;
+                    LeftEyeAngle = -5;
+                    RightEyeAngle = +5;
                     break;
+
                 case "sad":
-                    UseRoundEyes = true; ShowTear = true; GlowColor = Media.Color.FromRgb(120, 160, 255); GlowOpacity = 0.55;
+                    EyeOpen = 0.55;
+                    LeftEyeAngle = -12;
+                    RightEyeAngle = +12;
                     break;
+
                 case "love":
-                    UseRoundEyes = true; ShowHearts = true; GlowColor = Media.Color.FromRgb(255, 120, 200); GlowOpacity = 0.7;
+                    EyeOpen = 1.0;
+                    ShowHeart = true;
                     break;
+
                 case "cat":
-                    UseRoundEyes = true; ShowCat = true; GlowColor = Media.Color.FromRgb(255, 200, 120); GlowOpacity = 0.65;
+                    EyeOpen = 1.0;
+                    ShowCat = true;
+                    EyeSeparation = 14;
                     break;
+
                 case "devil":
-                    EyeScale = 0.95; EyeTilt = 20; EyeSeparation = 34; EyeY = -1;
-                    ShowDevil = true; GlowColor = Media.Color.FromRgb(255, 80, 80); GlowOpacity = 0.8;
-                    FaceBrush = new Media.SolidColorBrush(Media.Color.FromRgb(190, 40, 40));
+                    EyeOpen = 0.8;
+                    ShowDevil = true;
+                    FaceColor = Color.FromRgb(0xD4, 0x34, 0x3A);
+                    LeftEyeAngle = +15;
+                    RightEyeAngle = -15;
                     break;
+
                 default:
-                    EyeScale = 1.0; EyeTilt = 12; EyeSeparation = 34; EyeY = 0;
-                    GlowColor = Media.Color.FromRgb(39, 215, 255); GlowOpacity = 0.40;
+                    EyeOpen = 0.9;
                     break;
             }
-
-            OnPropertyChanged(nameof(CurrentMood));
         }
+
+        private static double Clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
     }
 }
