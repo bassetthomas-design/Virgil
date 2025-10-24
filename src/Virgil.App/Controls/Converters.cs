@@ -1,14 +1,14 @@
 #nullable enable
 using System;
 using System.Globalization;
-using System.Windows;            // Visibility
+using System.Windows;            // Visibility, Thickness
 using System.Windows.Media;      // SolidColorBrush
 
 namespace Virgil.App.Controls
 {
     /// <summary>
-    /// Convertisseurs / helpers WPF sans aucune référence WinForms.
-    /// Tous les types WPF (Binding, Color, etc.) sont pleinement qualifiés.
+    /// Convertisseurs / helpers WPF sans référence à WinForms.
+    /// Tous les types ambigus (Binding, Color, etc.) sont pleinement qualifiés côté WPF.
     /// </summary>
     public static class Converters
     {
@@ -33,7 +33,7 @@ namespace Virgil.App.Controls
             => new System.Windows.Media.SolidColorBrush(ColorFromHex(hex));
 
         /// <summary>
-        /// Crée un Binding WPF sans ambiguïté avec WinForms.Binding.
+        /// Crée un Binding WPF (évite System.Windows.Forms.Binding).
         /// </summary>
         public static System.Windows.Data.Binding Bind(
             string path,
@@ -76,7 +76,7 @@ namespace Virgil.App.Controls
             if (value is string s && !string.IsNullOrWhiteSpace(s))
                 return new System.Windows.Media.SolidColorBrush(Converters.ColorFromHex(s));
 
-            // fallback: neutre
+            // fallback neutre
             return new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0xAA, 0xB7, 0xC4));
         }
 
@@ -117,6 +117,64 @@ namespace Virgil.App.Controls
             bool v = value is bool b && b;
             if (Invert) v = !v;
             return v ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => System.Windows.Data.Binding.DoNothing;
+    }
+
+    /// <summary>
+    /// EyeSeparation (double, en pixels) -> Thickness (Margin) pour positionner l'œil gauche/droit autour du centre.
+    /// Utilisation en XAML:
+    ///   ConverterParameter="Left"  => marge X négative (œil gauche)
+    ///   ConverterParameter="Right" => marge X positive (œil droit)
+    /// Optionnel: ConverterParameter="Left,Top=3" pour ajouter un décalage vertical (+3px ici).
+    /// </summary>
+    public sealed class EyeSeparationToMarginConverter : System.Windows.Data.IValueConverter
+    {
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            double sep = 0;
+            try
+            {
+                sep = value switch
+                {
+                    double d => d,
+                    float f => f,
+                    int i => i,
+                    string s when double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var dd) => dd,
+                    _ => 0
+                };
+            }
+            catch { sep = 0; }
+
+            // par défaut: œil droit
+            bool isLeft = false;
+            double topOffset = 0;
+
+            if (parameter is string param && !string.IsNullOrWhiteSpace(param))
+            {
+                var parts = param.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var raw in parts)
+                {
+                    var p = raw.Trim();
+                    if (p.Equals("Left", StringComparison.OrdinalIgnoreCase)) isLeft = true;
+                    else if (p.Equals("Right", StringComparison.OrdinalIgnoreCase)) isLeft = false;
+                    else if (p.StartsWith("Top=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var v = p.Substring(4);
+                        if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var tv))
+                            topOffset = tv;
+                    }
+                }
+            }
+
+            // On décale de sep/2 vers la gauche ou la droite
+            double dx = (sep / 2.0) * (isLeft ? -1 : +1);
+
+            // On retourne un Thickness avec un offset horizontal appliqué sur Left (marge gauche)
+            // L'appelant positionnera le Centre via un layout centré.
+            return new Thickness(dx, topOffset, 0, 0);
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
