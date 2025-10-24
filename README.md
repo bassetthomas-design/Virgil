@@ -17,4 +17,4 @@ Un workflow GitHub Actions est défini dans `.github/workflows/dotnet-build-and-
 
 ## Script de préparation
 
-Le dossier `tools` contient un script PowerShell (`prepare-and-push.ps1`) qui automatise la préparation et le build local : il modifie les fichiers `.csproj` pour cibler .NET 8 et x64, initialise un dépôt git, ajoute un `.gitignore` et génère le workflow CI. Vous pouvez l’exécuter à la racine de votre copie locale pour préparer l’environnement avant de pousser vers GitHub. :)
+Le dossier `tools` contient un script PowerShell (`prepare-and-push.ps1`) qui automatise la préparation et le build local : il modifie les fichiers `.csproj` pour cibler .NET 8 et x64, initialise un dépôt git, ajoute un `.gitignore` et génère le workflow CI. Vous pouvez l’exécuter à la racine de votre copie locale pour préparer l’environnement avant de pousser vers GitHub. 
