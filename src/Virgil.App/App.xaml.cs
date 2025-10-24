@@ -5,7 +5,7 @@ using System.Windows; // WPF
 
 namespace Virgil.App
 {
-    // ⚠️ Hérite explicitement de System.Windows.Application (évite le conflit avec WinForms)
+    // Important : hérite bien de System.Windows.Application (pas WinForms)
     public partial class App : System.Windows.Application
     {
         public App()
@@ -20,13 +20,18 @@ namespace Virgil.App
                     Directory.CreateDirectory(folder);
                     File.WriteAllText(Path.Combine(folder, "startup_crash.txt"), e.Exception.ToString());
                 }
-                catch { /* best effort */ }
+                catch
+                {
+                    // best effort
+                }
 
-                // WPF MessageBox (System.Windows)
-                MessageBox.Show(
+                // Utilise explicitement la MessageBox WPF
+                System.Windows.MessageBox.Show(
                     e.Exception.Message,
                     "Virgil — erreur au démarrage",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error
+                );
             };
         }
     }
