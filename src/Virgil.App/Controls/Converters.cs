@@ -64,7 +64,28 @@ namespace Virgil.App.Controls
     }
 
     /// <summary>
-    /// Exemple de converter: Mood -> Brush (utilisable en XAML).
+    /// string hex / Color -> SolidColorBrush (utilisable en XAML comme ColorToBrushConverter).
+    /// </summary>
+    public sealed class ColorToBrushConverter : System.Windows.Data.IValueConverter
+    {
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value is System.Windows.Media.Color c)
+                return new System.Windows.Media.SolidColorBrush(c);
+
+            if (value is string s && !string.IsNullOrWhiteSpace(s))
+                return new System.Windows.Media.SolidColorBrush(Converters.ColorFromHex(s));
+
+            // fallback: neutre
+            return new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0xAA, 0xB7, 0xC4));
+        }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => System.Windows.Data.Binding.DoNothing;
+    }
+
+    /// <summary>
+    /// Mood -> Brush (ex: proud/vigilant/alert/neutral)
     /// </summary>
     public sealed class MoodToBrushConverter : System.Windows.Data.IValueConverter
     {
@@ -81,7 +102,7 @@ namespace Virgil.App.Controls
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => System.Windows.Data.Binding.DoNothing; // fully qualified
+            => System.Windows.Data.Binding.DoNothing;
     }
 
     /// <summary>
@@ -99,6 +120,6 @@ namespace Virgil.App.Controls
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => System.Windows.Data.Binding.DoNothing; // fully qualified
+            => System.Windows.Data.Binding.DoNothing;
     }
 }
