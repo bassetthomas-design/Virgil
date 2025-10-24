@@ -124,11 +124,9 @@ namespace Virgil.App.Controls
     }
 
     /// <summary>
-    /// EyeSeparation (double, en pixels) -> Thickness (Margin) pour positionner l'œil gauche/droit autour du centre.
-    /// Utilisation en XAML:
-    ///   ConverterParameter="Left"  => marge X négative (œil gauche)
-    ///   ConverterParameter="Right" => marge X positive (œil droit)
-    /// Optionnel: ConverterParameter="Left,Top=3" pour ajouter un décalage vertical (+3px ici).
+    /// EyeSeparation (double, en px) -> Thickness (Margin) pour positionner l'œil gauche/droit.
+    /// Paramètres:
+    ///   "Left" / "Right" et optionnellement "Top=3" (séparés par , ou ;)
     /// </summary>
     public sealed class EyeSeparationToMarginConverter : System.Windows.Data.IValueConverter
     {
@@ -148,8 +146,7 @@ namespace Virgil.App.Controls
             }
             catch { sep = 0; }
 
-            // par défaut: œil droit
-            bool isLeft = false;
+            bool isLeft = false;           // défaut: œil droit
             double topOffset = 0;
 
             if (parameter is string param && !string.IsNullOrWhiteSpace(param))
@@ -169,11 +166,7 @@ namespace Virgil.App.Controls
                 }
             }
 
-            // On décale de sep/2 vers la gauche ou la droite
             double dx = (sep / 2.0) * (isLeft ? -1 : +1);
-
-            // On retourne un Thickness avec un offset horizontal appliqué sur Left (marge gauche)
-            // L'appelant positionnera le Centre via un layout centré.
             return new Thickness(dx, topOffset, 0, 0);
         }
 
