@@ -62,9 +62,11 @@
 
             <!-- LEFT PANEL: Avatar + Stats (stats visibles seulement en surveillance) -->
             <StackPanel Grid.Column="0" Margin="12">
-                <Border CornerRadius="16" Background="#161a23" Padding="12">
-                    <controls:VirgilAvatar x:Name="AvatarControl" />
-                </Border>
+               <!-- LEFT PANEL: Avatar -->
+<Border CornerRadius="16" Background="#161a23" Padding="12">
+    <controls:VirgilAvatar x:Name="AvatarControl"/>
+</Border>
+
 
                 <Border CornerRadius="12" Background="#161a23" Padding="12"
                         Visibility="{Binding IsSurveillanceOn, Converter={StaticResource BoolToVis}}"
