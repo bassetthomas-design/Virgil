@@ -1,16 +1,14 @@
 #nullable enable
 using System;
 using System.Globalization;
-using System.Windows; // Visibility, etc.
-using System.Windows.Data; // IValueConverter, BindingMode, UpdateSourceTrigger
-using System.Windows.Media; // SolidColorBrush
+using System.Windows;            // Visibility
+using System.Windows.Media;      // SolidColorBrush
 
 namespace Virgil.App.Controls
 {
     /// <summary>
     /// Convertisseurs / helpers WPF sans aucune référence WinForms.
-    /// On utilise des types pleinement qualifiés pour éviter les conflits
-    /// avec d’éventuels global usings (System.Drawing, System.Windows.Forms).
+    /// Tous les types WPF (Binding, Color, etc.) sont pleinement qualifiés.
     /// </summary>
     public static class Converters
     {
@@ -23,7 +21,9 @@ namespace Virgil.App.Controls
                 return System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
 
             var obj = System.Windows.Media.ColorConverter.ConvertFromString(hex);
-            return obj is System.Windows.Media.Color c ? c : System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
+            return obj is System.Windows.Media.Color c
+                ? c
+                : System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
         }
 
         /// <summary>
@@ -33,7 +33,7 @@ namespace Virgil.App.Controls
             => new System.Windows.Media.SolidColorBrush(ColorFromHex(hex));
 
         /// <summary>
-        /// Crée un Binding WPF (aucune ambiguïté avec WinForms.Binding).
+        /// Crée un Binding WPF sans ambiguïté avec WinForms.Binding.
         /// </summary>
         public static System.Windows.Data.Binding Bind(
             string path,
@@ -58,11 +58,13 @@ namespace Virgil.App.Controls
             string path,
             object? source = null,
             System.Windows.Data.IValueConverter? converter = null)
-            => Bind(path, source, converter, System.Windows.Data.BindingMode.OneTime, System.Windows.Data.UpdateSourceTrigger.PropertyChanged);
+            => Bind(path, source, converter,
+                    System.Windows.Data.BindingMode.OneTime,
+                    System.Windows.Data.UpdateSourceTrigger.PropertyChanged);
     }
 
     /// <summary>
-    /// Exemple de converter: Mood -> Brush (si tu l’utilises en XAML).
+    /// Exemple de converter: Mood -> Brush (utilisable en XAML).
     /// </summary>
     public sealed class MoodToBrushConverter : System.Windows.Data.IValueConverter
     {
@@ -78,11 +80,12 @@ namespace Virgil.App.Controls
             };
         }
 
-        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => System.Windows.Data.Binding.DoNothing; // fully qualified
     }
 
     /// <summary>
-    /// Exemple de converter: bool -> Visibility (si tu n’utilises pas le BoolToVisibilityConverter built-in).
+    /// bool -> Visibility (si tu ne veux pas utiliser le BoolToVisibilityConverter built-in).
     /// </summary>
     public sealed class BoolToVisibilityConverter : System.Windows.Data.IValueConverter
     {
@@ -90,13 +93,12 @@ namespace Virgil.App.Controls
 
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            bool v = false;
-            if (value is bool b) v = b;
+            bool v = value is bool b && b;
             if (Invert) v = !v;
             return v ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => Binding.DoNothing;
+            => System.Windows.Data.Binding.DoNothing; // fully qualified
     }
 }
