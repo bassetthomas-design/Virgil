@@ -2,90 +2,59 @@
 using System;
 using System.Globalization;
 using System.Windows;
-using System.Windows.Data;
-using WMedia = System.Windows.Media;
+using System.Windows.Data;        // Binding
+using System.Windows.Media;       // Color/Brush
 
 namespace Virgil.App.Controls
 {
-    /// <summary>
-    /// Convertit Color/string/Brush en SolidColorBrush (gère aussi System.Drawing.Color).
-    /// </summary>
+    // string/hex -> Brush (SolidColorBrush)
     public sealed class ColorToBrushConverter : IValueConverter
     {
-        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            // 1) Déjà un Brush → renvoyer tel quel
-            if (value is WMedia.Brush existing) return existing;
+            if (value is Brush b) return b;
 
-            // 2) WPF Color → SolidColorBrush
-            if (value is WMedia.Color wpfColor)
-                return CreateFrozenBrush(wpfColor);
+            if (value is Color c) return new SolidColorBrush(c);
 
-            // 3) System.Drawing.Color → SolidColorBrush (sans import System.Drawing pour éviter l'ambiguïté)
-            if (value is global::System.Drawing.Color dColor)
-            {
-                var w = WMedia.Color.FromArgb(dColor.A, dColor.R, dColor.G, dColor.B);
-                return CreateFrozenBrush(w);
-            }
-
-            // 4) string → essayer de parser via ColorConverter ("#FF00FF", "#AA112233", "White", etc.)
             if (value is string s && !string.IsNullOrWhiteSpace(s))
             {
                 try
                 {
-                    var obj = WMedia.ColorConverter.ConvertFromString(s);
-                    if (obj is WMedia.Color parsed)
-                        return CreateFrozenBrush(parsed);
+                    var cc = new ColorConverter();              // WPF ColorConverter
+                    var col = (Color)cc.ConvertFromString(s)!;
+                    return new SolidColorBrush(col);
                 }
-                catch
-                {
-                    // on ignore le parsing error → fallback transparent
-                }
+                catch { }
             }
 
-            // 5) fallback : Transparent
-            return WMedia.Brushes.Transparent;
+            return Brushes.Transparent;
         }
 
-        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-        {
-            if (value is WMedia.SolidColorBrush sb) return sb.Color;
-
-            // ConvertBack non supporté pour les autres types → on rend la main au binding
-            return DependencyProperty.UnsetValue;
-        }
-
-        private static WMedia.SolidColorBrush CreateFrozenBrush(WMedia.Color c)
-        {
-            var b = new WMedia.SolidColorBrush(c);
-            if (b.CanFreeze) b.Freeze();
-            return b;
-        }
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
     }
 
-    /// <summary>
-    /// Décale chaque œil via Margin selon la séparation (double) et le paramètre "left"/"right".
-    /// </summary>
+    // double (séparation des yeux) -> Thickness (marges opposées)
     public sealed class EyeSeparationToMarginConverter : IValueConverter
     {
-        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            // Séparation par défaut
-            double sep = 8.0;
-            if (value is double d && double.IsFinite(d)) sep = Math.Abs(d);
+            double sep = 0;
+            if (value is double d) sep = d;
+            else if (value is float f) sep = f;
 
-            var side = (parameter as string ?? "left").Trim().ToLowerInvariant();
-
-            if (side == "left")
+            // param = "Left" ou "Right"
+            var side = parameter as string;
+            if (string.Equals(side, "Left", StringComparison.OrdinalIgnoreCase))
                 return new Thickness(-sep, 0, sep, 0);
 
-            if (side == "right")
+            if (string.Equals(side, "Right", StringComparison.OrdinalIgnoreCase))
                 return new Thickness(sep, 0, -sep, 0);
 
             return new Thickness(0);
         }
 
-        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => DependencyProperty.UnsetValue;
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
     }
 }
