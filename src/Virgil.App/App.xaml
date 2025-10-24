@@ -2,26 +2,29 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Virgil.App.Controls"
-             xmlns:effects="clr-namespace:System.Windows.Media.Effects;assembly=PresentationCore"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
     <ResourceDictionary>
+
+      <!-- Dictionnaires fusionnés (laisse vide si pas utilisés) -->
       <ResourceDictionary.MergedDictionaries>
-        <!-- Laisser vide si pas de thèmes -->
+        <!-- Exemple : <ResourceDictionary Source="Themes/Generic.xaml" /> -->
       </ResourceDictionary.MergedDictionaries>
 
-      <!-- Converters / helpers -->
+      <!-- Converters et helpers -->
       <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+      <!-- IMPORTANT : créer une nouvelle instance à chaque usage -->
+      <DropShadowEffect x:Key="DropShadowEffect"
+                        x:Shared="False"
+                        Color="#001020"
+                        ShadowDepth="0"
+                        BlurRadius="25"
+                        Opacity="0.6" />
+
       <controls:ColorToBrushConverter x:Key="ColorToBrushConverter" />
-      <controls:MoodToBrushConverter x:Key="MoodToBrushConverter" />
       <controls:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter" />
 
-      <!-- NOTE: on fully-qualifie l'effet pour éviter toute résolution douteuse -->
-      <effects:DropShadowEffect x:Key="GlobalDropShadow"
-                                Color="#FF001020"
-                                ShadowDepth="0"
-                                BlurRadius="25"
-                                Opacity="0.6" />
     </ResourceDictionary>
   </Application.Resources>
 </Application>
