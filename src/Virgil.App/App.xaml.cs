@@ -1,64 +1,32 @@
 #nullable enable
 using System;
 using System.IO;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Threading;
+using System.Windows;
 
 namespace Virgil.App
 {
-    public partial class App : System.Windows.Application
+    // ⚠️ Hérite bien de System.Windows.Application (et pas de WinForms)
+    public partial class App : Application
     {
-        private const string LogFileName = "Virgil_crash.log";
-
         public App()
         {
-            // Hook global handlers BEFORE any UI
-            this.DispatcherUnhandledException += App_DispatcherUnhandledException;
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-        }
-
-        private void App_DispatcherUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
-        {
-            LogAndShow("DispatcherUnhandledException", e.Exception);
-            e.Handled = true; // prevent silent shutdown
-        }
-
-        private void CurrentDomain_UnhandledException(object? sender, UnhandledExceptionEventArgs e)
-        {
-            var ex = e.ExceptionObject as Exception ?? new Exception("Unknown unhandled exception object");
-            LogAndShow("CurrentDomain.UnhandledException", ex);
-        }
-
-        private void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
-        {
-            LogAndShow("TaskScheduler.UnobservedTaskException", e.Exception);
-            e.SetObserved();
-        }
-
-        private static void LogAndShow(string source, Exception ex)
-        {
-            try
+            this.DispatcherUnhandledException += (s, e) =>
             {
-                var sb = new StringBuilder();
-                sb.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}");
-                sb.AppendLine(ex.ToString());
-                sb.AppendLine(new string('-', 70));
+                try
+                {
+                    var folder = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                        "Virgil_Logs");
+                    Directory.CreateDirectory(folder);
+                    File.WriteAllText(Path.Combine(folder, "startup_crash.txt"), e.Exception.ToString());
+                }
+                catch { /* best effort */ }
 
-                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LogFileName);
-                File.AppendAllText(path, sb.ToString(), Encoding.UTF8);
-
-                System.Windows.MessageBox.Show(
-                    $"{source}\n\n{ex.Message}\n\nUn journal a été écrit ici :\n{path}",
-                    "Virgil – erreur au démarrage",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Error);
-            }
-            catch
-            {
-                // last-resort: swallow
-            }
+                MessageBox.Show(
+                    e.Exception.Message,
+                    "Virgil — erreur au démarrage",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            };
         }
     }
 }
