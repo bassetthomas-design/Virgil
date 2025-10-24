@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Company>Virgil</Company>
+    <Authors>Virgil</Authors>
+    <Product>Virgil</Product>
+    <FileVersion>0.1.0.0</FileVersion>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <RepositoryUrl>https://github.com/</RepositoryUrl>
+  </PropertyGroup>
+</Project>
