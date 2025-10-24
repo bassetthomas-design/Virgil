@@ -1,21 +1,24 @@
 #nullable enable
-using System.Windows.Controls;
+using System.Windows.Controls;     // WPF UserControl
+using System.Windows.Media;
 
 namespace Virgil.App.Controls
 {
     public partial class VirgilAvatar : UserControl
     {
+        private readonly VirgilAvatarViewModel _vm = new();
+
         public VirgilAvatar()
         {
             InitializeComponent();
-
-            // Si le DataContext n’a pas été injecté par le parent,
-            // on garde celui déclaré dans le XAML (instance par défaut).
+            DataContext = _vm;
         }
 
-        /// <summary>
-        /// Accès pratique au VM depuis MainWindow si besoin.
-        /// </summary>
-        public VirgilAvatarViewModel? ViewModel => DataContext as VirgilAvatarViewModel;
+        // API utilisé par MainWindow : change l’humeur
+        public void SetMood(string mood) => _vm.SetMood(mood);
+
+        // Optionnel : couleurs custom
+        public void SetBodyColor(Color c) => _vm.BodyBrush = new SolidColorBrush(c);
+        public void SetEyeColor(Color c)  => _vm.EyeBrush  = new SolidColorBrush(c);
     }
 }
