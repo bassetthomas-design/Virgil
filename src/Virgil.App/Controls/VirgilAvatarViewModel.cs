@@ -3,137 +3,139 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Virgil.App.Controls
 {
-    /// <summary>
-    /// VM piloté par MainWindow via SetMood("neutral|happy|angry|sleepy|sad|love|cat|devil").
-    /// Expose uniquement des propriétés WPF (pas de System.Drawing).
-    /// </summary>
     public sealed class VirgilAvatarViewModel : INotifyPropertyChanged
     {
-        private string _mood = "neutral";
-        public string Mood
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+
+        // Couleurs & brosses
+        private Brush _bodyBrush = new SolidColorBrush(Color.FromRgb(0x5A, 0x7C, 0x4E)); // vert
+        public Brush BodyBrush { get => _bodyBrush; set { _bodyBrush = value; OnChanged(); } }
+
+        private Brush _eyeBrush = Brushes.White;
+        public Brush EyeBrush { get => _eyeBrush; set { _eyeBrush = value; OnChanged(); } }
+
+        // Yeux (géométrie simple)
+        private double _eyeWidth = 26;
+        public double EyeWidth  { get => _eyeWidth; set { _eyeWidth = value; OnChanged(); } }
+
+        private double _eyeHeight = 26;
+        public double EyeHeight { get => _eyeHeight; set { _eyeHeight = value; OnChanged(); } }
+
+        private double _eyeSeparation = 16;
+        public double EyeSeparation { get => _eyeSeparation; set { _eyeSeparation = value; OnChanged(); } }
+
+        // clignement (0..1) = scaleY
+        private double _blink = 1.0;
+        public double Blink { get => _blink; set { _blink = value; OnChanged(); } }
+
+        // états d’humeur
+        public bool IsFlatEyes { get; private set; } = true;
+        public bool IsAngry    { get; private set; }
+        public bool IsLove     { get; private set; }
+        public bool IsSad      { get; private set; }
+        public bool IsCat      { get; private set; }
+        public bool IsDevil    { get; private set; }
+
+        private void SetFlags(bool flat, bool angry, bool love, bool sad, bool cat, bool devil)
         {
-            get => _mood;
-            private set { _mood = value; OnPropertyChanged(); }
+            IsFlatEyes = flat; OnChanged(nameof(IsFlatEyes));
+            IsAngry    = angry; OnChanged(nameof(IsAngry));
+            IsLove     = love; OnChanged(nameof(IsLove));
+            IsSad      = sad; OnChanged(nameof(IsSad));
+            IsCat      = cat; OnChanged(nameof(IsCat));
+            IsDevil    = devil; OnChanged(nameof(IsDevil));
         }
 
-        // Couleur du visage (convertie en Brush via ColorToBrushConverter côté XAML)
-        private Color _faceColor = Color.FromRgb(0x5E, 0x7A, 0x56); // vert doux
-        public Color FaceColor
-        {
-            get => _faceColor;
-            private set { _faceColor = value; OnPropertyChanged(); }
-        }
-
-        // Accents (oreilles chat, cœur, diable)
-        private bool _showHeart, _showCat, _showDevil;
-        public bool ShowHeart { get => _showHeart; private set { _showHeart = value; OnPropertyChanged(); } }
-        public bool ShowCat   { get => _showCat;   private set { _showCat   = value; OnPropertyChanged(); } }
-        public bool ShowDevil { get => _showDevil; private set { _showDevil = value; OnPropertyChanged(); } }
-
-        // Paramétrage des yeux
-        // EyeOpen : 1 = grand ouvert, 0 = fermé
-        private double _eyeOpen = 1.0;
-        public double EyeOpen { get => _eyeOpen; private set { _eyeOpen = Clamp01(value); OnPropertyChanged(); } }
-
-        // Séparation des yeux (décalage latéral)
-        private double _eyeSeparation = 10.0;
-        public double EyeSeparation { get => _eyeSeparation; private set { _eyeSeparation = value; OnPropertyChanged(); } }
-
-        // Inclinaison par œil (angles en degrés)
-        private double _leftEyeAngle;
-        private double _rightEyeAngle;
-        public double LeftEyeAngle  { get => _leftEyeAngle;  private set { _leftEyeAngle  = value; OnPropertyChanged(); } }
-        public double RightEyeAngle { get => _rightEyeAngle; private set { _rightEyeAngle = value; OnPropertyChanged(); } }
-
-        // Bordure/traits
-        private Color _strokeColor = Colors.White;
-        public Color StrokeColor { get => _strokeColor; private set { _strokeColor = value; OnPropertyChanged(); } }
-
-        // Méthode pilotée par MainWindow
         public void SetMood(string mood)
         {
-            mood = (mood ?? "neutral").Trim().ToLowerInvariant();
-            Mood = mood;
+            mood = (mood ?? "neutral").ToLowerInvariant();
 
-            // Valeurs par défaut
-            FaceColor     = Color.FromRgb(0x5E, 0x7A, 0x56);
-            StrokeColor   = Colors.White;
-            EyeOpen       = 1.0;
-            EyeSeparation = 10.0;
-            LeftEyeAngle  = 0;
-            RightEyeAngle = 0;
-            ShowHeart     = ShowCat = ShowDevil = false;
+            // valeurs par défaut
+            BodyBrush = new SolidColorBrush(Color.FromRgb(0x5A, 0x7C, 0x4E)); // vert
+            EyeBrush  = Brushes.White;
+            EyeWidth = EyeHeight = 26;
+            EyeSeparation = 16;
 
             switch (mood)
             {
                 case "neutral":
-                    EyeOpen = 0.95;
-                    break;
-
-                case "happy":
-                case "proud":
-                    EyeOpen = 1.0;
-                    LeftEyeAngle = -10;
-                    RightEyeAngle = +10;
-                    break;
-
                 case "vigilant":
-                    EyeOpen = 0.85;
-                    LeftEyeAngle = -7;
-                    RightEyeAngle = +7;
+                case "proud":
+                    SetFlags(flat: true, angry:false, love:false, sad:false, cat:false, devil:false);
                     break;
 
-                case "angry":
                 case "alert":
-                    EyeOpen = 0.65;
-                    LeftEyeAngle = +18;   // sourcils vers le centre
-                    RightEyeAngle = -18;
-                    break;
-
-                case "sleepy":
-                    EyeOpen = 0.35;
-                    LeftEyeAngle = -5;
-                    RightEyeAngle = +5;
-                    break;
-
-                case "sad":
-                    EyeOpen = 0.55;
-                    LeftEyeAngle = -12;
-                    RightEyeAngle = +12;
+                case "angry":
+                    SetFlags(flat:false, angry:true, love:false, sad:false, cat:false, devil:false);
+                    BodyBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0x3C, 0x3C)); // rouge
                     break;
 
                 case "love":
-                    EyeOpen = 1.0;
-                    ShowHeart = true;
+                    SetFlags(flat:false, angry:false, love:true, sad:false, cat:false, devil:false);
+                    BodyBrush = new SolidColorBrush(Color.FromRgb(0xE8, 0x6A, 0xB3));
+                    break;
+
+                case "sad":
+                    SetFlags(flat:false, angry:false, love:false, sad:true, cat:false, devil:false);
+                    BodyBrush = new SolidColorBrush(Color.FromRgb(0x4A, 0x66, 0x7A));
                     break;
 
                 case "cat":
-                    EyeOpen = 1.0;
-                    ShowCat = true;
-                    EyeSeparation = 14;
+                    SetFlags(flat:true, angry:false, love:false, sad:false, cat:true, devil:false);
                     break;
 
                 case "devil":
-                    EyeOpen = 0.8;
-                    ShowDevil = true;
-                    FaceColor = Color.FromRgb(0xD4, 0x34, 0x3A);
-                    LeftEyeAngle = +15;
-                    RightEyeAngle = -15;
+                    SetFlags(flat:false, angry:true, love:false, sad:false, cat:false, devil:true);
+                    BodyBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0x3C, 0x3C));
                     break;
 
                 default:
-                    EyeOpen = 0.9;
+                    SetFlags(flat:true, angry:false, love:false, sad:false, cat:false, devil:false);
                     break;
             }
         }
 
-        private static double Clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
+        // --- animation : clignement automatique
+        private readonly DispatcherTimer _blinkTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
+        private int _blinkPhase = 0;
+        private int _ticksToNextBlink = 0;
+        private readonly Random _rng = new();
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? p = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        public VirgilAvatarViewModel()
+        {
+            PlanNextBlink();
+            _blinkTimer.Tick += (_, __) => StepBlink();
+            _blinkTimer.Start();
+        }
+
+        private void PlanNextBlink()
+        {
+            _ticksToNextBlink = _rng.Next(18, 36); // ~2–4s (120ms * n)
+        }
+
+        private void StepBlink()
+        {
+            if (_ticksToNextBlink > 0)
+            {
+                _ticksToNextBlink--;
+                return;
+            }
+
+            // phases: 0->1->2->3->open
+            switch (_blinkPhase)
+            {
+                case 0: Blink = 0.5; _blinkPhase = 1; break;
+                case 1: Blink = 0.1; _blinkPhase = 2; break;
+                case 2: Blink = 0.5; _blinkPhase = 3; break;
+                default:
+                    Blink = 1.0; _blinkPhase = 0; PlanNextBlink(); break;
+            }
+        }
     }
 }
