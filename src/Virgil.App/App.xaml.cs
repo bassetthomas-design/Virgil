@@ -1,12 +1,12 @@
 #nullable enable
 using System;
 using System.IO;
-using System.Windows;
+using System.Windows; // WPF
 
 namespace Virgil.App
 {
-    // ⚠️ Hérite bien de System.Windows.Application (et pas de WinForms)
-    public partial class App : Application
+    // ⚠️ Hérite explicitement de System.Windows.Application (évite le conflit avec WinForms)
+    public partial class App : System.Windows.Application
     {
         public App()
         {
@@ -22,6 +22,7 @@ namespace Virgil.App
                 }
                 catch { /* best effort */ }
 
+                // WPF MessageBox (System.Windows)
                 MessageBox.Show(
                     e.Exception.Message,
                     "Virgil — erreur au démarrage",
