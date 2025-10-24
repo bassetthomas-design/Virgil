@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
-using System.Windows;                 // WPF only
+using System.Windows;
 
 namespace Virgil.App
 {
@@ -9,19 +9,19 @@ namespace Virgil.App
     {
         public App()
         {
-            this.DispatcherUnhandledException += (_, e) =>
+            DispatcherUnhandledException += (_, e) =>
             {
                 try
                 {
                     var dir = AppDomain.CurrentDomain.BaseDirectory;
                     var file = Path.Combine(dir, "Virgil_crash.log");
-                    File.AppendAllText(file, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {e.Exception}\r\n");
+                    File.AppendAllText(file, $"[{DateTime.Now}] {e.Exception}\r\n");
                 }
-                catch { /* ignore */ }
+                catch { }
 
                 System.Windows.MessageBox.Show(
-                    "La valeur fournie sur 'TypeConverterMarkupExtension' a levé une exception.\n" +
-                    "Un journal a été écrit à côté de l'exécutable (Virgil_crash.log).",
+                    "Une erreur interne est survenue lors du chargement de l’interface.\n" +
+                    "Un journal a été enregistré dans Virgil_crash.log.",
                     "Virgil — erreur au démarrage",
                     MessageBoxButton.OK, MessageBoxImage.Error);
 
