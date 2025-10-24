@@ -1,58 +1,59 @@
 #nullable enable
 using System;
-using System.Windows.Controls;
-using System.Windows.Threading;
+using System.Windows;                    // WPF
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace Virgil.App.Controls
 {
-    /// <summary>
-    /// Code-behind : set DataContext + animations (clignement & “breathing”).
-    /// </summary>
-    public partial class VirgilAvatar : UserControl
+    // ⚠️ on force la classe de base WPF pour éviter tout conflit avec WinForms
+    public partial class VirgilAvatar : System.Windows.Controls.UserControl
     {
-        private readonly VirgilAvatarViewModel _vm = new();
-        private readonly DispatcherTimer _blinkTimer = new() { Interval = TimeSpan.FromSeconds(3) };
-        private readonly DispatcherTimer _breathTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
-        private double _phase;
-
         public VirgilAvatar()
         {
             InitializeComponent();
-            DataContext = _vm;
 
-            // Clignement aléatoire
-            var rnd = new Random();
-            _blinkTimer.Tick += (_, __) =>
-            {
-                var old = _vm.EyeScale;
-                _vm.EyeScale = Math.Max(0.6, old - 0.35);
-                // remonte après ~120ms
-                _ = Dispatcher.BeginInvoke(async () =>
-                {
-                    await System.Threading.Tasks.Task.Delay(120);
-                    _vm.EyeScale = old;
-                });
-                _blinkTimer.Interval = TimeSpan.FromSeconds(rnd.Next(2, 5));
-            };
-            _blinkTimer.Start();
-
-            // Breathing (léger effet de pulsation)
-            _breathTimer.Tick += (_, __) =>
-            {
-                _phase += 0.08;
-                var s = 1.0 + 0.02 * Math.Sin(_phase);
-                _vm.EyeScale = s;
-                var glow = 0.38 + 0.04 * (1 + Math.Sin(_phase + Math.PI / 2));
-                _vm.GlowOpacity = glow;
-            };
-            _breathTimer.Start();
+            // Si aucun DataContext défini côté XAML, on instancie le ViewModel par défaut
+            if (DataContext == null)
+                DataContext = new VirgilAvatarViewModel();
         }
 
-        /// <summary>API appelée depuis MainWindow pour changer d’humeur.</summary>
-        public void SetMood(string mood) => _vm.SetMood(mood);
+        // Méthode utilitaire appelée depuis MainWindow pour changer l’humeur
+        public void SetMood(string mood)
+        {
+            if (DataContext is VirgilAvatarViewModel vm)
+                vm.SetMood(mood);
+        }
 
-        /// <summary>Expose le ViewModel si tu veux binder depuis XAML externe.</summary>
-        public VirgilAvatarViewModel ViewModel => _vm;
+        // (Optionnel) Expose un petit “nudge” visuel
+        public void Nudge()
+        {
+            try
+            {
+                var sb = new Storyboard();
+                var anim = new DoubleAnimation
+                {
+                    From = 1.0,
+                    To = 1.06,
+                    Duration = TimeSpan.FromMilliseconds(120),
+                    AutoReverse = true,
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                Storyboard.SetTarget(anim, this);
+                Storyboard.SetTargetProperty(anim, new PropertyPath("LayoutTransform.ScaleX"));
+                sb.Children.Add(anim);
+
+                var animY = anim.Clone();
+                Storyboard.SetTargetProperty(animY, new PropertyPath("LayoutTransform.ScaleY"));
+                sb.Children.Add(animY);
+
+                if (LayoutTransform == Transform.Identity)
+                    LayoutTransform = new ScaleTransform(1, 1);
+
+                sb.Begin();
+            }
+            catch { /* effet non bloquant */ }
+        }
     }
 }
