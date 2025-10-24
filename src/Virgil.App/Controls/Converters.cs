@@ -12,9 +12,6 @@ namespace Virgil.App.Controls
     /// </summary>
     public static class Converters
     {
-        /// <summary>
-        /// Color depuis un hex (#RRGGBB ou #AARRGGBB).
-        /// </summary>
         public static System.Windows.Media.Color ColorFromHex(string hex)
         {
             if (string.IsNullOrWhiteSpace(hex))
@@ -26,15 +23,9 @@ namespace Virgil.App.Controls
                 : System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
         }
 
-        /// <summary>
-        /// SolidColorBrush depuis un hex (#RRGGBB ou #AARRGGBB).
-        /// </summary>
         public static System.Windows.Media.SolidColorBrush BrushFromHex(string hex)
             => new System.Windows.Media.SolidColorBrush(ColorFromHex(hex));
 
-        /// <summary>
-        /// Crée un Binding WPF (évite System.Windows.Forms.Binding).
-        /// </summary>
         public static System.Windows.Data.Binding Bind(
             string path,
             object? source = null,
@@ -51,9 +42,6 @@ namespace Virgil.App.Controls
             };
         }
 
-        /// <summary>
-        /// Binding OneTime simplifié.
-        /// </summary>
         public static System.Windows.Data.Binding BindOneTime(
             string path,
             object? source = null,
@@ -63,9 +51,6 @@ namespace Virgil.App.Controls
                     System.Windows.Data.UpdateSourceTrigger.PropertyChanged);
     }
 
-    /// <summary>
-    /// string hex / Color -> SolidColorBrush (utilisable en XAML comme ColorToBrushConverter).
-    /// </summary>
     public sealed class ColorToBrushConverter : System.Windows.Data.IValueConverter
     {
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -76,7 +61,6 @@ namespace Virgil.App.Controls
             if (value is string s && !string.IsNullOrWhiteSpace(s))
                 return new System.Windows.Media.SolidColorBrush(Converters.ColorFromHex(s));
 
-            // fallback neutre
             return new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0xAA, 0xB7, 0xC4));
         }
 
@@ -84,9 +68,6 @@ namespace Virgil.App.Controls
             => System.Windows.Data.Binding.DoNothing;
     }
 
-    /// <summary>
-    /// Mood -> Brush (ex: proud/vigilant/alert/neutral)
-    /// </summary>
     public sealed class MoodToBrushConverter : System.Windows.Data.IValueConverter
     {
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -105,9 +86,6 @@ namespace Virgil.App.Controls
             => System.Windows.Data.Binding.DoNothing;
     }
 
-    /// <summary>
-    /// bool -> Visibility (si tu ne veux pas utiliser le BoolToVisibilityConverter built-in).
-    /// </summary>
     public sealed class BoolToVisibilityConverter : System.Windows.Data.IValueConverter
     {
         public bool Invert { get; set; }
@@ -123,11 +101,6 @@ namespace Virgil.App.Controls
             => System.Windows.Data.Binding.DoNothing;
     }
 
-    /// <summary>
-    /// EyeSeparation (double, en px) -> Thickness (Margin) pour positionner l'œil gauche/droit.
-    /// Paramètres:
-    ///   "Left" / "Right" et optionnellement "Top=3" (séparés par , ou ;)
-    /// </summary>
     public sealed class EyeSeparationToMarginConverter : System.Windows.Data.IValueConverter
     {
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -146,7 +119,7 @@ namespace Virgil.App.Controls
             }
             catch { sep = 0; }
 
-            bool isLeft = false;           // défaut: œil droit
+            bool isLeft = false;
             double topOffset = 0;
 
             if (parameter is string param && !string.IsNullOrWhiteSpace(param))
