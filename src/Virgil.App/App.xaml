@@ -2,30 +2,26 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Virgil.App.Controls"
+             xmlns:effects="clr-namespace:System.Windows.Media.Effects;assembly=PresentationCore"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
     <ResourceDictionary>
-      <!-- Si tu as des dictionnaires, ajoute-les ici -->
       <ResourceDictionary.MergedDictionaries>
-        <!-- Exemple :
-        <ResourceDictionary Source="Themes/Generic.xaml" /> -->
+        <!-- Laisser vide si pas de thèmes -->
       </ResourceDictionary.MergedDictionaries>
 
       <!-- Converters / helpers -->
-      <!-- BoolToVisibility WPF (built-in) -->
       <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-      <!-- Effet d’ombre utilisé par l’avatar -->
-      <DropShadowEffect x:Key="DropShadowEffect"
-                        Color="#001020"
-                        ShadowDepth="0"
-                        BlurRadius="25"
-                        Opacity="0.6" />
-
-      <!-- Converters personnalisés (définis dans Controls/Converters.cs) -->
       <controls:ColorToBrushConverter x:Key="ColorToBrushConverter" />
       <controls:MoodToBrushConverter x:Key="MoodToBrushConverter" />
       <controls:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter" />
+
+      <!-- NOTE: on fully-qualifie l'effet pour éviter toute résolution douteuse -->
+      <effects:DropShadowEffect x:Key="GlobalDropShadow"
+                                Color="#FF001020"
+                                ShadowDepth="0"
+                                BlurRadius="25"
+                                Opacity="0.6" />
     </ResourceDictionary>
   </Application.Resources>
 </Application>
