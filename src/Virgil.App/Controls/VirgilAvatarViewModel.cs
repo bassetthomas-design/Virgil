@@ -5,12 +5,17 @@ using Media = System.Windows.Media;
 
 namespace Virgil.App.Controls
 {
+    /// <summary>
+    /// ViewModel de l'avatar : teintes/yeux/glow + états d'humeur.
+    /// Utilisé par VirgilAvatar.xaml (Bindings).
+    /// </summary>
     public class VirgilAvatarViewModel : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? n = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
 
+        // Couleurs / glow
         public Media.Brush FaceBrush { get => _faceBrush; set { _faceBrush = value; OnPropertyChanged(); } }
         public Media.Brush EyeBrush  { get => _eyeBrush;  set { _eyeBrush = value;  OnPropertyChanged(); } }
         public Media.Color GlowColor { get => _glowColor; set { _glowColor = value; OnPropertyChanged(); } }
@@ -21,6 +26,7 @@ namespace Virgil.App.Controls
         private Media.Color _glowColor = Media.Color.FromRgb(39, 215, 255);
         private double _glowOpacity = 0.40;
 
+        // Paramètres des yeux (pour l’animation)
         public double EyeScale { get => _eyeScale; set { _eyeScale = value; OnPropertyChanged(); } }
         public double EyeTilt { get => _eyeTilt; set { _eyeTilt = value; OnPropertyChanged(); } }
         public double EyeSeparation { get => _eyeSeparation; set { _eyeSeparation = value; OnPropertyChanged(); } }
@@ -31,6 +37,7 @@ namespace Virgil.App.Controls
         private double _eyeSeparation = 34;
         private double _eyeY = 0;
 
+        // Décors/états spéciaux
         public bool UseRoundEyes { get => _round; set { _round = value; OnPropertyChanged(); } }
         public bool ShowTear     { get => _tear;  set { _tear = value;  OnPropertyChanged(); } }
         public bool ShowHearts   { get => _hearts;set { _hearts = value;OnPropertyChanged(); } }
@@ -45,6 +52,7 @@ namespace Virgil.App.Controls
         {
             CurrentMood = (mood ?? "neutral").ToLowerInvariant();
 
+            // reset
             UseRoundEyes = ShowTear = ShowHearts = ShowCat = ShowDevil = false;
             FaceBrush = new Media.SolidColorBrush(Media.Color.FromRgb(98, 125, 78));
             EyeBrush  = Media.Brushes.White;
