@@ -1,149 +1,78 @@
 #nullable enable
 using System;
 using System.Globalization;
-using System.Windows;            // Visibility, Thickness
-using System.Windows.Media;      // SolidColorBrush
+using System.Windows;
+using System.Windows.Data;       // Binding (WPF)
+using System.Windows.Media;     // Color/Brush (WPF)
 
 namespace Virgil.App.Controls
 {
-    /// <summary>
-    /// Convertisseurs / helpers WPF sans référence à WinForms.
-    /// Tous les types ambigus (Binding, Color, etc.) sont pleinement qualifiés côté WPF.
-    /// </summary>
-    public static class Converters
+    // ----------- Color -> SolidColorBrush -----------
+    public sealed class ColorToBrushConverter : IValueConverter
     {
-        public static System.Windows.Media.Color ColorFromHex(string hex)
+        public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (string.IsNullOrWhiteSpace(hex))
-                return System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
-
-            var obj = System.Windows.Media.ColorConverter.ConvertFromString(hex);
-            return obj is System.Windows.Media.Color c
-                ? c
-                : System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
-        }
-
-        public static System.Windows.Media.SolidColorBrush BrushFromHex(string hex)
-            => new System.Windows.Media.SolidColorBrush(ColorFromHex(hex));
-
-        public static System.Windows.Data.Binding Bind(
-            string path,
-            object? source = null,
-            System.Windows.Data.IValueConverter? converter = null,
-            System.Windows.Data.BindingMode mode = System.Windows.Data.BindingMode.OneWay,
-            System.Windows.Data.UpdateSourceTrigger update = System.Windows.Data.UpdateSourceTrigger.PropertyChanged)
-        {
-            return new System.Windows.Data.Binding(path)
+            if (value is Color c) return new SolidColorBrush(c);
+            if (value is string s)
             {
-                Source = source,
-                Converter = converter,
-                Mode = mode,
-                UpdateSourceTrigger = update
-            };
+                try
+                {
+                    var cc = (Color)ColorConverter.ConvertFromString(s)!;
+                    return new SolidColorBrush(cc);
+                }
+                catch { }
+            }
+            // Transparence par défaut
+            return new SolidColorBrush(Color.FromArgb(0x00, 0, 0, 0));
         }
 
-        public static System.Windows.Data.Binding BindOneTime(
-            string path,
-            object? source = null,
-            System.Windows.Data.IValueConverter? converter = null)
-            => Bind(path, source, converter,
-                    System.Windows.Data.BindingMode.OneTime,
-                    System.Windows.Data.UpdateSourceTrigger.PropertyChanged);
+        public object? ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => (value is SolidColorBrush b) ? b.Color : DependencyProperty.UnsetValue;
     }
 
-    public sealed class ColorToBrushConverter : System.Windows.Data.IValueConverter
+    // ----------- double (séparation des yeux) -> Thickness (Margin) -----------
+    public sealed class EyeSeparationToMarginConverter : IValueConverter
     {
-        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        {
-            if (value is System.Windows.Media.Color c)
-                return new System.Windows.Media.SolidColorBrush(c);
-
-            if (value is string s && !string.IsNullOrWhiteSpace(s))
-                return new System.Windows.Media.SolidColorBrush(Converters.ColorFromHex(s));
-
-            return new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0xAA, 0xB7, 0xC4));
-        }
-
-        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => System.Windows.Data.Binding.DoNothing;
-    }
-
-    public sealed class MoodToBrushConverter : System.Windows.Data.IValueConverter
-    {
-        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        {
-            var mood = value as string ?? "neutral";
-            return mood switch
-            {
-                "proud"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0x46, 0xFF, 0x7A)),
-                "vigilant" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0xE4, 0x6B)),
-                "alert"    => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0xFF, 0x69, 0x61)),
-                _          => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0xAA, 0xB7, 0xC4)),
-            };
-        }
-
-        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => System.Windows.Data.Binding.DoNothing;
-    }
-
-    public sealed class BoolToVisibilityConverter : System.Windows.Data.IValueConverter
-    {
-        public bool Invert { get; set; }
-
-        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        {
-            bool v = value is bool b && b;
-            if (Invert) v = !v;
-            return v ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => System.Windows.Data.Binding.DoNothing;
-    }
-
-    public sealed class EyeSeparationToMarginConverter : System.Windows.Data.IValueConverter
-    {
-        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        // parameter attendu : "left" ou "right" (par défaut: "left")
+        public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             double sep = 0;
-            try
-            {
-                sep = value switch
-                {
-                    double d => d,
-                    float f => f,
-                    int i => i,
-                    string s when double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var dd) => dd,
-                    _ => 0
-                };
-            }
-            catch { sep = 0; }
+            try { sep = System.Convert.ToDouble(value, CultureInfo.InvariantCulture); } catch { }
 
-            bool isLeft = false;
-            double topOffset = 0;
+            string side = (parameter as string ?? "left").Trim().ToLowerInvariant();
 
-            if (parameter is string param && !string.IsNullOrWhiteSpace(param))
-            {
-                var parts = param.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (var raw in parts)
-                {
-                    var p = raw.Trim();
-                    if (p.Equals("Left", StringComparison.OrdinalIgnoreCase)) isLeft = true;
-                    else if (p.Equals("Right", StringComparison.OrdinalIgnoreCase)) isLeft = false;
-                    else if (p.StartsWith("Top=", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var v = p.Substring(4);
-                        if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var tv))
-                            topOffset = tv;
-                    }
-                }
-            }
+            // On répartit la moitié de la séparation de part et d’autre
+            double half = Math.Max(0, sep) / 2.0;
 
-            double dx = (sep / 2.0) * (isLeft ? -1 : +1);
-            return new Thickness(dx, topOffset, 0, 0);
+            // Margin(left, top, right, bottom)
+            return side == "right"
+                ? new Thickness(half, 0, 0, 0)
+                : new Thickness(-half, 0, 0, 0);
         }
 
-        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => System.Windows.Data.Binding.DoNothing;
+        public object? ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => DependencyProperty.UnsetValue;
+    }
+
+    // ----------- (Optionnel) bool -> Visibility (si tu n’utilises pas BooleanToVisibilityConverter) -----------
+    public sealed class BoolToVisibilityConverter : IValueConverter
+    {
+        public bool CollapseWhenFalse { get; set; } = true;
+
+        public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            bool v = false;
+            if (value is bool b) v = b;
+            else if (value is bool? nb && nb.HasValue) v = nb.Value;
+
+            if (v) return Visibility.Visible;
+            return CollapseWhenFalse ? Visibility.Collapsed : Visibility.Hidden;
+        }
+
+        public object? ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is Visibility vis) return vis == Visibility.Visible;
+            return false;
+        }
     }
 }
