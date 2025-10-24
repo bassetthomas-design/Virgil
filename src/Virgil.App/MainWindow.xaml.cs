@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
-// WPF media (alias pour éviter toute ambiguïté avec System.Drawing)
+// Alias WPF (évite le conflit avec System.Drawing)
 using Media = System.Windows.Media;
 using MediaBrush = System.Windows.Media.Brush;
 using MediaColor = System.Windows.Media.Color;
@@ -20,7 +20,7 @@ using Virgil.Core.Services; // AdvancedMonitoringService, ConfigService, Browser
 
 namespace Virgil.App
 {
-    // ============ Modèle de message (utile pour le binding & fallback visuel) ============
+    // ===== Modèle message (fallback d’affichage + binding éventuel) =====
     public class ChatMessage : INotifyPropertyChanged
     {
         public string Id { get; } = Guid.NewGuid().ToString("N");
@@ -30,11 +30,7 @@ namespace Virgil.App
         public string Text { get => _text; set { _text = value; OnPropertyChanged(); } }
 
         private string _mood = "neutral";
-        public string Mood
-        {
-            get => _mood;
-            set { _mood = value; OnPropertyChanged(); UpdateBrush(); }
-        }
+        public string Mood { get => _mood; set { _mood = value; OnPropertyChanged(); UpdateBrush(); } }
 
         public MediaBrush BubbleBrush { get; private set; } =
             new SolidColorBrush(MediaColor.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
@@ -102,7 +98,7 @@ namespace Virgil.App
         private string? _lastPulseLine;
         private DateTime _lastPulseAt = DateTime.MinValue;
 
-        // Seuils d’alerte (peuvent être surchargés via config)
+        // Seuils d’alerte (surconfigurables)
         private float _cpuAlertC = 85f, _gpuAlertC = 85f;
 
         public MainWindow()
@@ -110,7 +106,7 @@ namespace Virgil.App
             InitializeComponent();
             DataContext = this;
 
-            // Charger seuils depuis la conf si disponibles (gère float? -> float)
+            // Charger seuils depuis la conf si disponibles (float? -> float)
             try
             {
                 var cur = _config.Current;
@@ -118,15 +114,11 @@ namespace Virgil.App
                 {
                     float? c = cur.CpuTempAlert;
                     float? g = cur.GpuTempAlert;
-
                     if (c.HasValue) _cpuAlertC = c.Value;
                     if (g.HasValue) _gpuAlertC = g.Value;
                 }
             }
-            catch
-            {
-                // Non bloquant si la config n'est pas lisible
-            }
+            catch { /* non bloquant */ }
 
             // Horloge
             _clockTimer.Tick += (_, __) =>
@@ -139,36 +131,33 @@ namespace Virgil.App
             // Surveillance
             _survTimer.Tick += (_, __) => SurveillancePulse();
 
-            // Avatar neutre au démarrage
+            // Avatar neutre
             SetAvatarMood("neutral");
 
             // Message d’accueil (via Dialogues.cs)
             try { Say(Dialogues.Startup(), "neutral"); } catch { Say("Virgil en place. Système prêt.", "neutral"); }
         }
 
-        // ================== Chat (via ton VirgilChatPanel) ==================
+        // ================== Chat (via VirgilChatPanel) ==================
         private void Say(string text, string mood = "neutral", int ttlMs = 60000)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
 
-            // Ajout au binding (utile si tu affiches aussi ChatMessages)
+            // Binding interne (au cas où tu affiches aussi ChatMessages)
             ChatMessages.Add(new ChatMessage { Text = text, Mood = mood, Timestamp = DateTime.Now });
 
-            // Envoi au panneau custom (effet, TTL, autoscroll)
-            try { ChatArea?.Post(text, mood, ttlMs); } catch { /* fallback silencieux */ }
+            // Envoi au panneau custom (effet/TTL/autoscroll)
+            try { ChatArea?.Post(text, mood, ttlMs); } catch { /* ok */ }
         }
 
         private void SetAvatarMood(string mood)
         {
             try
             {
-                var vm = AvatarControl?.DataContext; // si tu as VirgilAvatarViewModel bindé en XAML
-                vm?.GetType().GetMethod("SetMood")?.Invoke(vm, new object[] { mood });
+                // On appelle l’API exposée par le contrôle (code-behind)
+                AvatarControl?.SetMood(mood);
             }
-            catch
-            {
-                // non bloquant
-            }
+            catch { /* non bloquant */ }
         }
 
         // ================== Progression / Statut ==================
@@ -213,7 +202,7 @@ namespace Virgil.App
             {
                 try { Say(Dialogues.SurveillanceStart(), "vigilant"); } catch { Say("Surveillance activée. Je garde un œil 👀", "vigilant"); }
                 _survTimer.Start();
-                SurveillancePulse(); // premier tick immédiat
+                SurveillancePulse(); // tick immédiat
             }
             else
             {
@@ -490,7 +479,7 @@ namespace Virgil.App
                 }
                 catch { memUsed = 0; }
 
-                double gpu = 0; // à 0 par défaut (pas de compteur standard)
+                double gpu = 0; // à 0 par défaut
 
                 return (Clamp(cpu), Clamp(gpu), Clamp(memUsed), Clamp(disk));
             }
