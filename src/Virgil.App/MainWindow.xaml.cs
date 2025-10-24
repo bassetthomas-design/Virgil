@@ -430,62 +430,54 @@ namespace Virgil.App
                 Say($"TEMP analysé ~{bytesFound / (1024.0 * 1024):F1} MB — supprimé ~{bytesDeleted / (1024.0 * 1024):F1} MB", "proud"));
         }
 
-        // ========= Sonde simple CPU/MEM/DISK (GPU=0 par défaut) =========
-        private sealed class UtilProbe : IDisposable
-        {
-            private readonly PerformanceCounter? _cpu;
-            private readonly PerformanceCounter? _disk;
-            private readonly PerformanceCounter? _memAvail;
+        // === Sondes CPU/MEM/DISK robustes (fallback + warm-up) ===
+private sealed class UtilProbe : IDisposable
+{
+    private System.Diagnostics.PerformanceCounter? _cpu;
+    private System.Diagnostics.PerformanceCounter? _disk;
+    private System.Diagnostics.PerformanceCounter? _memAvail;
+    private bool _warmedUp;
 
-            public UtilProbe()
-            {
-                try { _cpu = new PerformanceCounter("Processor", "% Processor Time", "_Total", true); } catch { _cpu = null; }
-                try { _disk = new PerformanceCounter("PhysicalDisk", "% Disk Time", "_Total", true); } catch { _disk = null; }
-                try { _memAvail = new PerformanceCounter("Memory", "Available MBytes"); } catch { _memAvail = null; }
-            }
-
-            public (double cpu, double gpu, double mem, double disk) Read()
-            {
-                double cpu = SafeRead(_cpu);
-                double disk = SafeRead(_disk);
-
-                double memUsed;
-                try
-                {
-                    var totalMb = GetTotalMemoryMB();
-                    var freeMb = SafeRead(_memAvail);
-                    memUsed = (totalMb > 0) ? (1.0 - (freeMb / totalMb)) * 100.0 : 0;
-                }
-                catch { memUsed = 0; }
-
-                double gpu = 0; // laisser 0 si pas de sonde GPU spécifique
-
-                return (Clamp(cpu), Clamp(gpu), Clamp(memUsed), Clamp(disk));
-            }
-
-            private static double SafeRead(PerformanceCounter? c)
-            {
-                try { return c?.NextValue() ?? 0; } catch { return 0; }
-            }
-
-            private static double GetTotalMemoryMB()
-            {
-                try
-                {
-                    var ci = new Microsoft.VisualBasic.Devices.ComputerInfo();
-                    return ci.TotalPhysicalMemory / 1024.0 / 1024.0;
-                }
-                catch { return 0; }
-            }
-
-            private static double Clamp(double v) => Math.Max(0, Math.Min(100, double.IsFinite(v) ? v : 0));
-
-            public void Dispose()
-            {
-                try { _cpu?.Dispose(); } catch { }
-                try { _disk?.Dispose(); } catch { }
-                try { _memAvail?.Dispose(); } catch { }
-            }
-        }
+    public UtilProbe()
+    {
+        TryCreateCounters();
+        try { _ = _cpu?.NextValue(); _ = _disk?.NextValue(); _ = _memAvail?.NextValue(); _warmedUp = true; }
+        catch { _warmedUp = false; }
     }
+
+    private void TryCreateCounters()
+    {
+        _cpu  = TryOne(new[] { ("Processor", "% Processor Time", "_Total"),
+                               ("Processor Information", "% Processor Time", "_Total") });
+        _disk = TryOne(new[] { ("PhysicalDisk", "% Disk Time", "_Total"),
+                               ("LogicalDisk", "% Disk Time", "_Total") });
+        try { _memAvail = new System.Diagnostics.PerformanceCounter("Memory", "Available MBytes"); } catch { _memAvail = null; }
+    }
+    private static System.Diagnostics.PerformanceCounter? TryOne((string cat, string ctr, string inst)[] opts)
+    {
+        foreach (var (c, t, i) in opts)
+            try { if (System.Diagnostics.PerformanceCounterCategory.Exists(c)) return new(c, t, i, true); } catch { }
+        return null;
+    }
+
+    public (double cpu, double gpu, double mem, double disk) Read()
+    {
+        if (!_warmedUp) { try { _ = _cpu?.NextValue(); _ = _disk?.NextValue(); _ = _memAvail?.NextValue(); _warmedUp = true; } catch { } }
+
+        double cpu = Safe(_cpu), disk = Safe(_disk);
+        double memUsed;
+        try {
+            var totalMb = TotalMb();
+            var freeMb  = Safe(_memAvail);
+            memUsed = totalMb > 0 ? (1.0 - freeMb / totalMb) * 100.0 : 0;
+        } catch { memUsed = 0; }
+
+        double gpu = 0; // (ajoute ta sonde GPU si besoin)
+        return (Clamp(cpu), Clamp(gpu), Clamp(memUsed), Clamp(disk));
+    }
+    private static double Safe(System.Diagnostics.PerformanceCounter? c) { try { return c?.NextValue() ?? 0; } catch { return 0; } }
+    private static double TotalMb() { try { var ci = new Microsoft.VisualBasic.Devices.ComputerInfo(); return ci.TotalPhysicalMemory / 1024.0 / 1024.0; } catch { return 0; } }
+    private static double Clamp(double v) => Math.Max(0, Math.Min(100, double.IsFinite(v) ? v : 0));
+    public void Dispose(){ try { _cpu?.Dispose(); } catch { } try { _disk?.Dispose(); } catch { } try { _memAvail?.Dispose(); } catch { } }
 }
+
