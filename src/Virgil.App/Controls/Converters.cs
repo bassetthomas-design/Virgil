@@ -2,77 +2,83 @@
 using System;
 using System.Globalization;
 using System.Windows;
-using System.Windows.Data;       // Binding (WPF)
-using System.Windows.Media;     // Color/Brush (WPF)
+using System.Windows.Data;
+using System.Windows.Media;
 
+// IMPORTANT : ce namespace doit correspondre à celui que tu utilises dans XAML :
+// xmlns:controls="clr-namespace:Virgil.App.Controls"
 namespace Virgil.App.Controls
 {
-    // ----------- Color -> SolidColorBrush -----------
+    /// <summary>
+    /// Convertit un Color (ou string) en SolidColorBrush. Accepte déjà un Brush en entrée.
+    /// </summary>
     public sealed class ColorToBrushConverter : IValueConverter
     {
-        public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
+            // Déjà un Brush -> on renvoie tel quel
+            if (value is Brush b) return b;
+
+            // Color WPF
             if (value is Color c) return new SolidColorBrush(c);
-            if (value is string s)
+
+            // String -> Color (ex: "#FF00FF" ou "White")
+            if (value is string s && !string.IsNullOrWhiteSpace(s))
             {
                 try
                 {
-                    var cc = (Color)ColorConverter.ConvertFromString(s)!;
-                    return new SolidColorBrush(cc);
+                    var obj = ColorConverter.ConvertFromString(s);
+                    if (obj is Color cc) return new SolidColorBrush(cc);
                 }
-                catch { }
+                catch { /* ignore parsing errors */ }
             }
-            // Transparence par défaut
-            return new SolidColorBrush(Color.FromArgb(0x00, 0, 0, 0));
+
+            // Valeur par défaut
+            return Brushes.Transparent;
         }
 
-        public object? ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            => (value is SolidColorBrush b) ? b.Color : DependencyProperty.UnsetValue;
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value is SolidColorBrush sb) return sb.Color;
+            return DependencyProperty.UnsetValue;
+        }
     }
 
-    // ----------- double (séparation des yeux) -> Thickness (Margin) -----------
+    /// <summary>
+    /// Décale chaque œil vers la gauche ou la droite via une Margin,
+    /// en fonction de la séparation (double) et du ConverterParameter "left"/"right".
+    /// </summary>
     public sealed class EyeSeparationToMarginConverter : IValueConverter
     {
-        // parameter attendu : "left" ou "right" (par défaut: "left")
-        public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            double sep = 0;
-            try { sep = System.Convert.ToDouble(value, CultureInfo.InvariantCulture); } catch { }
+            // Séparation par défaut si null/non num.
+            double sep = 8.0;
+            if (value is double d) sep = Math.Abs(d);
 
             string side = (parameter as string ?? "left").Trim().ToLowerInvariant();
 
-            // On répartit la moitié de la séparation de part et d’autre
-            double half = Math.Max(0, sep) / 2.0;
+            // On renvoie une Thickness différente selon le côté.
+            // (AUCUN opérateur '?:' ici → pas d'erreur de syntaxe)
+            if (side == "left")
+            {
+                // œil gauche : marge négative à gauche, positive à droite
+                return new Thickness(-sep, 0, sep, 0);
+            }
+            else if (side == "right")
+            {
+                // œil droit : marge positive à gauche, négative à droite
+                return new Thickness(sep, 0, -sep, 0);
+            }
 
-            // Margin(left, top, right, bottom)
-            return side == "right"
-                ? new Thickness(half, 0, 0, 0)
-                : new Thickness(-half, 0, 0, 0);
+            // fallback neutre
+            return new Thickness(0);
         }
 
-        public object? ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            => DependencyProperty.UnsetValue;
-    }
-
-    // ----------- (Optionnel) bool -> Visibility (si tu n’utilises pas BooleanToVisibilityConverter) -----------
-    public sealed class BoolToVisibilityConverter : IValueConverter
-    {
-        public bool CollapseWhenFalse { get; set; } = true;
-
-        public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            bool v = false;
-            if (value is bool b) v = b;
-            else if (value is bool? nb && nb.HasValue) v = nb.Value;
-
-            if (v) return Visibility.Visible;
-            return CollapseWhenFalse ? Visibility.Collapsed : Visibility.Hidden;
-        }
-
-        public object? ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is Visibility vis) return vis == Visibility.Visible;
-            return false;
+            // Pas de conversion retour
+            return DependencyProperty.UnsetValue;
         }
     }
 }
