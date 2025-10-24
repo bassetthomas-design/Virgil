@@ -1,30 +1,11 @@
 <Application x:Class="Virgil.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="clr-namespace:Virgil.App.Controls"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
     <ResourceDictionary>
-
-      <!-- Dictionnaires fusionnés (laisse vide si pas utilisés) -->
-      <ResourceDictionary.MergedDictionaries>
-        <!-- Exemple : <ResourceDictionary Source="Themes/Generic.xaml" /> -->
-      </ResourceDictionary.MergedDictionaries>
-
-      <!-- Converters et helpers -->
+      <!-- Garder UNIQUEMENT ce qui est sûr à charger très tôt -->
       <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-      <!-- IMPORTANT : créer une nouvelle instance à chaque usage -->
-      <DropShadowEffect x:Key="DropShadowEffect"
-                        x:Shared="False"
-                        Color="#001020"
-                        ShadowDepth="0"
-                        BlurRadius="25"
-                        Opacity="0.6" />
-
-      <controls:ColorToBrushConverter x:Key="ColorToBrushConverter" />
-      <controls:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter" />
-
     </ResourceDictionary>
   </Application.Resources>
 </Application>
