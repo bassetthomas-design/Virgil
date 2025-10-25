@@ -1,4 +1,4 @@
-using System.Text;
+eusing System.Text;
 using System.Threading.Tasks;
 using Virgil.Core.Services;
 
@@ -57,13 +57,20 @@ namespace Virgil.Core
             var apps = new ApplicationUpdateService();
             log.AppendLine(await apps.UpgradeAllAsync(includeUnknown: true, silent: true).ConfigureAwait(false));
 
-            // Windows Update
-            var wu = new WindowsUpdateService();
-            log.AppendLine(await wu.StartScanAsync().ConfigureAwait(false));
-            log.AppendLine(await wu.StartDownloadAsync().ConfigureAwait(false));
-            log.AppendLine(await wu.StartInstallAsync().ConfigureAwait(false));
+    // Windows Update
+    var wu = new WindowsUpdateService();
+    log.AppendLine(await wu.StartScanAsync().ConfigureAwait(false));
+    log.AppendLine(await wu.StartDownloadAsync().ConfigureAwait(false));
+    log.AppendLine(await wu.StartInstallAsync().ConfigureAwait(false));
 
-            return log.ToString();
-        }
-    }
+    // Drivers
+    var drivers = new DriverUpdateService();
+    log.AppendLine(await drivers.UpgradeDriversAsync().ConfigureAwait(false));
+
+    // Windows Defender
+ var defender = new DefenderUpdateService();
+log.AppendLine(await defender.UpdateSignaturesAsync().ConfigureAwait(false));
+log.AppendLine(await defender.QuickScanAsync().ConfigureAwait(false));
+                    return log.ToString();
 }
+                
