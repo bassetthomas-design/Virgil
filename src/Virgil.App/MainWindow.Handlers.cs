@@ -20,7 +20,9 @@ namespace Virgil.App
             {
                 var presets = new MaintenancePresetsService();
                 // Exécuter la maintenance complète sur un thread de travail pour ne pas bloquer l'UI
-                var log = await Task.Run(() => presets.FullAsync()).Unwrap().ConfigureAwait(true);
+                // Exécuter la maintenance complète de façon asynchrone.  FullAsync() renvoie un Task<string>
+                // et s'exécute de manière non bloquante ; il n'est pas nécessaire de l'envelopper dans Task.Run().
+                var log = await presets.FullAsync();
                 // Afficher le rapport dans le chat et mettre à jour la progression
                 Say(log, "proud");
                 ProgressDone("Maintenance complète terminée.");
