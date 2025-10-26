@@ -12,26 +12,62 @@ namespace Virgil.App
         private readonly Brush _warn  = new SolidColorBrush(Color.FromRgb(0xF1, 0xC4, 0x0F));
         private readonly Brush _alert = new SolidColorBrush(Color.FromRgb(0xD9, 0x3D, 0x3D));
 
+        // Helpers pour éviter les interpolations imbriquées (qui ont été cassées)
+        private static string TempShort(double t) => double.IsNaN(t) ? "--" : $"{t:F0}°C";
+        private static string TempFull(double t)  => double.IsNaN(t) ? "-- °C" : $"{t:F1} °C";
+
         private async System.Threading.Tasks.Task SurveillancePulseInternal()
         {
             try
             {
                 var snap = await _monitor.GetSnapshotAsync();
 
-                SetGauge(CpuBar,  snap.CpuUsage,  T.CpuWarn,  T.CpuAlert,  CpuBadge,  CpuBadgeHot,
-                         $"CPU: {snap.CpuUsage:F0}% — {(double.IsNaN(snap.CpuTemp) ? \"--\" : $"{snap.CpuTemp:F0}°C")}");
-                CpuTemp.Text = double.IsNaN(snap.CpuTemp) ? "-- °C" : $"{snap.CpuTemp:F1} °C";
+                // CPU
+                SetGauge(
+                    CpuBar,
+                    snap.CpuUsage,
+                    T.CpuWarn,
+                    T.CpuAlert,
+                    CpuBadge,
+                    CpuBadgeHot,
+                    $"CPU: { (double.IsNaN(snap.CpuUsage) ? "--" : $"{snap.CpuUsage:F0}%") } — {TempShort(snap.CpuTemp)}"
+                );
+                CpuTemp.Text = TempFull(snap.CpuTemp);
 
-                SetGauge(GpuBar,  snap.GpuUsage,  T.GpuWarn,  T.GpuAlert,  GpuBadge,  GpuBadgeHot,
-                         $"GPU: {snap.GpuUsage:F0}% — {(double.IsNaN(snap.GpuTemp) ? \"--\" : $"{snap.GpuTemp:F0}°C")}");
-                GpuTemp.Text = double.IsNaN(snap.GpuTemp) ? "-- °C" : $"{snap.GpuTemp:F1} °C";
+                // GPU
+                SetGauge(
+                    GpuBar,
+                    snap.GpuUsage,
+                    T.GpuWarn,
+                    T.GpuAlert,
+                    GpuBadge,
+                    GpuBadgeHot,
+                    $"GPU: { (double.IsNaN(snap.GpuUsage) ? "--" : $"{snap.GpuUsage:F0}%") } — {TempShort(snap.GpuTemp)}"
+                );
+                GpuTemp.Text = TempFull(snap.GpuTemp);
 
-                SetGauge(MemBar,  snap.MemUsage,  T.MemWarn,  T.MemAlert,  MemBadge,  MemBadgeHot,
-                         $"Mémoire: {snap.MemUsage:F0}%");
+                // MEM
+                SetGauge(
+                    MemBar,
+                    snap.MemUsage,
+                    T.MemWarn,
+                    T.MemAlert,
+                    MemBadge,
+                    MemBadgeHot,
+                    $"Mémoire: { (double.IsNaN(snap.MemUsage) ? "--" : $"{snap.MemUsage:F0}%") }"
+                );
 
-                SetGauge(DiskBar, snap.DiskUsage, T.DiskWarn, T.DiskAlert, DiskBadge, DiskBadgeHot,
-                         $"Disque: {snap.DiskUsage:F0}% — {(double.IsNaN(snap.DiskTemp) ? \"--\" : $"{snap.DiskTemp:F0}°C")}");
-                DiskTemp.Text = double.IsNaN(snap.DiskTemp) ? "-- °C" : $"{snap.DiskTemp:F1} °C";
+                // DISK
+                SetGauge(
+                    DiskBar,
+                    snap.DiskUsage,
+                    T.DiskWarn,
+                    T.DiskAlert,
+                    DiskBadge,
+                    DiskBadgeHot,
+                    $"Disque: { (double.IsNaN(snap.DiskUsage) ? "--" : $"{snap.DiskUsage:F0}%") } — {TempShort(snap.DiskTemp)}"
+                );
+                DiskTemp.Text = TempFull(snap.DiskTemp);
 
                 EvaluateAndReact(snap);
                 StatusText.Text = $"Pulse @ {DateTime.Now:HH:mm:ss}";
@@ -42,7 +78,10 @@ namespace Virgil.App
                     PlanNextPunchline();
                 }
             }
-            catch (Exception ex) { StatusText.Text = "Erreur surveillance: " + ex.Message; }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Erreur surveillance: " + ex.Message;
+            }
         }
 
         private void SetGauge(
