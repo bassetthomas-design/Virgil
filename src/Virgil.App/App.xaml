@@ -1,21 +1,27 @@
 <Application x:Class="Virgil.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="clr-namespace:Virgil.App.Controls"
-             StartupUri="MainWindow.xaml">
-    <Application.Resources>
-        <ResourceDictionary>
-            <!-- Converters globaux -->
-            <BooleanToVisibilityConverter x:Key="BoolToVis" />
-            <controls:ColorToBrushConverter x:Key="ColorToBrushConverter" />
-            <controls:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter" />
+             xmlns:controls="clr-namespace:Virgil.App.Controls">
+  <Application.Resources>
 
-            <!-- Effet ombre pour l’avatar -->
-            <DropShadowEffect x:Key="DropShadowEffect"
-                              Color="#001020"
-                              ShadowDepth="0"
-                              BlurRadius="25"
-                              Opacity="0.6"/>
-        </ResourceDictionary>
-    </Application.Resources>
+    <!-- Converters -->
+    <controls:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+    <controls:EyeSeparationToMarginConverter x:Key="EyeSeparationToMarginConverter"/>
+
+    <!-- Styles chat -->
+    <Style x:Key="VirgilBubble" TargetType="Border">
+      <Setter Property="Background" Value="#2C3E50"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="10"/>
+      <Setter Property="Margin" Value="0,6,0,6"/>
+      <Setter Property="Effect">
+        <Setter.Value>
+          <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.35"/>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Simple BooleanToVisibility (au cas où) -->
+    <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+  </Application.Resources>
 </Application>
