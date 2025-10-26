@@ -16,17 +16,19 @@
     </Grid.ColumnDefinitions>
 
     <!-- TOP BAR -->
-    <DockPanel Grid.Row="0" Grid.ColumnSpan="2" Background="#222" LastChildFill="True" Padding="10,0">
-      <ToggleButton x:Name="SurveillanceToggle"
-                    Width="190" Height="32" Margin="0,8,10,8"
-                    Content="Démarrer la surveillance"
-                    IsChecked="{Binding IsMonitoring, Mode=TwoWay}"
-                    Checked="SurveillanceToggle_Checked"
-                    Unchecked="SurveillanceToggle_Unchecked"/>
-      <Button Content="Config" Width="90" Height="32" Margin="0,8,10,8" Click="OpenConfig_Click"/>
-      <TextBlock x:Name="ClockText" FontSize="16" Foreground="White"
-                 HorizontalAlignment="Right" VerticalAlignment="Center"/>
-    </DockPanel>
+    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#222" Padding="10,0">
+      <DockPanel LastChildFill="True">
+        <ToggleButton x:Name="SurveillanceToggle"
+                      Width="190" Height="32" Margin="0,8,10,8"
+                      Content="Démarrer la surveillance"
+                      IsChecked="{Binding IsMonitoring, Mode=TwoWay}"
+                      Checked="SurveillanceToggle_Checked"
+                      Unchecked="SurveillanceToggle_Unchecked"/>
+        <Button Content="Config" Width="90" Height="32" Margin="0,8,10,8" Click="OpenConfig_Click"/>
+        <TextBlock x:Name="ClockText" FontSize="16" Foreground="White"
+                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+      </DockPanel>
+    </Border>
 
     <!-- LEFT PANEL: Avatar + Stats -->
     <StackPanel Grid.Row="1" Grid.Column="0" Margin="16">
