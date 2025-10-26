@@ -1,12 +1,12 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Virgil.Core.Services; // <- nécessaire pour voir l’extension AnalyzeAndCleanAsync
+using Virgil.Core.Services; // extension AnalyzeAndCleanAsync
 
-// ==== Aliases pour lever les ambiguïtés ====
-// Services (nettoyage/updates/defender/presets)
+// Aliases (évite les ambiguïtés)
 using Cleaning       = Virgil.Core.Services.CleaningService;
 using Browsers       = Virgil.Core.Services.BrowserCleaningService;
 using ExtendedClean  = Virgil.Core.Services.ExtendedCleaningService;
@@ -16,13 +16,10 @@ using DriverUpdate   = Virgil.Core.Services.DriverUpdateService;
 using DefenderUpdate = Virgil.Core.Services.DefenderUpdateService;
 using Presets        = Virgil.Core.Services.MaintenancePresetsService;
 
-// Config (seuils + fusion machine/user)
 using ConfigSvc   = Virgil.Core.Config.ConfigService;
 using Thresholds  = Virgil.Core.Config.Thresholds;
 
-// Monitoring (snapshot + service avancé)
 using AdvMon = Virgil.Core.Monitoring.AdvancedMonitoringService;
-using Snap   = Virgil.Core.Monitoring.HardwareSnapshot;
 
 namespace Virgil.App;
 
@@ -32,6 +29,7 @@ public sealed class ChatMessage
 {
     public string Text { get; set; } = string.Empty;
     public Brush BubbleBrush { get; set; } = Brushes.DimGray;
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 }
 
 public partial class MainWindow : Window
@@ -40,6 +38,8 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _survTimer  = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _thanosTimer= new() { Interval = TimeSpan.FromSeconds(5) }; // purge visuelle
+
     private DateTime _nextPunch = DateTime.Now.AddMinutes(1);
 
     private readonly AdvMon _monitor        = new();
@@ -65,7 +65,12 @@ public partial class MainWindow : Window
 
         _survTimer.Tick += async (_, _) => await SurveillancePulseInternal();
 
-        Say("Hello, c'est Virgil. Clique sur ‘Démarrer la surveillance’ pour commencer !", Mood.Neutral);
+        // Thanos effect: toutes les 5s, on fade les messages > 60s
+        _thanosTimer.Tick += (_, _) => ThanosSweep();
+        _thanosTimer.Start();
+
+        // message d'accueil
+        Say("Salut, c’est Virgil. Active la surveillance pour commencer.", Mood.Neutral);
     }
 
     private void Say(string text, Mood mood)
@@ -74,9 +79,9 @@ public partial class MainWindow : Window
         {
             Mood.Alert   => new SolidColorBrush(Color.FromRgb(0xD9,0x3D,0x3D)),
             Mood.Playful => new SolidColorBrush(Color.FromRgb(0x9B,0x59,0xB6)),
-            _            => new SolidColorBrush(Color.FromRgb(0x44,0x55,0x66)),
+            _            => new SolidColorBrush(Color.FromRgb(0x2C,0x3E,0x50)),
         };
-        _chat.Add(new ChatMessage { Text = text, BubbleBrush = brush });
+        _chat.Add(new ChatMessage { Text = text, BubbleBrush = brush, CreatedUtc = DateTime.UtcNow });
     }
 
     private string GetRandomPunchline()
@@ -88,7 +93,8 @@ public partial class MainWindow : Window
             "Un petit nettoyage et ça repart.",
             "Winget est prêt à tout casser (dans le bon sens).",
         };
-        var r = new Random(); return lines[r.Next(lines.Length)];
+        var r = new Random();
+        return lines[r.Next(lines.Length)];
     }
 
     private void PlanNextPunchline()
@@ -116,50 +122,14 @@ public partial class MainWindow : Window
         Say("Surveillance arrêtée.", Mood.Neutral);
     }
 
-    private async System.Threading.Tasks.Task SurveillancePulseInternal()
-    {
-        try
-        {
-            var snap = await _monitor.GetSnapshotAsync();
-            StatusText.Text = $"Pulse @ {DateTime.Now:HH:mm:ss}";
-
-            EvaluateAndReact(snap);
-            if (DateTime.Now >= _nextPunch)
-            {
-                Say(GetRandomPunchline(), Mood.Playful);
-                PlanNextPunchline();
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = "Erreur surveillance: " + ex.Message;
-        }
-    }
-
-    private void EvaluateAndReact(Snap snap)
-    {
-        bool alert = snap.CpuUsage > T.CpuAlert || snap.GpuUsage > T.GpuAlert || snap.MemUsage > T.MemAlert || snap.DiskUsage > T.DiskAlert
-                   || (!double.IsNaN(snap.CpuTemp) && snap.CpuTemp > T.CpuTempAlert)
-                   || (!double.IsNaN(snap.GpuTemp) && snap.GpuTemp > T.GpuTempAlert)
-                   || (!double.IsNaN(snap.DiskTemp) && snap.DiskTemp > T.DiskTempAlert);
-        bool warn  = !alert && (snap.CpuUsage > T.CpuWarn || snap.GpuUsage > T.GpuWarn || snap.MemUsage > T.MemWarn || snap.DiskUsage > T.DiskWarn
-                   || (!double.IsNaN(snap.CpuTemp) && snap.CpuTemp > T.CpuTempWarn)
-                   || (!double.IsNaN(snap.GpuTemp) && snap.GpuTemp > T.GpuTempWarn)
-                   || (!double.IsNaN(snap.DiskTemp) && snap.DiskTemp > T.DiskTempWarn));
-
-        if (alert) { SetAvatarMood("alert"); Say("🔥 Temp/charge élevée détectée !", Mood.Alert); }
-        else if (warn) { SetAvatarMood("playful"); }
-        else { SetAvatarMood("happy"); }
-    }
-
     private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
     {
         ActionProgress.Visibility = Visibility.Visible;
-        Say("Maintenance complète lancée…", Mood.Neutral);
+        Say("Maintenance complète…", Mood.Neutral);
         try
         {
             var log = await _presets.FullAsync();
-            Say(log, Mood.Neutral);
+            Say(Summarize(log), Mood.Neutral);
             StatusText.Text = "Maintenance complète terminée";
         }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
@@ -172,7 +142,7 @@ public partial class MainWindow : Window
         try
         {
             var log = await _cleaning.CleanTempAsync();
-            Say(log, Mood.Neutral);
+            Say(Summarize(log), Mood.Neutral);
             StatusText.Text = "Nettoyage TEMP terminé";
         }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
@@ -184,8 +154,8 @@ public partial class MainWindow : Window
         Say("Nettoyage navigateurs…", Mood.Neutral);
         try
         {
-            var report = await _browsers.AnalyzeAndCleanAsync(); // extension importée via using Virgil.Core.Services;
-            Say(report, Mood.Neutral);
+            var report = await _browsers.AnalyzeAndCleanAsync(); // extension
+            Say(Summarize(report), Mood.Neutral);
             StatusText.Text = "Nettoyage navigateurs terminé";
         }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
@@ -204,27 +174,39 @@ public partial class MainWindow : Window
             var r = await _drivers.UpgradeDriversAsync();
             var m = await _def.UpdateSignaturesAsync();
             var q = await _def.QuickScanAsync();
-            Say(a + "\n" + s + d + i + "\n" + r + "\n" + m + "\n" + q, Mood.Neutral);
-            StatusText.Text = "Mises à jour globales terminées";
+
+            var merged = string.Join("\n", new[] { a, s + d + i, r, m, q });
+            Say(Summarize(merged), Mood.Neutral);
+            StatusText.Text = "Mises à jour terminées";
         }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
     }
 
-    private void OpenConfig_Click(object sender, RoutedEventArgs e)
+    private string Summarize(string text)
     {
-        var cfg = _config.Get();
-        Say($"Seuils : CPU {cfg.Thresholds.CpuWarn}/{cfg.Thresholds.CpuAlert}% — GPU {cfg.Thresholds.GpuWarn}/{cfg.Thresholds.GpuAlert}% — MEM {cfg.Thresholds.MemWarn}/{cfg.Thresholds.MemAlert}%", Mood.Neutral);
-        Say($"Temp CPU {cfg.Thresholds.CpuTempWarn}/{cfg.Thresholds.CpuTempAlert}°C — GPU {cfg.Thresholds.GpuTempWarn}/{cfg.Thresholds.GpuTempAlert}°C — DISK {cfg.Thresholds.DiskTempWarn}/{cfg.Thresholds.DiskTempAlert}°C", Mood.Neutral);
-        Say("Édite %AppData%/Virgil/user.json pour override.", Mood.Neutral);
+        if (string.IsNullOrWhiteSpace(text)) return "(OK)";
+        var lines = text.Split('\n').Select(x => x.Trim()).Where(x => x.Length > 0);
+        // on prend qq lignes représentatives, pas le dump entier
+        return string.Join("\n", lines.Take(6)) + (lines.Count() > 6 ? "\n…" : "");
     }
 
-    private void SendButton_Click(object sender, RoutedEventArgs e)
+    // Effet "Thanos": fade/shrink des messages de Virgil après ~60s
+    private void ThanosSweep()
     {
-        var txt = UserInput.Text?.Trim();
-        if (!string.IsNullOrEmpty(txt))
+        var threshold = DateTime.UtcNow.AddSeconds(-60);
+        for (int i = 0; i < _chat.Count; i++)
         {
-            Say(txt, Mood.Playful);
-            UserInput.Clear();
+            var msg = _chat[i];
+            if (msg.CreatedUtc < threshold)
+            {
+                // on désature la bulle + raccourcit le texte (simulate dust)
+                if (msg.BubbleBrush is SolidColorBrush sb)
+                {
+                    var c = sb.Color;
+                    msg.BubbleBrush = new SolidColorBrush(Color.FromArgb((byte)128, c.R, c.G, c.B));
+                }
+                if (msg.Text.Length > 60) msg.Text = msg.Text[..60] + "…";
+            }
         }
     }
 }
