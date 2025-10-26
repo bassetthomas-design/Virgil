@@ -4,7 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Virgil.Core.Services; // extension AnalyzeAndCleanAsync
+using Virgil.Core.Services;
 
 // Aliases (évite les ambiguïtés)
 using Cleaning       = Virgil.Core.Services.CleaningService;
@@ -38,7 +38,7 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _survTimer  = new() { Interval = TimeSpan.FromSeconds(2) };
-    private readonly DispatcherTimer _thanosTimer= new() { Interval = TimeSpan.FromSeconds(5) }; // purge visuelle
+    private readonly DispatcherTimer _thanosTimer= new() { Interval = TimeSpan.FromSeconds(5) };
 
     private DateTime _nextPunch = DateTime.Now.AddMinutes(1);
 
@@ -65,11 +65,9 @@ public partial class MainWindow : Window
 
         _survTimer.Tick += async (_, _) => await SurveillancePulseInternal();
 
-        // Thanos effect: toutes les 5s, on fade les messages > 60s
         _thanosTimer.Tick += (_, _) => ThanosSweep();
         _thanosTimer.Start();
 
-        // message d'accueil
         Say("Salut, c’est Virgil. Active la surveillance pour commencer.", Mood.Neutral);
     }
 
@@ -154,7 +152,7 @@ public partial class MainWindow : Window
         Say("Nettoyage navigateurs…", Mood.Neutral);
         try
         {
-            var report = await _browsers.AnalyzeAndCleanAsync(); // extension
+            var report = await _browsers.AnalyzeAndCleanAsync(); 
             Say(Summarize(report), Mood.Neutral);
             StatusText.Text = "Nettoyage navigateurs terminé";
         }
@@ -186,11 +184,9 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(text)) return "(OK)";
         var lines = text.Split('\n').Select(x => x.Trim()).Where(x => x.Length > 0);
-        // on prend qq lignes représentatives, pas le dump entier
         return string.Join("\n", lines.Take(6)) + (lines.Count() > 6 ? "\n…" : "");
     }
 
-    // Effet "Thanos": fade/shrink des messages de Virgil après ~60s
     private void ThanosSweep()
     {
         var threshold = DateTime.UtcNow.AddSeconds(-60);
@@ -199,7 +195,6 @@ public partial class MainWindow : Window
             var msg = _chat[i];
             if (msg.CreatedUtc < threshold)
             {
-                // on désature la bulle + raccourcit le texte (simulate dust)
                 if (msg.BubbleBrush is SolidColorBrush sb)
                 {
                     var c = sb.Color;
@@ -208,5 +203,14 @@ public partial class MainWindow : Window
                 if (msg.Text.Length > 60) msg.Text = msg.Text[..60] + "…";
             }
         }
+    }
+
+    // 🛠️ Ajout : bouton “Config”
+    private void OpenConfig_Click(object sender, RoutedEventArgs e)
+    {
+        var cfg = _config.Get();
+        Say($"Seuils : CPU {cfg.Thresholds.CpuWarn}/{cfg.Thresholds.CpuAlert}% — GPU {cfg.Thresholds.GpuWarn}/{cfg.Thresholds.GpuAlert}% — MEM {cfg.Thresholds.MemWarn}/{cfg.Thresholds.MemAlert}%", Mood.Neutral);
+        Say($"Temp CPU {cfg.Thresholds.CpuTempWarn}/{cfg.Thresholds.CpuTempAlert}°C — GPU {cfg.Thresholds.GpuTempWarn}/{cfg.Thresholds.GpuTempAlert}°C — DISK {cfg.Thresholds.DiskTempWarn}/{cfg.Thresholds.DiskTempAlert}°C", Mood.Neutral);
+        Say("Édite %AppData%/Virgil/user.json pour override.", Mood.Neutral);
     }
 }
