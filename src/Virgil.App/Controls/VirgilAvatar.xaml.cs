@@ -20,7 +20,6 @@ namespace Virgil.App.Controls
             set => SetValue(FaceFillProperty, value);
         }
 
-        /// <summary> Change l’humeur → change la couleur du visage + glow, et lance l’animation "MoodPulse". </summary>
         public void SetMood(string mood)
         {
             var key = (mood ?? "").Trim().ToLowerInvariant();
@@ -34,7 +33,6 @@ namespace Virgil.App.Controls
 
             FaceFill = new SolidColorBrush(color);
 
-            // teinte du halo si présent dans le XAML
             try
             {
                 if (Glow != null)
@@ -43,15 +41,14 @@ namespace Virgil.App.Controls
                     Glow.Fill = new SolidColorBrush(halo);
                 }
             }
-            catch { /* safe */ }
+            catch { }
 
-            // lance le storyboard de pulse si défini en ressource
             try
             {
                 if (FindResource("MoodPulse") is Storyboard sb)
                     sb.Begin();
             }
-            catch { /* safe */ }
+            catch { }
         }
     }
 }
