@@ -1,7 +1,8 @@
 <Application x:Class="Virgil.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="clr-namespace:Virgil.App.Controls">
+             xmlns:controls="clr-namespace:Virgil.App.Controls"
+             StartupUri="MainWindow.xaml">
   <Application.Resources>
 
     <!-- Converters -->
@@ -21,7 +22,6 @@
       </Setter>
     </Style>
 
-    <!-- Simple BooleanToVisibility (au cas où) -->
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
   </Application.Resources>
 </Application>
