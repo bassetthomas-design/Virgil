@@ -1,6 +1,8 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -25,11 +27,21 @@ namespace Virgil.App;
 
 public enum Mood { Neutral, Playful, Alert }
 
-public sealed class ChatMessage
+public sealed class ChatMessage : INotifyPropertyChanged
 {
+    private double _opacity = 1.0;
+    private double _scale = 1.0;
+
     public string Text { get; set; } = string.Empty;
     public Brush BubbleBrush { get; set; } = Brushes.DimGray;
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+
+    public double Opacity { get => _opacity; set { _opacity = value; OnPropertyChanged(); } }
+    public double Scale   { get => _scale;   set { _scale   = value; OnPropertyChanged(); } }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? prop = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(prop));
 }
 
 public partial class MainWindow : Window
@@ -38,7 +50,7 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _survTimer  = new() { Interval = TimeSpan.FromSeconds(2) };
-    private readonly DispatcherTimer _thanosTimer= new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly DispatcherTimer _thanosTimer= new() { Interval = TimeSpan.FromSeconds(0.5) }; // animation fine
 
     private DateTime _nextPunch = DateTime.Now.AddMinutes(1);
 
@@ -68,6 +80,7 @@ public partial class MainWindow : Window
         _thanosTimer.Tick += (_, _) => ThanosSweep();
         _thanosTimer.Start();
 
+        Avatar?.SetMood("happy");
         Say("Salut, c’est Virgil. Active la surveillance pour commencer.", Mood.Neutral);
     }
 
@@ -79,7 +92,7 @@ public partial class MainWindow : Window
             Mood.Playful => new SolidColorBrush(Color.FromRgb(0x9B,0x59,0xB6)),
             _            => new SolidColorBrush(Color.FromRgb(0x2C,0x3E,0x50)),
         };
-        _chat.Add(new ChatMessage { Text = text, BubbleBrush = brush, CreatedUtc = DateTime.UtcNow });
+        _chat.Add(new ChatMessage { Text = text, BubbleBrush = brush, CreatedUtc = DateTime.UtcNow, Opacity = 1.0, Scale = 1.0 });
     }
 
     private string GetRandomPunchline()
@@ -130,6 +143,11 @@ public partial class MainWindow : Window
             Say(Summarize(log), Mood.Neutral);
             StatusText.Text = "Maintenance complète terminée";
         }
+        catch (Exception ex)
+        {
+            Say("❌ Maintenance: " + ex.Message, Mood.Alert);
+            StatusText.Text = "Erreur maintenance";
+        }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
     }
 
@@ -143,6 +161,11 @@ public partial class MainWindow : Window
             Say(Summarize(log), Mood.Neutral);
             StatusText.Text = "Nettoyage TEMP terminé";
         }
+        catch (Exception ex)
+        {
+            Say("❌ Nettoyage TEMP: " + ex.Message, Mood.Alert);
+            StatusText.Text = "Erreur nettoyage TEMP";
+        }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
     }
 
@@ -155,6 +178,11 @@ public partial class MainWindow : Window
             var report = await _browsers.AnalyzeAndCleanAsync(); 
             Say(Summarize(report), Mood.Neutral);
             StatusText.Text = "Nettoyage navigateurs terminé";
+        }
+        catch (Exception ex)
+        {
+            Say("❌ Navigateurs: " + ex.Message, Mood.Alert);
+            StatusText.Text = "Erreur navigateurs";
         }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
     }
@@ -177,6 +205,11 @@ public partial class MainWindow : Window
             Say(Summarize(merged), Mood.Neutral);
             StatusText.Text = "Mises à jour terminées";
         }
+        catch (Exception ex)
+        {
+            Say("❌ Mises à jour: " + ex.Message, Mood.Alert);
+            StatusText.Text = "Erreur mises à jour";
+        }
         finally { ActionProgress.Visibility = Visibility.Collapsed; }
     }
 
@@ -187,25 +220,25 @@ public partial class MainWindow : Window
         return string.Join("\n", lines.Take(6)) + (lines.Count() > 6 ? "\n…" : "");
     }
 
+    // Effet "Thanos": à partir de 60s, fade 1.0 -> 0 et scale 1.0 -> 0.8 sur 10s, puis suppression
     private void ThanosSweep()
     {
-        var threshold = DateTime.UtcNow.AddSeconds(-60);
-        for (int i = 0; i < _chat.Count; i++)
+        var now = DateTime.UtcNow;
+        for (int i = _chat.Count - 1; i >= 0; i--)
         {
             var msg = _chat[i];
-            if (msg.CreatedUtc < threshold)
-            {
-                if (msg.BubbleBrush is SolidColorBrush sb)
-                {
-                    var c = sb.Color;
-                    msg.BubbleBrush = new SolidColorBrush(Color.FromArgb((byte)128, c.R, c.G, c.B));
-                }
-                if (msg.Text.Length > 60) msg.Text = msg.Text[..60] + "…";
-            }
+            var age = (now - msg.CreatedUtc).TotalSeconds;
+            if (age <= 60) continue;
+
+            var t = (age - 60) / 10.0; // 0..1
+            if (t >= 1.0) { _chat.RemoveAt(i); continue; }
+
+            var k = Math.Clamp(t, 0, 1);
+            msg.Opacity = 1.0 - k;
+            msg.Scale = 1.0 - 0.2 * k;
         }
     }
 
-    // 🛠️ Ajout : bouton “Config”
     private void OpenConfig_Click(object sender, RoutedEventArgs e)
     {
         var cfg = _config.Get();
