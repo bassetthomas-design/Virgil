@@ -1,5 +1,6 @@
 using System.Text;
 using System.Threading.Tasks;
+using Virgil.Core.Services;
 
 namespace Virgil.Core.Services
 {
