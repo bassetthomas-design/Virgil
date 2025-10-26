@@ -9,25 +9,15 @@ namespace Virgil.App.Controls
     {
         public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is Color c)
-                return new SolidColorBrush(c);
-
+            if (value is Color c) return new SolidColorBrush(c);
             if (value is string s && (s.StartsWith("#") || s.Contains(",")))
             {
-                try
-                {
-                    var color = (Color)ColorConverter.ConvertFromString(s)!;
-                    return new SolidColorBrush(color);
-                }
+                try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(s)!); }
                 catch { }
             }
             return Brushes.Transparent;
         }
-
         public object? ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is SolidColorBrush b) return b.Color;
-            return null;
-        }
+            => value is SolidColorBrush b ? b.Color : null;
     }
 }
