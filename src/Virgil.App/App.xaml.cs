@@ -14,7 +14,7 @@ namespace Virgil.App
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             this.DispatcherUnhandledException += App_DispatcherUnhandledException;
             base.OnStartup(e);
-            // Pas besoin de new MainWindow().Show(); => StartupUri gère l’ouverture
+            // StartupUri=MainWindow.xaml (dans App.xaml) ouvre la fenêtre
         }
 
         private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
@@ -23,7 +23,13 @@ namespace Virgil.App
             {
                 string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Virgil_crash.log");
                 File.AppendAllText(path, BuildCrashText(e.Exception));
-                MessageBox.Show("Une erreur est survenue au démarrage. Un journal a été écrit dans Virgil_crash.log", "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
+                // 👉 Qualifier explicitement la MessageBox WPF
+                System.Windows.MessageBox.Show(
+                    "Une erreur est survenue au démarrage. Un journal a été écrit dans Virgil_crash.log",
+                    "Virgil",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
             }
             catch { }
             finally
