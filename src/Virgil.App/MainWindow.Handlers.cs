@@ -7,47 +7,25 @@ namespace Virgil.App
     {
         private void ProgressIndeterminate()
         {
-            try
-            {
-                ActionProgress.Visibility = Visibility.Visible;
-                ActionProgress.IsIndeterminate = true;
-            }
+            try { ActionProgress.Visibility = Visibility.Visible; ActionProgress.IsIndeterminate = true; }
             catch { }
         }
-
         private void ProgressDone()
         {
-            try
-            {
-                ActionProgress.IsIndeterminate = false;
-                ActionProgress.Visibility = Visibility.Collapsed;
-            }
+            try { ActionProgress.IsIndeterminate = false; ActionProgress.Visibility = Visibility.Collapsed; }
             catch { }
         }
-
         private void ProgressReset()
         {
-            try
-            {
-                ActionProgress.IsIndeterminate = false;
-                ActionProgress.Value = 0;
-                ActionProgress.Visibility = Visibility.Collapsed;
-            }
+            try { ActionProgress.IsIndeterminate = false; ActionProgress.Value = 0; ActionProgress.Visibility = Visibility.Collapsed; }
             catch { }
         }
 
         private async Task<string> CleanTempWithProgressInternal()
         {
             ProgressIndeterminate();
-            try
-            {
-                var result = await _cleaning.CleanTempAsync();
-                return result;
-            }
-            finally
-            {
-                ProgressDone();
-            }
+            try { return await _cleaning.CleanTempAsync(); }
+            finally { ProgressDone(); }
         }
     }
 }
