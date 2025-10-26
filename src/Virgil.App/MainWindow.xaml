@@ -4,110 +4,111 @@
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         Title="Virgil" Height="720" Width="1200"
         WindowStartupLocation="CenterScreen">
-  <Grid Background="#111">
+  <Grid Background="#0E1116">
     <Grid.RowDefinitions>
-      <RowDefinition Height="48"/>
+      <RowDefinition Height="56"/>
       <RowDefinition Height="*"/>
-      <RowDefinition Height="24"/>
+      <RowDefinition Height="28"/>
     </Grid.RowDefinitions>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="340"/>
+      <ColumnDefinition Width="360"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
 
     <!-- TOP BAR -->
-    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#222" Padding="10,0">
+    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#171B21" Padding="12,0">
       <DockPanel LastChildFill="True">
         <ToggleButton x:Name="SurveillanceToggle"
-                      Width="190" Height="32" Margin="0,8,10,8"
+                      Width="210" Height="36" Margin="0,10,10,10"
                       Content="Démarrer la surveillance"
-                      IsChecked="{Binding IsMonitoring, Mode=TwoWay}"
                       Checked="SurveillanceToggle_Checked"
                       Unchecked="SurveillanceToggle_Unchecked"/>
-        <Button Content="Config" Width="90" Height="32" Margin="0,8,10,8" Click="OpenConfig_Click"/>
+        <Button Content="Config" Width="100" Height="36" Margin="0,10,10,10"
+                Click="OpenConfig_Click"/>
         <TextBlock x:Name="ClockText" FontSize="16" Foreground="White"
                    HorizontalAlignment="Right" VerticalAlignment="Center"/>
       </DockPanel>
     </Border>
 
-    <!-- LEFT PANEL: Avatar + Stats -->
-    <StackPanel Grid.Row="1" Grid.Column="0" Margin="16">
-      <controls:VirgilAvatar x:Name="Avatar" Width="220" Height="220"/>
+    <!-- LEFT: avatar + stats + actions -->
+    <ScrollViewer Grid.Row="1" Grid.Column="0" Margin="16,16,8,16" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <controls:VirgilAvatar x:Name="Avatar" Width="220" Height="220" HorizontalAlignment="Center"/>
 
-      <GroupBox Header="Ressources" Foreground="White" BorderBrush="#444" Margin="0,16,0,0">
-        <StackPanel Margin="10">
-          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Foreground="White" Text="CPU"/>
-            <TextBlock x:Name="CpuBadge" Text="⚠" Foreground="Orange" Margin="6,0,0,0" Visibility="Collapsed"/>
-            <TextBlock x:Name="CpuBadgeHot" Text="🔥" Foreground="Red" Margin="6,0,0,0" Visibility="Collapsed"/>
+        <GroupBox Header="Ressources" Foreground="White" BorderBrush="#2A2F36" Margin="0,16,0,0">
+          <StackPanel Margin="10">
+            <!-- CPU -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Foreground="White" Text="CPU"/>
+              <TextBlock x:Name="CpuBadge" Text="⚠" Foreground="#F1C40F" Margin="6,0,0,0" Visibility="Collapsed"/>
+              <TextBlock x:Name="CpuBadgeHot" Text="🔥" Foreground="#E74C3C" Margin="6,0,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+            <ProgressBar x:Name="CpuBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
+            <TextBlock x:Name="CpuTemp" Foreground="#9aa4b1" FontSize="12"/>
+
+            <!-- GPU -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <TextBlock Foreground="White" Text="GPU"/>
+              <TextBlock x:Name="GpuBadge" Text="⚠" Foreground="#F1C40F" Margin="6,0,0,0" Visibility="Collapsed"/>
+              <TextBlock x:Name="GpuBadgeHot" Text="🔥" Foreground="#E74C3C" Margin="6,0,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+            <ProgressBar x:Name="GpuBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
+            <TextBlock x:Name="GpuTemp" Foreground="#9aa4b1" FontSize="12"/>
+
+            <!-- MEM -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <TextBlock Foreground="White" Text="Mémoire"/>
+              <TextBlock x:Name="MemBadge" Text="⚠" Foreground="#F1C40F" Margin="6,0,0,0" Visibility="Collapsed"/>
+              <TextBlock x:Name="MemBadgeHot" Text="🔥" Foreground="#E74C3C" Margin="6,0,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+            <ProgressBar x:Name="MemBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
+
+            <!-- DISK -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <TextBlock Foreground="White" Text="Disque"/>
+              <TextBlock x:Name="DiskBadge" Text="⚠" Foreground="#F1C40F" Margin="6,0,0,0" Visibility="Collapsed"/>
+              <TextBlock x:Name="DiskBadgeHot" Text="🔥" Foreground="#E74C3C" Margin="6,0,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+            <ProgressBar x:Name="DiskBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
+            <TextBlock x:Name="DiskTemp" Foreground="#9aa4b1" FontSize="12"/>
           </StackPanel>
-          <ProgressBar x:Name="CpuBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
-          <TextBlock x:Name="CpuTemp" Foreground="Gray" FontSize="12"/>
+        </GroupBox>
 
-          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-            <TextBlock Foreground="White" Text="GPU"/>
-            <TextBlock x:Name="GpuBadge" Text="⚠" Foreground="Orange" Margin="6,0,0,0" Visibility="Collapsed"/>
-            <TextBlock x:Name="GpuBadgeHot" Text="🔥" Foreground="Red" Margin="6,0,0,0" Visibility="Collapsed"/>
-          </StackPanel>
-          <ProgressBar x:Name="GpuBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
-          <TextBlock x:Name="GpuTemp" Foreground="Gray" FontSize="12"/>
+        <GroupBox Header="Actions" Foreground="White" BorderBrush="#2A2F36" Margin="0,16,0,0">
+          <UniformGrid Columns="2" Rows="2" Margin="10">
+            <Button Click="Action_MaintenanceComplete" Margin="6">Maintenance complète</Button>
+            <Button Click="Action_CleanTemp" Margin="6">Nettoyer TEMP</Button>
+            <Button Click="Action_CleanBrowsers" Margin="6">Nettoyer navigateurs</Button>
+            <Button Click="Action_UpdateAll" Margin="6">Tout mettre à jour</Button>
+          </UniformGrid>
+        </GroupBox>
+      </StackPanel>
+    </ScrollViewer>
 
-          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-            <TextBlock Foreground="White" Text="Mémoire"/>
-            <TextBlock x:Name="MemBadge" Text="⚠" Foreground="Orange" Margin="6,0,0,0" Visibility="Collapsed"/>
-            <TextBlock x:Name="MemBadgeHot" Text="🔥" Foreground="Red" Margin="6,0,0,0" Visibility="Collapsed"/>
-          </StackPanel>
-          <ProgressBar x:Name="MemBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
-
-          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-            <TextBlock Foreground="White" Text="Disque"/>
-            <TextBlock x:Name="DiskBadge" Text="⚠" Foreground="Orange" Margin="6,0,0,0" Visibility="Collapsed"/>
-            <TextBlock x:Name="DiskBadgeHot" Text="🔥" Foreground="Red" Margin="6,0,0,0" Visibility="Collapsed"/>
-          </StackPanel>
-          <ProgressBar x:Name="DiskBar" Height="16" Maximum="100" ToolTipService.ShowDuration="20000"/>
-          <TextBlock x:Name="DiskTemp" Foreground="Gray" FontSize="12"/>
-        </StackPanel>
-      </GroupBox>
-
-      <GroupBox Header="Actions" Foreground="White" BorderBrush="#444" Margin="0,16,0,0">
-        <UniformGrid Columns="2" Rows="2" Margin="10">
-          <Button Click="Action_MaintenanceComplete" Margin="6">Maintenance complète</Button>
-          <Button Click="Action_CleanTemp" Margin="6">Nettoyer TEMP</Button>
-          <Button Click="Action_CleanBrowsers" Margin="6">Nettoyer navigateurs</Button>
-          <Button Click="Action_UpdateAll" Margin="6">Tout mettre à jour</Button>
-        </UniformGrid>
-      </GroupBox>
-    </StackPanel>
-
-    <!-- RIGHT PANEL: Chat -->
-    <Grid Grid.Row="1" Grid.Column="1" Margin="16">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="*"/>
-        <RowDefinition Height="Auto"/>
-      </Grid.RowDefinitions>
-
-      <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+    <!-- RIGHT: chat stylé -->
+    <Grid Grid.Row="1" Grid.Column="1" Margin="8,16,16,16">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
         <ItemsControl x:Name="ChatList">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border CornerRadius="8" Padding="8" Margin="0,6" Background="{Binding BubbleBrush}">
-                <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap"/>
+              <Border Style="{StaticResource VirgilBubble}" Background="{Binding BubbleBrush}">
+                <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap" />
               </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
-
-      <DockPanel Grid.Row="1" Margin="0,8,0,0">
-        <TextBox x:Name="UserInput" Height="32" Margin="0,0,8,0"/>
-        <Button Width="120" Content="Envoyer" Click="SendButton_Click"/>
-      </DockPanel>
     </Grid>
 
-    <!-- STATUS BAR -->
-    <StatusBar Grid.Row="2" Grid.ColumnSpan="2">
+    <!-- STATUS -->
+    <StatusBar Grid.Row="2" Grid.ColumnSpan="2" Background="#171B21">
       <StatusBarItem>
-        <TextBlock x:Name="StatusText"/>
+        <TextBlock x:Name="StatusText" Foreground="White"/>
       </StatusBarItem>
       <StatusBarItem HorizontalAlignment="Right">
         <ProgressBar x:Name="ActionProgress" Width="140" Height="14" IsIndeterminate="True" Visibility="Collapsed"/>
