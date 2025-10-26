@@ -10,7 +10,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
   </ItemGroup>
