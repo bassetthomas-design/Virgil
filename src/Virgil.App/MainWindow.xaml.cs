@@ -3,9 +3,25 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Virgil.Core.Config;
-using Virgil.Core.Monitoring;
-using Virgil.Core.Services;
+
+// ==== Aliases pour éviter toute ambiguïté de types ====
+// Services (nettoyage/updates/defender/presets)
+using Cleaning       = Virgil.Core.Services.CleaningService;
+using Browsers       = Virgil.Core.Services.BrowserCleaningService;
+using ExtendedClean  = Virgil.Core.Services.ExtendedCleaningService;
+using AppsUpdate     = Virgil.Core.Services.ApplicationUpdateService;
+using WinUpdate      = Virgil.Core.Services.WindowsUpdateService;
+using DriverUpdate   = Virgil.Core.Services.DriverUpdateService;
+using DefenderUpdate = Virgil.Core.Services.DefenderUpdateService;
+using Presets        = Virgil.Core.Services.MaintenancePresetsService;
+
+// Config (seuils + fusion machine/user)
+using ConfigSvc   = Virgil.Core.Config.ConfigService;
+using Thresholds  = Virgil.Core.Config.Thresholds;
+
+// Monitoring (snapshot + service avancé)
+using AdvMon = Virgil.Core.Monitoring.AdvancedMonitoringService;
+using Snap   = Virgil.Core.Monitoring.HardwareSnapshot;
 
 namespace Virgil.App;
 
@@ -27,17 +43,17 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _survTimer  = new() { Interval = TimeSpan.FromSeconds(2) };
     private DateTime _nextPunch = DateTime.Now.AddMinutes(1);
 
-    // Services
-    private readonly AdvancedMonitoringService _monitor = new();
-    private readonly ConfigService _config = new();
-    private readonly CleaningService _cleaning = new();
-    private readonly BrowserCleaningService _browsers = new();
-    private readonly ExtendedCleaningService _extended = new();
-    private readonly ApplicationUpdateService _apps = new();
-    private readonly WindowsUpdateService _wu = new();
-    private readonly DriverUpdateService _drivers = new();
-    private readonly DefenderUpdateService _def = new();
-    private readonly MaintenancePresetsService _presets = new();
+    // Services (aliases ci-dessus)
+    private readonly AdvMon _monitor        = new();
+    private readonly ConfigSvc _config      = new();
+    private readonly Cleaning _cleaning     = new();
+    private readonly Browsers _browsers     = new();
+    private readonly ExtendedClean _extended= new();
+    private readonly AppsUpdate _apps       = new();
+    private readonly WinUpdate _wu          = new();
+    private readonly DriverUpdate _drivers  = new();
+    private readonly DefenderUpdate _def    = new();
+    private readonly Presets _presets       = new();
 
     private Thresholds T => _config.Get().Thresholds;
 
@@ -46,14 +62,14 @@ public partial class MainWindow : Window
         InitializeComponent();
         ChatList.ItemsSource = _chat;
 
-        // clock
+        // Horloge
         _clockTimer.Tick += (_, _) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
         _clockTimer.Start();
 
-        // surveillance
+        // Surveillance
         _survTimer.Tick += async (_, _) => await SurveillancePulseInternal();
 
-        // greeting
+        // Message d’accueil
         Say("Hello, c'est Virgil. Clique sur ‘Démarrer la surveillance’ pour commencer !", Mood.Neutral);
     }
 
@@ -91,7 +107,7 @@ public partial class MainWindow : Window
         try { Avatar?.SetMood(mood); } catch { }
     }
 
-    // ===== Events from XAML =====
+    // ===== Handlers XAML =====
     private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
     {
         _survTimer.Start();
@@ -105,6 +121,42 @@ public partial class MainWindow : Window
         _survTimer.Stop();
         StatusText.Text = "Surveillance: OFF";
         Say("Surveillance arrêtée.", Mood.Neutral);
+    }
+
+    private async System.Threading.Tasks.Task SurveillancePulseInternal()
+    {
+        try
+        {
+            var snap = await _monitor.GetSnapshotAsync();
+            StatusText.Text = $"Pulse @ {DateTime.Now:HH:mm:ss}";
+
+            EvaluateAndReact(snap);
+            if (DateTime.Now >= _nextPunch)
+            {
+                Say(GetRandomPunchline(), Mood.Playful);
+                PlanNextPunchline();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Erreur surveillance: " + ex.Message;
+        }
+    }
+
+    private void EvaluateAndReact(Snap snap)
+    {
+        bool alert = snap.CpuUsage > T.CpuAlert || snap.GpuUsage > T.GpuAlert || snap.MemUsage > T.MemAlert || snap.DiskUsage > T.DiskAlert
+                   || (!double.IsNaN(snap.CpuTemp) && snap.CpuTemp > T.CpuTempAlert)
+                   || (!double.IsNaN(snap.GpuTemp) && snap.GpuTemp > T.GpuTempAlert)
+                   || (!double.IsNaN(snap.DiskTemp) && snap.DiskTemp > T.DiskTempAlert);
+        bool warn  = !alert && (snap.CpuUsage > T.CpuWarn || snap.GpuUsage > T.GpuWarn || snap.MemUsage > T.MemWarn || snap.DiskUsage > T.DiskWarn
+                   || (!double.IsNaN(snap.CpuTemp) && snap.CpuTemp > T.CpuTempWarn)
+                   || (!double.IsNaN(snap.GpuTemp) && snap.GpuTemp > T.GpuTempWarn)
+                   || (!double.IsNaN(snap.DiskTemp) && snap.DiskTemp > T.DiskTempWarn));
+
+        if (alert) { SetAvatarMood("alert"); Say("🔥 Temp/charge élevée détectée !", Mood.Alert); }
+        else if (warn) { SetAvatarMood("playful"); }
+        else { SetAvatarMood("happy"); }
     }
 
     private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
@@ -181,42 +233,5 @@ public partial class MainWindow : Window
             Say(txt, Mood.Playful);
             UserInput.Clear();
         }
-    }
-
-    // ===== Monitoring pulse =====
-    private async System.Threading.Tasks.Task SurveillancePulseInternal()
-    {
-        try
-        {
-            var snap = await _monitor.GetSnapshotAsync();
-            StatusText.Text = $"Pulse @ {DateTime.Now:HH:mm:ss}";
-
-            EvaluateAndReact(snap);
-            if (DateTime.Now >= _nextPunch)
-            {
-                Say(GetRandomPunchline(), Mood.Playful);
-                PlanNextPunchline();
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = "Erreur surveillance: " + ex.Message;
-        }
-    }
-
-    private void EvaluateAndReact(HardwareSnapshot snap)
-    {
-        bool alert = snap.CpuUsage > T.CpuAlert || snap.GpuUsage > T.GpuAlert || snap.MemUsage > T.MemAlert || snap.DiskUsage > T.DiskAlert
-                   || (!double.IsNaN(snap.CpuTemp) && snap.CpuTemp > T.CpuTempAlert)
-                   || (!double.IsNaN(snap.GpuTemp) && snap.GpuTemp > T.GpuTempAlert)
-                   || (!double.IsNaN(snap.DiskTemp) && snap.DiskTemp > T.DiskTempAlert);
-        bool warn  = !alert && (snap.CpuUsage > T.CpuWarn || snap.GpuUsage > T.GpuWarn || snap.MemUsage > T.MemWarn || snap.DiskUsage > T.DiskWarn
-                   || (!double.IsNaN(snap.CpuTemp) && snap.CpuTemp > T.CpuTempWarn)
-                   || (!double.IsNaN(snap.GpuTemp) && snap.GpuTemp > T.GpuTempWarn)
-                   || (!double.IsNaN(snap.DiskTemp) && snap.DiskTemp > T.DiskTempWarn));
-
-        if (alert) { SetAvatarMood("alert"); Say("🔥 Temp/charge élevée détectée !", Mood.Alert); }
-        else if (warn) { SetAvatarMood("playful"); }
-        else { SetAvatarMood("happy"); }
     }
 }
