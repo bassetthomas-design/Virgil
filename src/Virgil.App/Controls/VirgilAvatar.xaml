@@ -4,36 +4,59 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             d:DesignWidth="220" d:DesignHeight="220">
-
+             d:DesignWidth="220"
+             d:DesignHeight="220">
   <UserControl.Resources>
+    <!-- Animation : halo qui pulse -->
     <Storyboard x:Key="MoodPulse">
-      <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity"
-                       From="0" To="0.6" AutoReverse="True" Duration="0:0:0.6"/>
-      <DoubleAnimation Storyboard.TargetName="GlowScale" Storyboard.TargetProperty="ScaleX"
-                       From="1" To="1.08" AutoReverse="True" Duration="0:0:0.6"/>
-      <DoubleAnimation Storyboard.TargetName="GlowScale" Storyboard.TargetProperty="ScaleY"
-                       From="1" To="1.08" AutoReverse="True" Duration="0:0:0.6"/>
+      <DoubleAnimation Storyboard.TargetName="Glow"
+                       Storyboard.TargetProperty="Opacity"
+                       From="0" To="0.6"
+                       Duration="0:0:0.6" AutoReverse="True"/>
+      <DoubleAnimation Storyboard.TargetName="GlowScale"
+                       Storyboard.TargetProperty="ScaleX"
+                       From="1" To="1.08"
+                       Duration="0:0:0.6" AutoReverse="True"/>
+      <DoubleAnimation Storyboard.TargetName="GlowScale"
+                       Storyboard.TargetProperty="ScaleY"
+                       From="1" To="1.08"
+                       Duration="0:0:0.6" AutoReverse="True"/>
     </Storyboard>
   </UserControl.Resources>
 
   <Grid>
-    <!-- Halo -->
-    <Ellipse x:Name="Glow" Width="220" Height="220" Opacity="0">
+    <!-- Halo (éventuel) -->
+    <Ellipse x:Name="Glow"
+             Width="220"
+             Height="220"
+             Opacity="0">
       <Ellipse.RenderTransform>
-        <ScaleTransform x:Name="GlowScale" CenterX="110" CenterY="110"/>
+        <ScaleTransform x:Name="GlowScale"
+                        CenterX="110"
+                        CenterY="110"/>
       </Ellipse.RenderTransform>
     </Ellipse>
 
-    <!-- Face -->
-    <Ellipse Width="200" Height="200"
+    <!-- Visage -->
+    <Ellipse Width="200"
+             Height="200"
              Fill="{Binding FaceFill, RelativeSource={RelativeSource AncestorType=UserControl}}"
-             Stroke="White" StrokeThickness="6"/>
+             Stroke="White"
+             StrokeThickness="6"/>
 
     <!-- Yeux -->
-    <Grid Width="120" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center">
-      <Ellipse Width="26" Height="26" Fill="White" HorizontalAlignment="Left"/>
-      <Ellipse Width="26" Height="26" Fill="White" HorizontalAlignment="Right"/>
+    <Grid Width="120"
+          Height="50"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Center">
+      <Ellipse Width="26"
+               Height="26"
+               Fill="White"
+               HorizontalAlignment="Left"/>
+      <Ellipse Width="26"
+               Height="26"
+               Fill="White"
+               HorizontalAlignment="Right"/>
     </Grid>
   </Grid>
 </UserControl>
