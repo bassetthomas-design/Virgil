@@ -1,3 +1,4 @@
+using Virgil.Core.Services; // <- nécessaire pour voir l’extension AnalyzeAndCleanAsync
 using System;
 using System.Collections.ObjectModel;
 using System.Windows;
