@@ -12,7 +12,7 @@ namespace Virgil.App
                 ActionProgress.Visibility = Visibility.Visible;
                 ActionProgress.IsIndeterminate = true;
             }
-            catch { /* UI not ready: safe no-op */ }
+            catch { }
         }
 
         private void ProgressDone()
@@ -22,7 +22,7 @@ namespace Virgil.App
                 ActionProgress.IsIndeterminate = false;
                 ActionProgress.Visibility = Visibility.Collapsed;
             }
-            catch { /* safe */ }
+            catch { }
         }
 
         private void ProgressReset()
@@ -33,10 +33,9 @@ namespace Virgil.App
                 ActionProgress.Value = 0;
                 ActionProgress.Visibility = Visibility.Collapsed;
             }
-            catch { /* safe */ }
+            catch { }
         }
 
-        // Wrapper utilisé par l’ancien code pour “Nettoyer TEMP” avec progression
         private async Task<string> CleanTempWithProgressInternal()
         {
             ProgressIndeterminate();
