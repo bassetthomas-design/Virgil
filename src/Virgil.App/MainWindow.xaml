@@ -90,23 +90,19 @@
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <ItemsControl x:Name="ChatList">
           <ItemsControl.ItemsPanel>
-            <<!-- …dans la zone RIGHT: chat stylé, remplace juste ItemTemplate par ceci -->
-<ItemsControl.ItemTemplate>
-  <DataTemplate>
-    <Border Style="{StaticResource VirgilBubble}"
-            Background="{Binding BubbleBrush}"
-            Opacity="{Binding Opacity}">
-      <Border.RenderTransform>
-        <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}"/>
-      </Border.RenderTransform>
-      <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap"/>
-    </Border>
-  </DataTemplate>
-</ItemsControl.ItemTemplate>
-
+            <ItemsPanelTemplate>
+              <StackPanel/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Style="{StaticResource VirgilBubble}" Background="{Binding BubbleBrush}">
-                <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap" />
+              <Border Style="{StaticResource VirgilBubble}"
+                      Background="{Binding BubbleBrush}"
+                      Opacity="{Binding Opacity}">
+                <Border.RenderTransform>
+                  <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}"/>
+                </Border.RenderTransform>
+                <TextBlock Text="{Binding Text}" Foreground="White" TextWrapping="Wrap"/>
               </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
