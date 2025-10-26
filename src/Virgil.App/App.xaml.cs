@@ -1,33 +1,56 @@
-#nullable enable
 using System;
 using System.IO;
+using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace Virgil.App
 {
     public partial class App : Application
     {
-        public App()
+        protected override void OnStartup(StartupEventArgs e)
         {
-            DispatcherUnhandledException += (_, e) =>
+            // Hooks de diagnostic très tôt
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            this.DispatcherUnhandledException += App_DispatcherUnhandledException;
+            base.OnStartup(e);
+            // Pas besoin de new MainWindow().Show(); => StartupUri gère l’ouverture
+        }
+
+        private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+        {
+            try
             {
-                try
-                {
-                    var dir = AppDomain.CurrentDomain.BaseDirectory;
-                    var file = Path.Combine(dir, "Virgil_crash.log");
-                    File.AppendAllText(file, $"[{DateTime.Now}] {e.Exception}\r\n");
-                }
-                catch { }
-
-                System.Windows.MessageBox.Show(
-                    "Une erreur interne est survenue lors du chargement de l’interface.\n" +
-                    "Un journal a été enregistré dans Virgil_crash.log.",
-                    "Virgil — erreur au démarrage",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Virgil_crash.log");
+                File.AppendAllText(path, BuildCrashText(e.Exception));
+                MessageBox.Show("Une erreur est survenue au démarrage. Un journal a été écrit dans Virgil_crash.log", "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch { }
+            finally
+            {
                 e.Handled = true;
-                Current.Shutdown();
-            };
+                Shutdown(-1);
+            }
+        }
+
+        private void CurrentDomain_UnhandledException(object? sender, UnhandledExceptionEventArgs e)
+        {
+            try
+            {
+                Exception ex = e.ExceptionObject as Exception ?? new Exception("Unknown unhandled exception");
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Virgil_crash.log");
+                File.AppendAllText(path, BuildCrashText(ex));
+            }
+            catch { }
+        }
+
+        private static string BuildCrashText(Exception ex)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("=== VIRGIL CRASH === " + DateTime.Now.ToString("u"));
+            sb.AppendLine(ex.ToString());
+            sb.AppendLine();
+            return sb.ToString();
         }
     }
 }
