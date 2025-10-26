@@ -1,11 +1,11 @@
-using Virgil.Core.Services; // <- nécessaire pour voir l’extension AnalyzeAndCleanAsync
 using System;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Virgil.Core.Services; // <- nécessaire pour voir l’extension AnalyzeAndCleanAsync
 
-// ==== Aliases pour éviter toute ambiguïté de types ====
+// ==== Aliases pour lever les ambiguïtés ====
 // Services (nettoyage/updates/defender/presets)
 using Cleaning       = Virgil.Core.Services.CleaningService;
 using Browsers       = Virgil.Core.Services.BrowserCleaningService;
@@ -36,15 +36,12 @@ public sealed class ChatMessage
 
 public partial class MainWindow : Window
 {
-    // UI data
     private readonly ObservableCollection<ChatMessage> _chat = new();
 
-    // Timers
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _survTimer  = new() { Interval = TimeSpan.FromSeconds(2) };
     private DateTime _nextPunch = DateTime.Now.AddMinutes(1);
 
-    // Services (aliases ci-dessus)
     private readonly AdvMon _monitor        = new();
     private readonly ConfigSvc _config      = new();
     private readonly Cleaning _cleaning     = new();
@@ -63,18 +60,14 @@ public partial class MainWindow : Window
         InitializeComponent();
         ChatList.ItemsSource = _chat;
 
-        // Horloge
         _clockTimer.Tick += (_, _) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
         _clockTimer.Start();
 
-        // Surveillance
         _survTimer.Tick += async (_, _) => await SurveillancePulseInternal();
 
-        // Message d’accueil
         Say("Hello, c'est Virgil. Clique sur ‘Démarrer la surveillance’ pour commencer !", Mood.Neutral);
     }
 
-    // ===== Chat helpers =====
     private void Say(string text, Mood mood)
     {
         Brush brush = mood switch
@@ -108,7 +101,6 @@ public partial class MainWindow : Window
         try { Avatar?.SetMood(mood); } catch { }
     }
 
-    // ===== Handlers XAML =====
     private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
     {
         _survTimer.Start();
@@ -192,7 +184,7 @@ public partial class MainWindow : Window
         Say("Nettoyage navigateurs…", Mood.Neutral);
         try
         {
-            var report = await _browsers.AnalyzeAndCleanAsync();
+            var report = await _browsers.AnalyzeAndCleanAsync(); // extension importée via using Virgil.Core.Services;
             Say(report, Mood.Neutral);
             StatusText.Text = "Nettoyage navigateurs terminé";
         }
