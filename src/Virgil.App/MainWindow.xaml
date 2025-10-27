@@ -5,122 +5,93 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         mc:Ignorable="d"
-        Title="Virgil"
-        Width="1280"
-        Height="760"
-        Background="#0E1116"
-        Foreground="White"
-        WindowStartupLocation="CenterScreen">
+        Title="Virgil" Height="640" Width="1024"
+        WindowStartupLocation="CenterScreen"
+        Background="#111316">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-  <Grid>
-    <!-- =========================
-         BARRE SUPÉRIEURE
-         ========================= -->
-    <DockPanel LastChildFill="False" Height="44" Background="#1A1D24">
-      <TextBlock x:Name="ClockText"
-                 Text="--:--:--"
-                 DockPanel.Dock="Left"
-                 VerticalAlignment="Center"
-                 Margin="16,0,0,0"
-                 FontSize="16"
-                 FontWeight="SemiBold"/>
-      <ToggleButton x:Name="SurveillanceToggle"
-                    Content="Démarrer la surveillance"
-                    DockPanel.Dock="Right"
-                    Margin="0,0,16,0"
-                    Padding="12,4"
-                    VerticalAlignment="Center"
-                    Checked="SurveillanceToggle_Checked"
-                    Unchecked="SurveillanceToggle_Unchecked"/>
-    </DockPanel>
+        <!-- Top Bar -->
+        <Border Grid.Row="0" Background="#1B1F24">
+            <DockPanel Margin="12,0" VerticalAlignment="Center">
+                <!-- Left: Clock text -->
+                <TextBlock x:Name="ClockText"
+                           DockPanel.Dock="Left"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           Foreground="#DDE3EA"
+                           Text="--:--:--"/>
+                <!-- Spacer -->
+                <DockPanel DockPanel.Dock="Left" Width="16"/>
 
-    <!-- =========================
-         CONTENU PRINCIPAL
-         ========================= -->
-    <Grid Margin="0,44,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="280"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="420"/>
-      </Grid.ColumnDefinitions>
+                <!-- Monitoring toggle -->
+                <ToggleButton x:Name="SurveillanceToggle"
+                              DockPanel.Dock="Left"
+                              Width="180" Height="28"
+                              VerticalAlignment="Center"
+                              Margin="0,0,8,0"
+                              Content="Démarrer la surveillance"
+                              Checked="SurveillanceToggle_Checked"
+                              Unchecked="SurveillanceToggle_Unchecked"/>
+                <!-- Spacer -->
+                <DockPanel DockPanel.Dock="Left" Width="8"/>
 
-      <!-- Panneau gauche (avatar + stats) -->
-      <Border Grid.Column="0" Background="#15191F" Padding="16">
-        <StackPanel>
-          <controls:VirgilAvatar x:Name="Avatar" Width="200" Height="200" HorizontalAlignment="Center"/>
+                <!-- Open Config -->
+                <Button x:Name="OpenConfigBtn"
+                        DockPanel.Dock="Left"
+                        Height="28"
+                        Content="Ouvrir la config"
+                        Click="OpenConfig_Click"/>
 
-          <Border BorderBrush="#2A2F36" BorderThickness="1" Margin="0,16,0,0" Padding="12">
-            <StackPanel>
-              <TextBlock Text="Surveillance" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
-              <TextBlock Text="CPU" FontSize="12"/>
-              <ProgressBar x:Name="CpuBar" Height="10" Maximum="100" Value="0" />
-              <TextBlock x:Name="CpuTempText" Text="CPU: -- °C" FontSize="11" Opacity="0.75" Margin="0,2,0,8"/>
+                <!-- Right side filler -->
+                <DockPanel DockPanel.Dock="Right" Width="0"/>
+            </DockPanel>
+        </Border>
 
-              <TextBlock Text="GPU" FontSize="12"/>
-              <ProgressBar x:Name="GpuBar" Height="10" Maximum="100" Value="0" />
-              <TextBlock x:Name="GpuTempText" Text="GPU: -- °C" FontSize="11" Opacity="0.75" Margin="0,2,0,8"/>
+        <!-- Content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-              <TextBlock Text="Mémoire" FontSize="12"/>
-              <ProgressBar x:Name="RamBar" Height="10" Maximum="100" Value="0" />
-              <TextBlock x:Name="RamText" Text="RAM: -- / --" FontSize="11" Opacity="0.75" Margin="0,2,0,8"/>
-
-              <TextBlock Text="Disque" FontSize="12"/>
-              <ProgressBar x:Name="DiskBar" Height="10" Maximum="100" Value="0" />
-              <TextBlock x:Name="DiskTempText" Text="Disque: -- °C" FontSize="11" Opacity="0.75" Margin="0,2,0,0"/>
-            </StackPanel>
-          </Border>
-
-          <!-- Seuils -->
-          <Border BorderBrush="#2A2F36" BorderThickness="1" Margin="0,12,0,0" Padding="12">
-            <StackPanel>
-              <TextBlock Text="Seuils (fusion machine + user)" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
-              <TextBlock x:Name="ThresholdsText" Text="Chargement..." FontSize="11" Opacity="0.9" TextWrapping="Wrap"/>
-              <Button x:Name="OpenConfigButton" Content="Ouvrir config" Margin="0,8,0,0" Click="OpenConfig_Click"/>
-            </StackPanel>
-          </Border>
-        </StackPanel>
-      </Border>
-
-      <!-- Zone centrale (chat) -->
-      <DockPanel Grid.Column="1" Background="#0E1116" LastChildFill="True">
-        <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
-          <ItemsControl x:Name="ChatList">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Border CornerRadius="6" Padding="8" Margin="6"
-                        Background="{Binding BubbleBrush}">
-                  <StackPanel>
-                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding Time}" FontSize="10" Opacity="0.7" HorizontalAlignment="Right"/>
-                  </StackPanel>
+            <!-- Left: Avatar -->
+            <StackPanel Grid.Column="0" Margin="16" VerticalAlignment="Top" >
+                <Border CornerRadius="12" Background="#15181D" Padding="12" >
+                    <!-- IMPORTANT: le nom expose 'AvatarControl' au code-behind -->
+                    <controls:VirgilAvatar x:Name="AvatarControl"
+                                           Width="280" Height="280"/>
                 </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
-      </DockPanel>
+            </StackPanel>
 
-      <!-- Panneau droit (actions + statut) -->
-      <Border Grid.Column="2" Background="#15191F" Padding="12">
-        <StackPanel>
-          <!-- ======== BOUTONS D’ACTION ======== -->
-          <GroupBox Header="Actions" Foreground="White" BorderBrush="#2A2F36" Margin="0,8,0,0">
-            <WrapPanel Margin="10" ItemWidth="240" ItemHeight="36">
-              <Button Click="Action_MaintenanceComplete" Margin="6">Maintenance complète</Button>
-              <Button Click="Action_CleanTemp"          Margin="6">Nettoyer TEMP</Button>
-              <Button Click="Action_CleanBrowsers"      Margin="6">Nettoyer navigateurs</Button>
-              <Button Click="Action_UpdateAll"          Margin="6">Tout mettre à jour</Button>
-              <Button Click="Action_Defender"           Margin="6">Sécurité (Defender)</Button>
-            </WrapPanel>
-          </GroupBox>
+            <!-- Right: Actions -->
+            <StackPanel Grid.Column="1" Margin="16" VerticalAlignment="Top" Spacing="8">
+                <TextBlock Text="Actions rapides" FontSize="16" FontWeight="Bold" Foreground="#E6EDF3" Margin="0,0,0,8"/>
 
-          <!-- ======== STATUT ======== -->
-          <StackPanel Margin="0,10,0,0">
-            <ProgressBar x:Name="ActionProgress" Height="8" IsIndeterminate="False" Visibility="Collapsed"/>
-            <TextBlock x:Name="StatusText" Text="Prêt." FontSize="13" Margin="0,6,0,0"/>
-          </StackPanel>
-        </StackPanel>
-      </Border>
+                <!-- Les 5 boutons correspondant EXACTEMENT aux handlers attendus -->
+                <Button Height="36" Content="Maintenance complète"
+                        Click="Action_MaintenanceComplete"/>
+                <Button Height="36" Content="Nettoyage fichiers temporaires"
+                        Click="Action_CleanTemp"/>
+                <Button Height="36" Content="Nettoyage navigateurs"
+                        Click="Action_CleanBrowsers"/>
+                <Button Height="36" Content="Mises à jour (winget + jeux + applis)"
+                        Click="Action_UpdateAll"/>
+                <Button Height="36" Content="Microsoft Defender (scan & update)"
+                        Click="Action_Defender"/>
+
+                <!-- Placeholders pour indicateurs (optionnel, non bloquant build) -->
+                <Border Margin="0,16,0,0" Background="#15181D" CornerRadius="8" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="Statuts" Foreground="#AABACB"/>
+                        <TextBlock x:Name="StatusText" Text="En attente..."
+                                   Foreground="#DDE3EA" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
     </Grid>
-  </Grid>
 </Window>
