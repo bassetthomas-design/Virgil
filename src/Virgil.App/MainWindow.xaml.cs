@@ -6,8 +6,8 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Virgil.App.Controls;
-using Virgil.Core.Config;      // <-- VirgilConfig est ici
-using Virgil.Core.Services;    // <-- Services (Cleaning, Updates, etc.)
+using Virgil.Core.Config;      // VirgilConfig est ici
+using Virgil.Core.Services;    // Services (Cleaning, Updates, etc.)
 
 namespace Virgil.App
 {
@@ -19,16 +19,16 @@ namespace Virgil.App
         private readonly DispatcherTimer _banterTimer = new();   // punchlines 1–6 min
 
         // Services (Core)
-        private readonly ConfigService _config                 = new();
-        private readonly MaintenancePresetsService _presets    = new();
+        private readonly ConfigService _config                          = new();
+        private readonly MaintenancePresetsService _presets             = new();
         private readonly Virgil.Core.Services.CleaningService _cleaning = new(); // évite ambigüité
-        private readonly BrowserCleaningService _browsers      = new();
-        private readonly ExtendedCleaningService _extended     = new();
-        private readonly ApplicationUpdateService _apps        = new();
-        private readonly DriverUpdateService _drivers          = new();
-        private readonly WindowsUpdateService _wu              = new();
-        private readonly DefenderUpdateService _def            = new();
-        private readonly AdvancedMonitoringService _monitor    = new();
+        private readonly BrowserCleaningService _browsers               = new();
+        private readonly ExtendedCleaningService _extended              = new();
+        private readonly ApplicationUpdateService _apps                 = new();
+        private readonly DriverUpdateService _drivers                   = new();
+        private readonly WindowsUpdateService _wu                       = new();
+        private readonly DefenderUpdateService _def                     = new();
+        private readonly AdvancedMonitoringService _monitor             = new();
 
         // Chat
         private readonly ObservableCollection<ChatItem> _chat = new();
@@ -46,10 +46,10 @@ namespace Virgil.App
             // Config (fusion machine + user)
             _cfg = _config.LoadMerged();
             ThresholdsText.Text =
-                $"CPU warn/alert: {_cfg.Thresholds.Cpu.Warn}% / {_cfg.Thresholds.Cpu.Alert}%\n" +
-                $"RAM warn/alert: {_cfg.Thresholds.Ram.Warn}% / {_cfg.Thresholds.Ram.Alert}%\n" +
-                $"Temp CPU warn/alert: {_cfg.Thresholds.Temps.Cpu.Warn}°C / {_cfg.Thresholds.Temps.Cpu.Alert}°C\n" +
-                $"Temp GPU warn/alert: {_cfg.Thresholds.Temps.Gpu.Warn}°C / {_cfg.Thresholds.Temps.Gpu.Alert}°C\n" +
+                $"CPU warn/alert: {_cfg.Thresholds.Cpu.Warn}% / {_cfg.Thresholds.Cpu.Alert}%{Environment.NewLine}" +
+                $"RAM warn/alert: {_cfg.Thresholds.Ram.Warn}% / {_cfg.Thresholds.Ram.Alert}%{Environment.NewLine}" +
+                $"Temp CPU warn/alert: {_cfg.Thresholds.Temps.Cpu.Warn}°C / {_cfg.Thresholds.Temps.Cpu.Alert}°C{Environment.NewLine}" +
+                $"Temp GPU warn/alert: {_cfg.Thresholds.Temps.Gpu.Warn}°C / {_cfg.Thresholds.Temps.Gpu.Alert}°C{Environment.NewLine}" +
                 $"Temp Disk warn/alert: {_cfg.Thresholds.Temps.Disk.Warn}°C / {_cfg.Thresholds.Temps.Disk.Alert}°C";
 
             InitTimers();
@@ -250,6 +250,69 @@ namespace Virgil.App
                 var sig = await _def.UpdateSignaturesAsync();
                 var scn = await _def.QuickScanAsync();       // FullScanAsync() possible si tu préfères
 
-                var all = string.Join("\n", new[] { a, d, s, dl, ins, sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                var nl  = Environment.NewLine;
+                var all = string.Join(nl, new[] { a, d, s, dl, ins, sig, scn }
+                                           .Where(x => !string.IsNullOrWhiteSpace(x)));
+
                 Say(Summarize(all), Mood.Neutral);
-                StatusText.Text = "Mises à jour complè
+                StatusText.Text = "Mises à jour complètes effectuées";
+                Say("✅ Tout est à jour !", Mood.Happy);
+            }
+            catch (Exception ex)
+            {
+                Say("❌ " + ex.Message, Mood.Alert);
+                StatusText.Text = "Erreur mise à jour";
+            }
+            finally { HideProgress(); }
+        }
+
+        private async void Action_Defender(object sender, RoutedEventArgs e)
+        {
+            ShowProgress();
+            Say("Sécurité Windows Defender…", Mood.Neutral);
+            try
+            {
+                var sig = await _def.UpdateSignaturesAsync();
+                var scn = await _def.QuickScanAsync();
+
+                var nl  = Environment.NewLine;
+                var msg = string.Join(nl, new[] { sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+                Say(Summarize(msg), Mood.Neutral);
+                StatusText.Text = "Defender: signatures à jour + scan terminé";
+            }
+            catch (Exception ex)
+            {
+                Say("❌ Defender: " + ex.Message, Mood.Alert);
+                StatusText.Text = "Erreur Defender";
+            }
+            finally { HideProgress(); }
+        }
+
+        // =========================
+        //   Config
+        // =========================
+        private void OpenConfig_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var where = _config.GetConfigLocations();
+                var nl = Environment.NewLine;
+                Say("Config machine: " + where.Machine + nl + "Config user: " + where.User, Mood.Neutral);
+            }
+            catch (Exception ex)
+            {
+                Say("Config: " + ex.Message, Mood.Alert);
+            }
+        }
+    }
+
+    public enum Mood { Neutral, Happy, Alert, Playful }
+
+    public sealed class ChatItem
+    {
+        public string Text { get; set; } = "";
+        public string Time { get; set; } = "";
+        public Brush BubbleBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x22, 0x2A, 0x32));
+    }
+}
