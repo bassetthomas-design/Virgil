@@ -6,35 +6,35 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Virgil.App.Controls;
-using Virgil.Core;
-using Virgil.Core.Services;
+using Virgil.Core.Config;      // <-- VirgilConfig est ici
+using Virgil.Core.Services;    // <-- Services (Cleaning, Updates, etc.)
 
 namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
         // Timers
-        private readonly DispatcherTimer _clockTimer = new();
-        private readonly DispatcherTimer _survTimer  = new();   // monitoring pulse
-        private readonly DispatcherTimer _banterTimer = new();  // punchlines 1-6 min
+        private readonly DispatcherTimer _clockTimer  = new();
+        private readonly DispatcherTimer _survTimer   = new();   // monitoring pulse
+        private readonly DispatcherTimer _banterTimer = new();   // punchlines 1–6 min
 
-        // Services (Core) — on force le namespace 'Virgil.Core.Services' pour éviter toute ambiguïté
-        private readonly ConfigService _config = new();
-        private readonly MaintenancePresetsService _presets = new();
-        private readonly Virgil.Core.Services.CleaningService _cleaning = new();
-        private readonly BrowserCleaningService _browsers = new();
-        private readonly ExtendedCleaningService _extended = new();
-        private readonly ApplicationUpdateService _apps = new();
-        private readonly DriverUpdateService _drivers = new();
-        private readonly WindowsUpdateService _wu = new();
-        private readonly DefenderUpdateService _def = new();
-        private readonly AdvancedMonitoringService _monitor = new();
+        // Services (Core)
+        private readonly ConfigService _config                 = new();
+        private readonly MaintenancePresetsService _presets    = new();
+        private readonly Virgil.Core.Services.CleaningService _cleaning = new(); // évite ambigüité
+        private readonly BrowserCleaningService _browsers      = new();
+        private readonly ExtendedCleaningService _extended     = new();
+        private readonly ApplicationUpdateService _apps        = new();
+        private readonly DriverUpdateService _drivers          = new();
+        private readonly WindowsUpdateService _wu              = new();
+        private readonly DefenderUpdateService _def            = new();
+        private readonly AdvancedMonitoringService _monitor    = new();
 
         // Chat
         private readonly ObservableCollection<ChatItem> _chat = new();
 
-        // Seuils (fusion machine + user)
-        private Virgil.Core.VirgilConfig _cfg;
+        // Config fusionnée (machine + user)
+        private VirgilConfig _cfg;
 
         public MainWindow()
         {
@@ -74,7 +74,6 @@ namespace Virgil.App
                 if (SurveillanceToggle.IsChecked == true)
                 {
                     Say(PunchlineService.RandomBanter(), Mood.Playful);
-                    // prochaine occurrence 1-6 min
                     _banterTimer.Interval = TimeSpan.FromMinutes(Random.Shared.Next(1, 7));
                 }
             };
@@ -82,14 +81,14 @@ namespace Virgil.App
         }
 
         // =========================
-        //   UI helpers
+        //   UI helpers (renommés)
         // =========================
-        private void ProgressIndeterminate()
+        private void ShowProgress()
         {
             ActionProgress.Visibility = Visibility.Visible;
             ActionProgress.IsIndeterminate = true;
         }
-        private void ProgressCollapsed()
+        private void HideProgress()
         {
             ActionProgress.IsIndeterminate = false;
             ActionProgress.Visibility = Visibility.Collapsed;
@@ -102,7 +101,6 @@ namespace Virgil.App
 
         private void Say(string text, Mood mood)
         {
-            // Choix couleur de bulle selon humeur
             var brush = mood switch
             {
                 Mood.Happy   => new SolidColorBrush(Color.FromRgb(0x22,0x4E,0x2E)),  // vert sombre
@@ -118,12 +116,9 @@ namespace Virgil.App
                 Time = DateTime.Now.ToString("HH:mm:ss")
             });
 
-            // Pilotage avatar
             SetAvatarMood(mood.ToString().ToLower());
-            // Auto-scroll en bas
             ChatScroll.ScrollToEnd();
 
-            // Minifie l’historique si trop long
             while (_chat.Count > 200) _chat.RemoveAt(0);
         }
 
@@ -153,7 +148,6 @@ namespace Virgil.App
                 DiskTempText.Text = snap.Disk.TemperatureC.HasValue ? $"Disque: {snap.Disk.TemperatureC.Value:F0} °C" : "Disque: -- °C";
                 RamText.Text      = $"RAM: {snap.Ram.UsedGiB:F1} / {snap.Ram.TotalGiB:F1} GiB";
 
-                // Alerte si dépassement
                 if (snap.Cpu.TemperatureC >= _cfg.Thresholds.Temps.Cpu.Alert ||
                     snap.Gpu.TemperatureC >= _cfg.Thresholds.Temps.Gpu.Alert ||
                     snap.Disk.TemperatureC >= _cfg.Thresholds.Temps.Disk.Alert)
@@ -192,11 +186,11 @@ namespace Virgil.App
         // =========================
         private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            ProgressIndeterminate();
+            ShowProgress();
             Say("Maintenance complète…", Mood.Neutral);
             try
             {
-                var log = await _presets.FullAsync(); // enchaîne cleaning/browsers/extended/winget/WU/drivers/defender
+                var log = await _presets.FullAsync();
                 Say(Summarize(log), Mood.Neutral);
                 StatusText.Text = "Maintenance complète effectuée";
             }
@@ -205,12 +199,12 @@ namespace Virgil.App
                 Say("❌ " + ex.Message, Mood.Alert);
                 StatusText.Text = "Erreur maintenance";
             }
-            finally { ProgressCollapsed(); }
+            finally { HideProgress(); }
         }
 
         private async void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            ProgressIndeterminate();
+            ShowProgress();
             Say("Nettoyage des fichiers temporaires…", Mood.Neutral);
             try
             {
@@ -222,12 +216,12 @@ namespace Virgil.App
             {
                 Say("❌ " + ex.Message, Mood.Alert);
             }
-            finally { ProgressCollapsed(); }
+            finally { HideProgress(); }
         }
 
         private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            ProgressIndeterminate();
+            ShowProgress();
             Say("Nettoyage des navigateurs…", Mood.Neutral);
             try
             {
@@ -239,82 +233,23 @@ namespace Virgil.App
             {
                 Say("❌ " + ex.Message, Mood.Alert);
             }
-            finally { ProgressCollapsed(); }
+            finally { HideProgress(); }
         }
 
         private async void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            ProgressIndeterminate();
+            ShowProgress();
             Say("Mise à jour globale du système…", Mood.Neutral);
             try
             {
-                // Apps/jeux (winget)
-                var a = await _apps.UpgradeAllAsync(); // --all --include-unknown --silent (implémenté côté service)
-                // Pilotes
-                var d = await _drivers.UpgradeDriversAsync();
-                // Windows Update
-                var s  = await _wu.StartScanAsync();
-                var dl = await _wu.StartDownloadAsync();
-                var ins= await _wu.StartInstallAsync();
-                // Defender
-                var sig  = await _def.UpdateSignaturesAsync();
-                var scan = await _def.QuickScanAsync();
+                var a   = await _apps.UpgradeAllAsync();     // winget --all --include-unknown --silent (impl. service)
+                var d   = await _drivers.UpgradeDriversAsync();
+                var s   = await _wu.StartScanAsync();
+                var dl  = await _wu.StartDownloadAsync();
+                var ins = await _wu.StartInstallAsync();
+                var sig = await _def.UpdateSignaturesAsync();
+                var scn = await _def.QuickScanAsync();       // FullScanAsync() possible si tu préfères
 
-                var all = string.Join("\n", new[] { a, d, s, dl, ins, sig, scan }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                var all = string.Join("\n", new[] { a, d, s, dl, ins, sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
                 Say(Summarize(all), Mood.Neutral);
-                StatusText.Text = "Mises à jour complètes effectuées";
-                Say("✅ Tout est à jour !", Mood.Happy);
-            }
-            catch (Exception ex)
-            {
-                Say("❌ " + ex.Message, Mood.Alert);
-                StatusText.Text = "Erreur mise à jour";
-            }
-            finally { ProgressCollapsed(); }
-        }
-
-        private async void Action_Defender(object sender, RoutedEventArgs e)
-        {
-            ProgressIndeterminate();
-            Say("Sécurité Windows Defender…", Mood.Neutral);
-            try
-            {
-                var sig = await _def.UpdateSignaturesAsync(); // MAJ signatures
-                var scan = await _def.QuickScanAsync();       // Quick scan (remplaçable par FullScanAsync)
-                Say(Summarize(string.Join("\n", new[] { sig, scan })), Mood.Neutral);
-                StatusText.Text = "Defender: signatures à jour + scan terminé";
-            }
-            catch (Exception ex)
-            {
-                Say("❌ Defender: " + ex.Message, Mood.Alert);
-                StatusText.Text = "Erreur Defender";
-            }
-            finally { ProgressCollapsed(); }
-        }
-
-        // =========================
-        //   Config
-        // =========================
-        private void OpenConfig_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var where = _config.GetConfigLocations();
-                Say("Config machine: " + where.Machine + "\nConfig user: " + where.User, Mood.Neutral);
-            }
-            catch (Exception ex)
-            {
-                Say("Config: " + ex.Message, Mood.Alert);
-            }
-        }
-    }
-
-    public enum Mood { Neutral, Happy, Alert, Playful }
-
-    public sealed class ChatItem
-    {
-        public string Text { get; set; } = "";
-        public string Time { get; set; } = "";
-        public Brush BubbleBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x22, 0x2A, 0x32));
-    }
-}
+                StatusText.Text = "Mises à jour complè
