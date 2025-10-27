@@ -1,4 +1,3 @@
-// src/Virgil.App/MainWindow.xaml.cs
 using System;
 using System.Windows;
 using System.Windows.Threading;
@@ -7,96 +6,92 @@ namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
-        // === Champs privés (UN SEUL exemplaire) ===
-        private readonly DispatcherTimer _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        // Timers uniques (NE PAS redéclarer ailleurs)
+        private readonly DispatcherTimer _clockTimer;
+        private readonly DispatcherTimer _survTimer;
 
-        // === Constructeur (UN SEUL) ===
+        // États
+        private bool _monitoring = false;
+
         public MainWindow()
         {
             InitializeComponent();
 
-            // Horloge en direct (top bar)
-            _clockTimer.Tick += (_, __) =>
-            {
-                try { ClockText?.SetCurrentValue(System.Windows.Controls.TextBlock.TextProperty, DateTime.Now.ToString("HH:mm:ss")); }
-                catch { /* ignore UI timing errors */ }
+            // Horloge en haut (tick chaque seconde)
+            _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _clockTimer.Tick += (_, __) => {
+                try
+                {
+                    // Si tu as un TextBlock nommé ClockText dans le XAML:
+                    // ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+                    // Si c’est du binding, laisse vide.
+                }
+                catch { /* safe */ }
             };
             _clockTimer.Start();
 
-            // Texte d’état par défaut
-            TrySetStatus("Prêt.");
-            // Avatar à l’humeur "idle"
-            SetAvatarMood("idle");
+            // Surveillance (tick toutes les 5s par défaut)
+            _survTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _survTimer.Tick += (_, __) =>
+            {
+                if (!_monitoring) return;
+                try
+                {
+                    // TODO: Appeler ici ton service de monitoring et pousser les valeurs dans les bindings
+                    // ex: AdvancedMonitoringService.Snapshot() -> met à jour VM/Bindings
+                    // Et déclencher les messages "pulse" si ON (via Say(...))
+                }
+                catch { /* safe */ }
+            };
+            // Ne pas démarrer ici : on ne démarre que quand le toggle est ON
         }
 
-        // === Utilitaires UI sûrs ===
-        private void TrySetStatus(string message)
-        {
-            try { StatusText?.SetCurrentValue(System.Windows.Controls.TextBlock.TextProperty, message); }
-            catch { /* ignore */ }
-        }
-
+        // Garde ce helper UNE seule fois dans tout le projet
         private void SetAvatarMood(string mood)
         {
-            try { AvatarControl?.SetMood(mood); } catch { /* ignore */ }
+            try
+            {
+                // N'appelle pas de type fort si tu n'as pas la ref du contrôle:
+                // on tente via réflexion (évite un using/dep manquante)
+                var field = GetType().GetField("AvatarControl",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                var ctrl = field?.GetValue(this);
+                var m = ctrl?.GetType().GetMethod("SetMood");
+                m?.Invoke(ctrl, new object[] { mood });
+            }
+            catch { /* safe */ }
         }
 
-        // === Handlers top-bar Surveillance (référencés par MainWindow.xaml) ===
-        private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
+        // Petit utilitaire chat côté fenêtre (dump texte)
+        // Garde juste la signature; implémente selon ton UI (ItemsControl, ListBox, etc.)
+        private void Say(string text, string mood = "neutral")
         {
-            TrySetStatus("Surveillance : ON");
+            try
+            {
+                // TODO: ajoute "text" à ta zone de chat et adapte la couleur/Style selon "mood"
+                // Ex: ChatList.Items.Add(new ChatMessage { Text = text, Mood = mood, When = DateTime.Now });
+                // Pense à binder l’UI à une ObservableCollection si tu as un VM.
+            }
+            catch { /* safe */ }
+        }
+
+        // Facultatif : expose un démarrage/arrêt programmatique du monitoring
+        private void StartMonitoring()
+        {
+            if (_monitoring) return;
+            _monitoring = true;
+            _survTimer.Start();
             SetAvatarMood("focused");
-            // TODO: démarrer le monitoring temps réel ici (timers, services, etc.)
+            Say("Surveillance démarrée.", "info");
         }
 
-        private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
+        private void StopMonitoring()
         {
-            TrySetStatus("Surveillance : OFF");
+            if (!_monitoring) return;
+            _monitoring = false;
+            _survTimer.Stop();
             SetAvatarMood("idle");
-            // TODO: arrêter le monitoring temps réel ici
-        }
-
-        // === Handler bouton configuration ===
-        private void OpenConfig_Click(object sender, RoutedEventArgs e)
-        {
-            TrySetStatus("Ouverture de la configuration...");
-            // TODO: ouvrir l’UI/éditeur pour la config (machine + user)
-        }
-
-        // === Actions (boutons dans le panneau d’outils) ===
-        private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
-        {
-            TrySetStatus("Maintenance complète en cours...");
-            SetAvatarMood("working");
-            // TODO: enchaîner nettoyage, updates, défense, etc.
-        }
-
-        private void Action_CleanTemp(object sender, RoutedEventArgs e)
-        {
-            TrySetStatus("Nettoyage des fichiers temporaires...");
-            SetAvatarMood("working");
-            // TODO: appeler ton service de nettoyage (temp)
-        }
-
-        private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
-        {
-            TrySetStatus("Nettoyage navigateurs...");
-            SetAvatarMood("working");
-            // TODO: appeler ton service de nettoyage (browsers)
-        }
-
-        private void Action_UpdateAll(object sender, RoutedEventArgs e)
-        {
-            TrySetStatus("Mises à jour en cours...");
-            SetAvatarMood("working");
-            // TODO: enchaîner winget/choco/driver/game/etc. suivant ta logique
-        }
-
-        private void Action_Defender(object sender, RoutedEventArgs e)
-        {
-            TrySetStatus("Analyse Microsoft Defender...");
-            SetAvatarMood("working");
-            // TODO: lancer l’analyse Defender / sécurité
+            Say("Surveillance arrêtée.", "info");
         }
     }
 }
