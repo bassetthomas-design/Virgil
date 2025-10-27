@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -7,62 +6,65 @@ using System.Text.Json;
 namespace Virgil.App
 {
     /// <summary>
-    /// Charge des phrases (punchlines/humeurs/infos) depuis JSON :
-    ///  - %ProgramData%/Virgil/punchlines.json
-    ///  - %AppData%/Virgil/punchlines.user.json  (override/ajouts)
-    /// Fallback : liste intégrée.
-    /// Format JSON attendu : { "lines": ["texte 1", "texte 2", ...] }
+    /// Charge des punchlines depuis %ProgramData%\Virgil\chat.json et %AppData%\Virgil\chat.json
+    /// (l'utilisateur override la machine). Fallback sur une petite liste embarquée.
     /// </summary>
-    public sealed class PunchlineService
+    public static class PunchlineService
     {
-        private readonly string _machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "punchlines.json");
-        private readonly string _user    = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "punchlines.user.json");
+        private static readonly string MachinePath =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "chat.json");
+        private static readonly string UserPath =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "chat.json");
 
-        private readonly string[] _fallback = new[]
+        private static readonly string[] Fallback =
         {
-            "Je veille. Rien ne m’échappe.",
-            "Hydrate-toi, pas que le CPU.",
-            "Un petit nettoyage et ça repart.",
-            "Winget est prêt à tout casser (dans le bon sens).",
-            "Je fais tourner les ventilos… dans ma tête.",
-            "Si ça rame, c’est pas un bateau.",
-            "On efface et on recommence ?"
+            "Routine OK. Tous les systèmes au vert.",
+            "Je veille sur tes températures.",
+            "Un petit nettoyage plus tard ?",
+            "Winget est prêt à upgrader ce qui traîne.",
+            "Si tu chauffes, je te préviens. Promis.",
+            "Un scan Defender rapide ?"
         };
 
-        private string[] _lines;
+        private static string[] _lines = Fallback;
 
-        public PunchlineService()
+        static PunchlineService()
         {
-            _lines = Load();
-            if (_lines.Length == 0) _lines = _fallback;
+            TryLoad();
         }
 
-        private string[] Load()
+        private static void TryLoad()
         {
-            var all = new List<string>();
-            foreach (var path in new[] { _machine, _user })
+            try
             {
-                try
-                {
-                    if (File.Exists(path))
-                    {
-                        var json = JsonSerializer.Deserialize<PunchlinesFile>(File.ReadAllText(path),
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        if (json?.Lines != null) all.AddRange(json.Lines.Where(s => !string.IsNullOrWhiteSpace(s)));
-                    }
-                }
-                catch { /* safe */ }
+                string[] machine = File.Exists(MachinePath)
+                    ? ReadJsonLines(MachinePath)
+                    : Array.Empty<string>();
+                string[] user = File.Exists(UserPath)
+                    ? ReadJsonLines(UserPath)
+                    : Array.Empty<string>();
+
+                // Fusion machine + user (user override = on met d'abord machine, puis user)
+                var merged = machine.Concat(user).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToArray();
+                if (merged.Length > 0) _lines = merged;
             }
-            return all.Distinct().ToArray();
+            catch
+            {
+                // garde Fallback
+            }
         }
 
-        public string Random()
+        private static string[] ReadJsonLines(string path)
         {
-            if (_lines.Length == 0) _lines = _fallback;
-            var r = new Random();
-            return _lines[r.Next(_lines.Length)];
+            using var fs = File.OpenRead(path);
+            var arr = JsonSerializer.Deserialize<string[]>(fs);
+            return arr ?? Array.Empty<string>();
         }
 
-        private sealed class PunchlinesFile { public string[]? Lines { get; set; } }
+        public static string RandomBanter()
+        {
+            if (_lines.Length == 0) return Fallback[Random.Shared.Next(Fallback.Length)];
+            return _lines[Random.Shared.Next(_lines.Length)];
+        }
     }
 }
