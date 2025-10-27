@@ -18,10 +18,10 @@ namespace Virgil.App
         private readonly DispatcherTimer _survTimer  = new();   // monitoring pulse
         private readonly DispatcherTimer _banterTimer = new();  // punchlines 1-6 min
 
-        // Services (Core)
+        // Services (Core) — on force le namespace 'Virgil.Core.Services' pour éviter toute ambiguïté
         private readonly ConfigService _config = new();
         private readonly MaintenancePresetsService _presets = new();
-        private readonly CleaningService _cleaning = new();
+        private readonly Virgil.Core.Services.CleaningService _cleaning = new();
         private readonly BrowserCleaningService _browsers = new();
         private readonly ExtendedCleaningService _extended = new();
         private readonly ApplicationUpdateService _apps = new();
@@ -34,7 +34,7 @@ namespace Virgil.App
         private readonly ObservableCollection<ChatItem> _chat = new();
 
         // Seuils (fusion machine + user)
-        private VirgilConfig _cfg;
+        private Virgil.Core.VirgilConfig _cfg;
 
         public MainWindow()
         {
@@ -105,10 +105,10 @@ namespace Virgil.App
             // Choix couleur de bulle selon humeur
             var brush = mood switch
             {
-                Mood.Happy  => new SolidColorBrush(Color.FromRgb(0x22,0x4E,0x2E)),  // vert sombre
-                Mood.Alert  => new SolidColorBrush(Color.FromRgb(0x4E,0x22,0x22)),  // rouge sombre
-                Mood.Playful=> new SolidColorBrush(Color.FromRgb(0x2E,0x2A,0x4E)),  // violet sombre
-                _           => new SolidColorBrush(Color.FromRgb(0x22,0x2A,0x32))
+                Mood.Happy   => new SolidColorBrush(Color.FromRgb(0x22,0x4E,0x2E)),  // vert sombre
+                Mood.Alert   => new SolidColorBrush(Color.FromRgb(0x4E,0x22,0x22)),  // rouge sombre
+                Mood.Playful => new SolidColorBrush(Color.FromRgb(0x2E,0x2A,0x4E)),  // violet sombre
+                _            => new SolidColorBrush(Color.FromRgb(0x22,0x2A,0x32))
             };
 
             _chat.Add(new ChatItem
@@ -253,11 +253,11 @@ namespace Virgil.App
                 // Pilotes
                 var d = await _drivers.UpgradeDriversAsync();
                 // Windows Update
-                var s = await _wu.StartScanAsync();
+                var s  = await _wu.StartScanAsync();
                 var dl = await _wu.StartDownloadAsync();
-                var ins = await _wu.StartInstallAsync();
+                var ins= await _wu.StartInstallAsync();
                 // Defender
-                var sig = await _def.UpdateSignaturesAsync();
+                var sig  = await _def.UpdateSignaturesAsync();
                 var scan = await _def.QuickScanAsync();
 
                 var all = string.Join("\n", new[] { a, d, s, dl, ins, sig, scan }.Where(x => !string.IsNullOrWhiteSpace(x)));
@@ -316,22 +316,5 @@ namespace Virgil.App
         public string Text { get; set; } = "";
         public string Time { get; set; } = "";
         public Brush BubbleBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x22, 0x2A, 0x32));
-    }
-
-    // Punchlines (périodiques 1–6 min quand surveillance ON)
-    internal static class PunchlineService
-    {
-        private static readonly string[] Lines = new[]
-        {
-            "Routine ok. Tous les systèmes au vert.",
-            "Je veille sur tes températures.",
-            "Un petit nettoyage plus tard ?",
-            "Winget est prêt à upgrader ce qui traîne.",
-            "Si tu chauffes, je te préviens. Promis.",
-            "Un scan Defender rapide ?"
-        };
-
-        public static string RandomBanter()
-            => Lines[Random.Shared.Next(Lines.Length)];
     }
 }
