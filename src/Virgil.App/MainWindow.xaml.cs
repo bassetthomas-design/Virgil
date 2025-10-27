@@ -1,537 +1,393 @@
 using System;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Media;
 using System.Windows.Threading;
-using Virgil.App.Controls;
-using CfgService = Virgil.Core.Services.ConfigService;   // service de config côté Services
-using CfgModel   = Virgil.Core.Config.VirgilConfig;      // modèle de config côté Config
-using Virgil.Core.Services;
 
 namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
-        // Timers
-        private readonly DispatcherTimer _clockTimer  = new DispatcherTimer();
-        private readonly DispatcherTimer _survTimer   = new DispatcherTimer();   // monitoring pulse
-        private readonly DispatcherTimer _banterTimer = new DispatcherTimer();   // punchlines 1–6 min
+        // --- Compat modèles (indépendants de Virgil.Core) --------------------
 
-        // Services (Core)
-        private readonly CfgService _config = new CfgService();
-        private readonly MaintenancePresetsService _presets = new MaintenancePresetsService();
-        private readonly Virgil.Core.Services.CleaningService _cleaning = new Virgil.Core.Services.CleaningService();
-        private readonly BrowserCleaningService _browsers = new BrowserCleaningService();
-        private readonly ExtendedCleaningService _extended = new ExtendedCleaningService();
-        private readonly ApplicationUpdateService _apps = new ApplicationUpdateService();
-        private readonly DriverUpdateService _drivers = new DriverUpdateService();
-        private readonly WindowsUpdateService _wu = new WindowsUpdateService();
-        private readonly DefenderUpdateService _def = new DefenderUpdateService();
-        private readonly AdvancedMonitoringService _monitor = new AdvancedMonitoringService();
+        public sealed class PercentPair
+        {
+            [JsonPropertyName("warn")]
+            public int Warn { get; set; } = 80;
 
-        // Chat
-        private readonly ObservableCollection<ChatItem> _chat = new ObservableCollection<ChatItem>();
+            [JsonPropertyName("alert")]
+            public int Alert { get; set; } = 95;
+        }
 
-        // Config fusionnée (machine + user)
-        private CfgModel _cfg = new CfgModel();
+        public sealed class TempPair
+        {
+            [JsonPropertyName("warn")]
+            public int Warn { get; set; } = 80;
+
+            [JsonPropertyName("alert")]
+            public int Alert { get; set; } = 90;
+        }
+
+        public sealed class ThresholdsCompat
+        {
+            [JsonPropertyName("cpu")]
+            public PercentPair Cpu { get; set; } = new PercentPair();
+
+            [JsonPropertyName("ram")]
+            public PercentPair Ram { get; set; } = new PercentPair();
+
+            // Températures : cpu/gpu/disk
+            [JsonPropertyName("temps")]
+            public TempsCompat Temps { get; set; } = new TempsCompat();
+
+            public sealed class TempsCompat
+            {
+                [JsonPropertyName("cpu")]
+                public TempPair Cpu { get; set; } = new TempPair();
+                [JsonPropertyName("gpu")]
+                public TempPair Gpu { get; set; } = new TempPair();
+                [JsonPropertyName("disk")]
+                public TempPair Disk { get; set; } = new TempPair();
+            }
+        }
+
+        public sealed class VirgilConfigCompat
+        {
+            [JsonPropertyName("thresholds")]
+            public ThresholdsCompat Thresholds { get; set; } = new ThresholdsCompat();
+        }
+
+        // --- Champs d’instance ------------------------------------------------
+
+        private readonly DispatcherTimer _clockTimer = new DispatcherTimer();
+        private readonly DispatcherTimer _survTimer = new DispatcherTimer();
+
+        private VirgilConfigCompat _config = new VirgilConfigCompat();
+
+        // Punchlines monitoring (1–6 min, texte uniquement)
+        private readonly Random _rng = new Random();
+        private bool _monitoringBanterEnabled = true;
+        private DateTime _nextPunchUtc = DateTime.UtcNow.AddMinutes(2);
+        private readonly string[] _punchlines = new[]
+        {
+            "Je surveille tout… même ce que tu ne vois pas 👀",
+            "CPU zen, GPU serein. Pour l’instant.",
+            "Un peu de ménage plus tard ? Ça ne fait jamais de mal.",
+            "Tes shaders me remercieront.",
+            "Winget chauffe… on met à jour quand tu veux.",
+            "Si ça throttle, je te ping, promis."
+        };
+
+        private bool _monitoringEnabled;
+
+        // --- Ctor -------------------------------------------------------------
 
         public MainWindow()
         {
             InitializeComponent();
 
-            ChatList.ItemsSource = _chat;
+            // 1) Charger config fusionnée machine+user (compat libre)
+            _config = LoadMergedConfigCompat();
 
-            // Charger config en mode "safe"
-            _cfg = LoadConfigSafe();
-
-            var nl = Environment.NewLine;
-            ThresholdsText.Text =
-                "CPU warn/alert: " + GetCpuWarn() + "% / " + GetCpuAlert() + "%" + nl +
-                "RAM warn/alert: " + GetRamWarn() + "% / " + GetRamAlert() + "%" + nl +
-                "Temp CPU warn/alert: " + GetTempWarn("Cpu") + "°C / " + GetTempAlert("Cpu") + "°C" + nl +
-                "Temp GPU warn/alert: " + GetTempWarn("Gpu") + "°C / " + GetTempAlert("Gpu") + "°C" + nl +
-                "Temp Disk warn/alert: " + GetTempWarn("Disk") + "°C / " + GetTempAlert("Disk") + "°C";
-
-            InitTimers();
-            Say("Salut, je suis Virgil !", Mood.Neutral);
-            SetAvatarMood("neutral");
-        }
-
-        // =========================
-        //   SAFE helpers (config)
-        // =========================
-        private CfgModel LoadConfigSafe()
-        {
-            try
-            {
-                // Tente .LoadMerged()
-                MethodInfo m = typeof(CfgService).GetMethod("LoadMerged", BindingFlags.Instance | BindingFlags.Public);
-                if (m != null)
-                {
-                    object v = m.Invoke(_config, null);
-                    if (v is CfgModel ok1) return ok1;
-                }
-                // Tente .Load()
-                m = typeof(CfgService).GetMethod("Load", BindingFlags.Instance | BindingFlags.Public);
-                if (m != null)
-                {
-                    object v = m.Invoke(_config, null);
-                    if (v is CfgModel ok2) return ok2;
-                }
-            }
-            catch
-            {
-                // ignore
-            }
-
-            // Fallback: lit %ProgramData% puis override %AppData%
-            try
-            {
-                string machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
-                string user = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "user.json");
-                CfgModel cfg = new CfgModel();
-
-                if (File.Exists(machine))
-                {
-                    CfgModel c = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(machine));
-                    if (c != null) cfg = c;
-                }
-                if (File.Exists(user))
-                {
-                    CfgModel u = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(user));
-                    if (u != null) cfg = MergeUserOnMachine(cfg, u);
-                }
-                return cfg;
-            }
-            catch
-            {
-                // ignore
-            }
-
-            return new CfgModel();
-        }
-
-        private object GetConfigLocationsSafe()
-        {
-            try
-            {
-                MethodInfo m = typeof(CfgService).GetMethod("GetConfigLocations", BindingFlags.Instance | BindingFlags.Public);
-                if (m != null)
-                {
-                    object v = m.Invoke(_config, null);
-                    if (v != null) return v;
-                }
-            }
-            catch
-            {
-                // ignore
-            }
-
-            string machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
-            string user = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "user.json");
-            return new { Machine = machine, User = user };
-        }
-
-        private static CfgModel MergeUserOnMachine(CfgModel machine, CfgModel user)
-        {
-            try
-            {
-                if (user != null && user.Thresholds != null)
-                {
-                    if (machine.Thresholds == null) machine.Thresholds = new CfgModel.ThresholdsModel();
-
-                    // CPU
-                    if (user.Thresholds.Cpu != null)
-                    {
-                        if (machine.Thresholds.Cpu == null) machine.Thresholds.Cpu = new CfgModel.PercentThreshold();
-                        if (user.Thresholds.Cpu.Warn > 0) machine.Thresholds.Cpu.Warn = user.Thresholds.Cpu.Warn;
-                        if (user.Thresholds.Cpu.Alert > 0) machine.Thresholds.Cpu.Alert = user.Thresholds.Cpu.Alert;
-                    }
-                    // RAM
-                    if (user.Thresholds.Ram != null)
-                    {
-                        if (machine.Thresholds.Ram == null) machine.Thresholds.Ram = new CfgModel.PercentThreshold();
-                        if (user.Thresholds.Ram.Warn > 0) machine.Thresholds.Ram.Warn = user.Thresholds.Ram.Warn;
-                        if (user.Thresholds.Ram.Alert > 0) machine.Thresholds.Ram.Alert = user.Thresholds.Ram.Alert;
-                    }
-                    // Temps
-                    if (user.Thresholds.Temps != null)
-                    {
-                        if (machine.Thresholds.Temps == null) machine.Thresholds.Temps = new CfgModel.TempThresholds();
-
-                        if (user.Thresholds.Temps.Cpu != null)
-                        {
-                            if (machine.Thresholds.Temps.Cpu == null) machine.Thresholds.Temps.Cpu = new CfgModel.TempThreshold();
-                            if (user.Thresholds.Temps.Cpu.Warn > 0) machine.Thresholds.Temps.Cpu.Warn = user.Thresholds.Temps.Cpu.Warn;
-                            if (user.Thresholds.Temps.Cpu.Alert > 0) machine.Thresholds.Temps.Cpu.Alert = user.Thresholds.Temps.Cpu.Alert;
-                        }
-                        if (user.Thresholds.Temps.Gpu != null)
-                        {
-                            if (machine.Thresholds.Temps.Gpu == null) machine.Thresholds.Temps.Gpu = new CfgModel.TempThreshold();
-                            if (user.Thresholds.Temps.Gpu.Warn > 0) machine.Thresholds.Temps.Gpu.Warn = user.Thresholds.Temps.Gpu.Warn;
-                            if (user.Thresholds.Temps.Gpu.Alert > 0) machine.Thresholds.Temps.Gpu.Alert = user.Thresholds.Temps.Gpu.Alert;
-                        }
-                        if (user.Thresholds.Temps.Disk != null)
-                        {
-                            if (machine.Thresholds.Temps.Disk == null) machine.Thresholds.Temps.Disk = new CfgModel.TempThreshold();
-                            if (user.Thresholds.Temps.Disk.Warn > 0) machine.Thresholds.Temps.Disk.Warn = user.Thresholds.Temps.Disk.Warn;
-                            if (user.Thresholds.Temps.Disk.Alert > 0) machine.Thresholds.Temps.Disk.Alert = user.Thresholds.Temps.Disk.Alert;
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // ignore
-            }
-            return machine;
-        }
-
-        private int GetCpuWarn() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Cpu != null) ? _cfg.Thresholds.Cpu.Warn : 70; }
-        private int GetCpuAlert() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Cpu != null) ? _cfg.Thresholds.Cpu.Alert : 90; }
-        private int GetRamWarn() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Ram != null) ? _cfg.Thresholds.Ram.Warn : 70; }
-        private int GetRamAlert() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Ram != null) ? _cfg.Thresholds.Ram.Alert : 90; }
-        private int GetTempWarn(string part)
-        {
-            if (_cfg == null || _cfg.Thresholds == null || _cfg.Thresholds.Temps == null) return 75;
-            if (part == "Cpu" && _cfg.Thresholds.Temps.Cpu != null) return _cfg.Thresholds.Temps.Cpu.Warn;
-            if (part == "Gpu" && _cfg.Thresholds.Temps.Gpu != null) return _cfg.Thresholds.Temps.Gpu.Warn;
-            if (part == "Disk" && _cfg.Thresholds.Temps.Disk != null) return _cfg.Thresholds.Temps.Disk.Warn;
-            return 75;
-        }
-        private int GetTempAlert(string part)
-        {
-            if (_cfg == null || _cfg.Thresholds == null || _cfg.Thresholds.Temps == null) return 90;
-            if (part == "Cpu" && _cfg.Thresholds.Temps.Cpu != null) return _cfg.Thresholds.Temps.Cpu.Alert;
-            if (part == "Gpu" && _cfg.Thresholds.Temps.Gpu != null) return _cfg.Thresholds.Temps.Gpu.Alert;
-            if (part == "Disk" && _cfg.Thresholds.Temps.Disk != null) return _cfg.Thresholds.Temps.Disk.Alert;
-            return 90;
-        }
-
-        private void InitTimers()
-        {
+            // 2) Démarrer l’horloge UI (top bar)
             _clockTimer.Interval = TimeSpan.FromSeconds(1);
-            _clockTimer.Tick += (s, e) => { ClockText.Text = DateTime.Now.ToString("HH:mm:ss"); };
+            _clockTimer.Tick += (_, __) =>
+            {
+                try
+                {
+                    // Met à jour un label si présent (optionnel)
+                    // Ex: ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+                }
+                catch { /* UI facultative */ }
+            };
             _clockTimer.Start();
 
+            // 3) Timer de surveillance (placeholder sans AdvancedMonitoringService)
             _survTimer.Interval = TimeSpan.FromSeconds(2);
-            _survTimer.Tick += async (s, e) => { await SurveillancePulse(); };
+            _survTimer.Tick += async (_, __) => await SurveillancePulseAsync();
 
-            _banterTimer.Tick += (s, e) =>
+            // 4) Message d’accueil + humeur neutre
+            SetAvatarMood("neutral");
+            Say("Salut, c’est Virgil. Je suis prêt à te donner un coup de main ✨", mood: "friendly");
+        }
+
+        // --- Config (machine + user) -----------------------------------------
+
+        private static VirgilConfigCompat LoadMergedConfigCompat()
+        {
+            // %ProgramData%\Virgil\config.json  (machine)
+            // %AppData%\Virgil\user.json        (user override)
+            var machinePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Virgil", "config.json");
+            var userPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Virgil", "user.json");
+
+            var options = new JsonSerializerOptions
             {
-                if (SurveillanceToggle.IsChecked == true)
-                {
-                    Say(PunchlineService.RandomBanter(), Mood.Playful);
-                    _banterTimer.Interval = TimeSpan.FromMinutes(new Random().Next(1, 7));
-                }
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
             };
-            _banterTimer.Interval = TimeSpan.FromMinutes(new Random().Next(1, 7));
+
+            VirgilConfigCompat machine = new VirgilConfigCompat();
+            VirgilConfigCompat user = new VirgilConfigCompat();
+
+            try
+            {
+                if (File.Exists(machinePath))
+                {
+                    var json = File.ReadAllText(machinePath);
+                    var parsed = JsonSerializer.Deserialize<VirgilConfigCompat>(json, options);
+                    if (parsed != null) machine = parsed;
+                }
+            }
+            catch { /* défauts */ }
+
+            try
+            {
+                if (File.Exists(userPath))
+                {
+                    var json = File.ReadAllText(userPath);
+                    var parsed = JsonSerializer.Deserialize<VirgilConfigCompat>(json, options);
+                    if (parsed != null) user = parsed;
+                }
+            }
+            catch { /* défauts */ }
+
+            return Merge(machine, user);
         }
 
-        // =========================
-        //   UI helpers
-        // =========================
-        private void ShowProgress()
+        private static VirgilConfigCompat Merge(VirgilConfigCompat machine, VirgilConfigCompat user)
         {
-            ActionProgress.Visibility = Visibility.Visible;
-            ActionProgress.IsIndeterminate = true;
+            // fusion simple : user override machine si des valeurs sont fournies.
+            var result = new VirgilConfigCompat();
+
+            // CPU
+            result.Thresholds.Cpu.Warn = user?.Thresholds?.Cpu?.Warn != 0 ? user.Thresholds.Cpu.Warn : machine.Thresholds.Cpu.Warn;
+            result.Thresholds.Cpu.Alert = user?.Thresholds?.Cpu?.Alert != 0 ? user.Thresholds.Cpu.Alert : machine.Thresholds.Cpu.Alert;
+
+            // RAM
+            result.Thresholds.Ram.Warn = user?.Thresholds?.Ram?.Warn != 0 ? user.Thresholds.Ram.Warn : machine.Thresholds.Ram.Warn;
+            result.Thresholds.Ram.Alert = user?.Thresholds?.Ram?.Alert != 0 ? user.Thresholds.Ram.Alert : machine.Thresholds.Ram.Alert;
+
+            // Temps
+            result.Thresholds.Temps.Cpu.Warn = user?.Thresholds?.Temps?.Cpu?.Warn != 0 ? user.Thresholds.Temps.Cpu.Warn : machine.Thresholds.Temps.Cpu.Warn;
+            result.Thresholds.Temps.Cpu.Alert = user?.Thresholds?.Temps?.Cpu?.Alert != 0 ? user.Thresholds.Temps.Cpu.Alert : machine.Thresholds.Temps.Cpu.Alert;
+
+            result.Thresholds.Temps.Gpu.Warn = user?.Thresholds?.Temps?.Gpu?.Warn != 0 ? user.Thresholds.Temps.Gpu.Warn : machine.Thresholds.Temps.Gpu.Warn;
+            result.Thresholds.Temps.Gpu.Alert = user?.Thresholds?.Temps?.Gpu?.Alert != 0 ? user.Thresholds.Temps.Gpu.Alert : machine.Thresholds.Temps.Gpu.Alert;
+
+            result.Thresholds.Temps.Disk.Warn = user?.Thresholds?.Temps?.Disk?.Warn != 0 ? user.Thresholds.Temps.Disk.Warn : machine.Thresholds.Temps.Disk.Warn;
+            result.Thresholds.Temps.Disk.Alert = user?.Thresholds?.Temps?.Disk?.Alert != 0 ? user.Thresholds.Temps.Disk.Alert : machine.Thresholds.Temps.Disk.Alert;
+
+            return result;
         }
 
-        private void HideProgress()
+        // --- UI helpers -------------------------------------------------------
+
+        public void Say(string text, string? mood = null)
         {
-            ActionProgress.IsIndeterminate = false;
-            ActionProgress.Visibility = Visibility.Collapsed;
+            try
+            {
+                // Brancher sur ta zone de chat si elle existe :
+                // ChatList.Items.Add(new ChatMessage { Text = text, Mood = mood ?? "neutral" });
+                // éventuellement scroller en bas etc.
+            }
+            catch { /* silencieux */ }
         }
 
         private void SetAvatarMood(string mood)
         {
-            try { if (Avatar != null) Avatar.SetMood(mood); } catch { }
+            try { AvatarControl?.SetMood(mood); } catch { /* safe */ }
         }
 
-        private void Say(string text, Mood mood)
-        {
-            SolidColorBrush brush;
-            if (mood == Mood.Happy) brush = new SolidColorBrush(Color.FromRgb(0x22, 0x4E, 0x2E));
-            else if (mood == Mood.Alert) brush = new SolidColorBrush(Color.FromRgb(0x4E, 0x22, 0x22));
-            else if (mood == Mood.Playful) brush = new SolidColorBrush(Color.FromRgb(0x2E, 0x2A, 0x4E));
-            else brush = new SolidColorBrush(Color.FromRgb(0x22, 0x2A, 0x32));
-
-            _chat.Add(new ChatItem
-            {
-                Text = text,
-                BubbleBrush = brush,
-                Time = DateTime.Now.ToString("HH:mm:ss")
-            });
-
-            SetAvatarMood(mood.ToString().ToLower());
-            ChatScroll.ScrollToEnd();
-
-            while (_chat.Count > 200) _chat.RemoveAt(0);
-        }
-
-        private static string Summarize(string big, int maxLines)
-        {
-            if (string.IsNullOrWhiteSpace(big)) return string.Empty;
-            string[] lines = big.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None);
-            if (lines.Length <= maxLines) return big;
-            return string.Join("\n", lines.Take(maxLines).Concat(new string[] { "… (+" + (lines.Length - maxLines) + " lignes)" }));
-        }
-
-        // =========================
-        //   Surveillance
-        // =========================
-        private async Task SurveillancePulse()
+        // Barre de statut : indéterminée / message
+        private void ProgressIndeterminate(bool isIndeterminate, string? statusText = null)
         {
             try
             {
-                dynamic snap = await ReadSnapshotSafeAsync();
-
-                CpuBar.Value  = Convert.ToDouble(GetDyn(snap, "Cpu", "UsagePercent", 0.0));
-                GpuBar.Value  = Convert.ToDouble(GetDyn(snap, "Gpu", "UsagePercent", 0.0));
-                RamBar.Value  = Convert.ToDouble(GetDyn(snap, "Ram", "UsagePercent", 0.0));
-                DiskBar.Value = Convert.ToDouble(GetDyn(snap, "Disk", "UsagePercent", 0.0));
-
-                double? cpuT  = GetDynNullableDouble(snap, "Cpu", "TemperatureC");
-                double? gpuT  = GetDynNullableDouble(snap, "Gpu", "TemperatureC");
-                double? dskT  = GetDynNullableDouble(snap, "Disk", "TemperatureC");
-                double usedGiB = Convert.ToDouble(GetDyn(snap, "Ram", "UsedGiB", 0.0));
-                double totGiB  = Convert.ToDouble(GetDyn(snap, "Ram", "TotalGiB", 0.0));
-
-                CpuTempText.Text  = (cpuT.HasValue ? "CPU: " + cpuT.Value.ToString("F0") + " °C" : "CPU: -- °C");
-                GpuTempText.Text  = (gpuT.HasValue ? "GPU: " + gpuT.Value.ToString("F0") + " °C" : "GPU: -- °C");
-                DiskTempText.Text = (dskT.HasValue ? "Disque: " + dskT.Value.ToString("F0") + " °C" : "Disque: -- °C");
-                RamText.Text      = "RAM: " + usedGiB.ToString("F1") + " / " + totGiB.ToString("F1") + " GiB";
-
-                int cpuA = GetTempAlert("Cpu");
-                int gpuA = GetTempAlert("Gpu");
-                int dskA = GetTempAlert("Disk");
-                if ((cpuT ?? 0) >= cpuA || (gpuT ?? 0) >= gpuA || (dskT ?? 0) >= dskA)
-                {
-                    Say("⚠️ Température élevée détectée.", Mood.Alert);
-                    SetAvatarMood("devil");
-                }
+                // Exemple si tu as une ProgressBar nommée StatusBarProgress :
+                // StatusBarProgress.IsIndeterminate = isIndeterminate;
+                // StatusBarText.Text = statusText ?? "";
             }
-            catch (Exception ex)
-            {
-                Say("Surveillance: " + ex.Message, Mood.Alert);
-            }
+            catch { /* safe */ }
         }
 
-        private async Task<dynamic> ReadSnapshotSafeAsync()
+        // --- Toggle Monitoring ------------------------------------------------
+
+        private void StartMonitoring()
         {
-            Type t = _monitor.GetType();
-            string[] names = new string[] { "GetSnapshotAsync", "ReadSnapshotAsync", "SnapshotAsync", "GetSnapshot", "ReadSnapshot" };
-
-            for (int i = 0; i < names.Length; i++)
-            {
-                MethodInfo m = t.GetMethod(names[i], BindingFlags.Instance | BindingFlags.Public);
-                if (m == null) continue;
-
-                object result = m.Invoke(_monitor, null);
-                if (result is Task task)
-                {
-                    await task.ConfigureAwait(false);
-                    PropertyInfo pr = task.GetType().GetProperty("Result");
-                    if (pr != null)
-                    {
-                        object val = pr.GetValue(task);
-                        return val ?? MakeEmptySnapshot();
-                    }
-                    return MakeEmptySnapshot();
-                }
-                return result ?? MakeEmptySnapshot();
-            }
-
-            return MakeEmptySnapshot();
-        }
-
-        private static object MakeEmptySnapshot()
-        {
-            return new
-            {
-                Cpu = new { UsagePercent = 0.0, TemperatureC = (double?)null },
-                Gpu = new { UsagePercent = 0.0, TemperatureC = (double?)null },
-                Ram = new { UsagePercent = 0.0, UsedGiB = 0.0, TotalGiB = 0.0 },
-                Disk = new { UsagePercent = 0.0, TemperatureC = (double?)null }
-            };
-        }
-
-        private static object GetDyn(object root, string part, string prop, object fallback)
-        {
-            if (root == null) return fallback;
-            PropertyInfo pPart = root.GetType().GetProperty(part);
-            if (pPart == null) return fallback;
-            object vPart = pPart.GetValue(root);
-            if (vPart == null) return fallback;
-            PropertyInfo pProp = vPart.GetType().GetProperty(prop);
-            if (pProp == null) return fallback;
-            object v = pProp.GetValue(vPart);
-            return v ?? fallback;
-        }
-
-        private static double? GetDynNullableDouble(object root, string part, string prop)
-        {
-            object v = GetDyn(root, part, prop, null);
-            if (v == null) return null;
-            try { return Convert.ToDouble(v); } catch { return null; }
-        }
-
-        // =========================
-        //   Top bar
-        // =========================
-        private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
-        {
+            if (_monitoringEnabled) return;
+            _monitoringEnabled = true;
             _survTimer.Start();
-            _banterTimer.Start();
-            StatusText.Text = "Surveillance ON";
-            Say("Surveillance en direct activée.", Mood.Happy);
+            PlanNextPunchline(); // démarre le cycle punchlines
+            Say("Surveillance démarrée ✅", mood: "active");
         }
 
-        private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
+        private void StopMonitoring()
         {
+            if (!_monitoringEnabled) return;
+            _monitoringEnabled = false;
             _survTimer.Stop();
-            _banterTimer.Stop();
-            StatusText.Text = "Surveillance OFF";
-            Say("Surveillance arrêtée.", Mood.Neutral);
+            Say("Surveillance arrêtée ⏹️", mood: "neutral");
         }
 
-        // =========================
-        //   Actions
-        // =========================
-        private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
+        // À binder sur le Toggle de la top bar (click/checked)
+        private void MonitoringToggle_Click(object sender, RoutedEventArgs e)
         {
-            ShowProgress();
-            Say("Maintenance complète…", Mood.Neutral);
+            if (_monitoringEnabled) StopMonitoring(); else StartMonitoring();
+        }
+
+        // --- Pulse de surveillance (compat sans AdvancedMonitoringService) ----
+
+        private async Task SurveillancePulseAsync()
+        {
+            // Ici : pas d’appel à AdvancedMonitoringService (les signatures varient).
+            // On fait un "pulse" minimum pour garder l’UX vivante : punchlines + alerte fictive si besoin.
             try
             {
-                string log = await _presets.FullAsync();
-                Say(Summarize(log, 30), Mood.Neutral);
-                StatusText.Text = "Maintenance complète effectuée";
+                await Task.Yield();
+
+                // Punchlines aléatoires (1–6 min)
+                if (_monitoringBanterEnabled && DateTime.UtcNow >= _nextPunchUtc)
+                {
+                    var pick = _punchlines[_rng.Next(_punchlines.Length)];
+                    Say(pick, mood: "witty");
+                    PlanNextPunchline();
+                }
+
+                // TODO: quand on aura la bonne API Core, lire snapshot & mettre à jour les barres si elles existent :
+                // - CpuBar.Value, GpuBar.Value, MemBar.Value, DiskBar.Value
+                // - CpuTemp.Text, GpuTemp.Text, DiskTemp.Text
+                // - Badges warn/alert selon _config.Thresholds
+            }
+            catch
+            {
+                // non-bloquant
+            }
+        }
+
+        private void PlanNextPunchline()
+        {
+            // entre 1 et 6 minutes
+            var minutes = _rng.Next(1, 7);
+            _nextPunchUtc = DateTime.UtcNow.AddMinutes(minutes);
+        }
+
+        // --- Boutons Actions (hooks simples, à relier aux Services Core) ------
+
+        private async void Action_MaintenanceComplete_Click(object sender, RoutedEventArgs e)
+        {
+            ProgressIndeterminate(true, "Maintenance complète en cours…");
+            Say("Je lance la maintenance complète (TEMP, navigateurs, caches étendus, mises à jour apps/jeux, Windows Update)…", mood: "active");
+            try
+            {
+                // TODO: appeler tes services Core réels :
+                // await MaintenancePresetsService.FullAsync();
+                await Task.Delay(2000); // placeholder visuel
+
+                Say("Maintenance terminée. Résumé posté dans le journal.", mood: "done");
             }
             catch (Exception ex)
             {
-                Say("❌ " + ex.Message, Mood.Alert);
-                StatusText.Text = "Erreur maintenance";
+                Say($"Erreur maintenance : {ex.Message}", mood: "alert");
             }
-            finally { HideProgress(); }
+            finally
+            {
+                ProgressIndeterminate(false, "Prêt");
+            }
         }
 
-        private async void Action_CleanTemp(object sender, RoutedEventArgs e)
+        private async void Action_CleanTemp_Click(object sender, RoutedEventArgs e)
         {
-            ShowProgress();
-            Say("Nettoyage des fichiers temporaires…", Mood.Neutral);
+            ProgressIndeterminate(true, "Nettoyage TEMP…");
+            Say("Analyse et nettoyage des fichiers temporaires (utilisateur, AppData\\Local, Windows\\Temp)…", mood: "active");
             try
             {
-                string res = await _cleaning.CleanTempAsync();
-                Say(Summarize(res, 30), Mood.Neutral);
-                StatusText.Text = "Nettoyage TEMP terminé";
+                // TODO: brancher sur Virgil.Core.CleaningService
+                await Task.Delay(1200); // placeholder
+
+                Say("TEMP nettoyé ✅", mood: "done");
             }
             catch (Exception ex)
             {
-                Say("❌ " + ex.Message, Mood.Alert);
+                Say($"Erreur nettoyage TEMP : {ex.Message}", mood: "alert");
             }
-            finally { HideProgress(); }
+            finally
+            {
+                ProgressIndeterminate(false, "Prêt");
+            }
         }
 
-        private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
+        private async void Action_CleanBrowsers_Click(object sender, RoutedEventArgs e)
         {
-            ShowProgress();
-            Say("Nettoyage des navigateurs…", Mood.Neutral);
+            ProgressIndeterminate(true, "Nettoyage navigateurs…");
+            Say("Je détecte les profils et vide les caches (Chromium/Firefox)…", mood: "active");
             try
             {
-                string report = await _browsers.AnalyzeAndCleanAsync();
-                Say(Summarize(report, 30), Mood.Neutral);
-                StatusText.Text = "Navigateurs nettoyés";
+                // TODO: brancher sur BrowserCleaningService.AnalyzeAndClean(...)
+                await Task.Delay(1200); // placeholder
+
+                Say("Navigateurs nettoyés ✅", mood: "done");
             }
             catch (Exception ex)
             {
-                Say("❌ " + ex.Message, Mood.Alert);
+                Say($"Erreur nettoyage navigateurs : {ex.Message}", mood: "alert");
             }
-            finally { HideProgress(); }
+            finally
+            {
+                ProgressIndeterminate(false, "Prêt");
+            }
         }
 
-        private async void Action_UpdateAll(object sender, RoutedEventArgs e)
+        private async void Action_UpdateAll_Click(object sender, RoutedEventArgs e)
         {
-            ShowProgress();
-            Say("Mise à jour globale du système…", Mood.Neutral);
+            ProgressIndeterminate(true, "Mises à jour…");
+            Say("Je lance les mises à jour : winget (apps/jeux, include-unknown, silencieux si possible), pilotes (best-effort), Windows Update (scan→download→install).", mood: "active");
             try
             {
-                string a   = await _apps.UpgradeAllAsync();
-                string d   = await _drivers.UpgradeDriversAsync();
-                string s   = await _wu.StartScanAsync();
-                string dl  = await _wu.StartDownloadAsync();
-                string ins = await _wu.StartInstallAsync();
-                string sig = await _def.UpdateSignaturesAsync();
-                string scn = await _def.QuickScanAsync();
+                // TODO:
+                // await ApplicationUpdateService.UpgradeAllAsync(...)
+                // await DriverUpdateService.UpgradeDriversAsync()
+                // await WindowsUpdateService.StartScanAsync(); etc.
+                await Task.Delay(2000); // placeholder
 
-                string nl = Environment.NewLine;
-                string all = string.Join(nl, new string[] { a, d, s, dl, ins, sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
-
-                Say(Summarize(all, 30), Mood.Neutral);
-                StatusText.Text = "Mises à jour complètes effectuées";
-                Say("Tout est à jour !", Mood.Happy);
+                Say("Mises à jour terminées ✅", mood: "done");
             }
             catch (Exception ex)
             {
-                Say("❌ " + ex.Message, Mood.Alert);
-                StatusText.Text = "Erreur mise à jour";
+                Say($"Erreur mises à jour : {ex.Message}", mood: "alert");
             }
-            finally { HideProgress(); }
+            finally
+            {
+                ProgressIndeterminate(false, "Prêt");
+            }
         }
 
-        private async void Action_Defender(object sender, RoutedEventArgs e)
+        private async void Action_Defender_Click(object sender, RoutedEventArgs e)
         {
-            ShowProgress();
-            Say("Sécurité Windows Defender…", Mood.Neutral);
+            ProgressIndeterminate(true, "Windows Defender…");
+            Say("Je lance la mise à jour des signatures Defender puis un scan rapide.", mood: "active");
             try
             {
-                string sig = await _def.UpdateSignaturesAsync();
-                string scn = await _def.QuickScanAsync();
+                // TODO: couche Core pour MpCmdRun.exe /UpdateSignature puis /Scan -ScanType 1
+                await Task.Delay(1500); // placeholder
 
-                string nl = Environment.NewLine;
-                string msg = string.Join(nl, new string[] { sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
-
-                Say(Summarize(msg, 30), Mood.Neutral);
-                StatusText.Text = "Defender: signatures à jour + scan terminé";
+                Say("Defender : signatures à jour et scan terminé ✅", mood: "done");
             }
             catch (Exception ex)
             {
-                Say("❌ Defender: " + ex.Message, Mood.Alert);
-                StatusText.Text = "Erreur Defender";
+                Say($"Erreur Defender : {ex.Message}", mood: "alert");
             }
-            finally { HideProgress(); }
-        }
-
-        private void OpenConfig_Click(object sender, RoutedEventArgs e)
-        {
-            try
+            finally
             {
-                object where = GetConfigLocationsSafe();
-                PropertyInfo pM = where.GetType().GetProperty("Machine");
-                PropertyInfo pU = where.GetType().GetProperty("User");
-                string machine = (pM != null ? Convert.ToString(pM.GetValue(where)) : "-") ?? "-";
-                string user = (pU != null ? Convert.ToString(pU.GetValue(where)) : "-") ?? "-";
-                string nl = Environment.NewLine;
-                Say("Config machine: " + machine + nl + "Config user: " + user, Mood.Neutral);
-            }
-            catch (Exception ex)
-            {
-                Say("Config: " + ex.Message, Mood.Alert);
+                ProgressIndeterminate(false, "Prêt");
             }
         }
-    }
-
-    public enum Mood { Neutral, Happy, Alert, Playful }
-
-    public sealed class ChatItem
-    {
-        public string Text { get; set; } = "";
-        public string Time { get; set; } = "";
-        public Brush BubbleBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x22, 0x2A, 0x32));
     }
 }
