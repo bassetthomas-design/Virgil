@@ -7,7 +7,6 @@
              d:DesignWidth="220"
              d:DesignHeight="220">
   <UserControl.Resources>
-    <!-- Animation : halo qui pulse -->
     <Storyboard x:Key="MoodPulse">
       <DoubleAnimation Storyboard.TargetName="Glow"
                        Storyboard.TargetProperty="Opacity"
@@ -33,52 +32,14 @@
     </Ellipse>
 
     <!-- Visage -->
-    <Ellipse Width="200"
-             Height="200"
+    <Ellipse Width="200" Height="200"
              Fill="{Binding FaceFill, RelativeSource={RelativeSource AncestorType=UserControl}}"
              Stroke="White" StrokeThickness="6"/>
 
-    <!-- Yeux -->
+    <!-- Yeux (toujours blancs) -->
     <Grid Width="120" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center">
       <Ellipse Width="26" Height="26" Fill="White" HorizontalAlignment="Left"/>
       <Ellipse Width="26" Height="26" Fill="White" HorizontalAlignment="Right"/>
-
-      <!-- Cœurs pour 'happy' -->
-      <Path x:Name="HeartLeft"
-            Data="M0,5 A5,5 0 0 1 5,0 A5,5 0 0 1 10,5 L5,10 Z"
-            Fill="#E91E63" Width="12" Height="12"
-            HorizontalAlignment="Left" Margin="7,7,0,0"
-            Visibility="Collapsed"/>
-      <Path x:Name="HeartRight"
-            Data="M0,5 A5,5 0 0 1 5,0 A5,5 0 0 1 10,5 L5,10 Z"
-            Fill="#E91E63" Width="12" Height="12"
-            HorizontalAlignment="Right" Margin="0,7,7,0"
-            Visibility="Collapsed"/>
     </Grid>
-
-    <!-- Cornes pour 'alert' -->
-    <Path x:Name="HornLeft"  Data="M0,15 L10,0 L20,15 Z" Fill="#E74C3C"
-          Width="20" Height="15" HorizontalAlignment="Left" Margin="60,20,0,0"
-          Visibility="Collapsed"/>
-    <Path x:Name="HornRight" Data="M0,15 L10,0 L20,15 Z" Fill="#E74C3C"
-          Width="20" Height="15" HorizontalAlignment="Right" Margin="0,20,60,0"
-          Visibility="Collapsed"/>
-
-    <!-- Moustaches pour 'playful' -->
-    <StackPanel x:Name="WhiskersLeft" Orientation="Vertical"
-                HorizontalAlignment="Left" VerticalAlignment="Center"
-                Margin="10,80,0,80" Visibility="Collapsed">
-      <Rectangle Width="40" Height="2" Fill="White" Margin="0,2,0,2"/>
-      <Rectangle Width="40" Height="2" Fill="White" Margin="0,2,0,2"/>
-      <Rectangle Width="40" Height="2" Fill="White" Margin="0,2,0,2"/>
-    </StackPanel>
-
-    <StackPanel x:Name="WhiskersRight" Orientation="Vertical"
-                HorizontalAlignment="Right" VerticalAlignment="Center"
-                Margin="0,80,10,80" Visibility="Collapsed">
-      <Rectangle Width="40" Height="2" Fill="White" Margin="0,2,0,2"/>
-      <Rectangle Width="40" Height="2" Fill="White" Margin="0,2,0,2"/>
-      <Rectangle Width="40" Height="2" Fill="White" Margin="0,2,0,2"/>
-    </StackPanel>
   </Grid>
 </UserControl>
