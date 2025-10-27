@@ -1,6 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -8,7 +11,7 @@ using System.Windows.Threading;
 using Virgil.App.Controls;
 using CfgService = Virgil.Core.Services.ConfigService;   // service de config côté Services
 using CfgModel   = Virgil.Core.Config.VirgilConfig;      // modèle de config côté Config
-using Virgil.Core.Services;                               // autres services (Cleaning, Updates, etc.)
+using Virgil.Core.Services;
 
 namespace Virgil.App
 {
@@ -35,7 +38,7 @@ namespace Virgil.App
         private readonly ObservableCollection<ChatItem> _chat = new();
 
         // Config fusionnée (machine + user)
-        private CfgModel _cfg;
+        private CfgModel _cfg = new CfgModel();
 
         public MainWindow()
         {
@@ -44,19 +47,157 @@ namespace Virgil.App
             // Chat binding
             ChatList.ItemsSource = _chat;
 
-            // Config (fusion machine + user)
-            _cfg = _config.LoadMerged();
+            // Config (fusion machine + user) — safe
+            _cfg = LoadConfigSafe();
+
             ThresholdsText.Text =
-                $"CPU warn/alert: {_cfg.Thresholds.Cpu.Warn}% / {_cfg.Thresholds.Cpu.Alert}%{Environment.NewLine}" +
-                $"RAM warn/alert: {_cfg.Thresholds.Ram.Warn}% / {_cfg.Thresholds.Ram.Alert}%{Environment.NewLine}" +
-                $"Temp CPU warn/alert: {_cfg.Thresholds.Temps.Cpu.Warn}°C / {_cfg.Thresholds.Temps.Cpu.Alert}°C{Environment.NewLine}" +
-                $"Temp GPU warn/alert: {_cfg.Thresholds.Temps.Gpu.Warn}°C / {_cfg.Thresholds.Temps.Gpu.Alert}°C{Environment.NewLine}" +
-                $"Temp Disk warn/alert: {_cfg.Thresholds.Temps.Disk.Warn}°C / {_cfg.Thresholds.Temps.Disk.Alert}°C";
+                $"CPU warn/alert: {GetCpuWarn()}% / {GetCpuAlert()}%{Environment.NewLine}" +
+                $"RAM warn/alert: {GetRamWarn()}% / {GetRamAlert()}%{Environment.NewLine}" +
+                $"Temp CPU warn/alert: {GetTempWarn(\"Cpu\")}°C / {GetTempAlert(\"Cpu\")}°C{Environment.NewLine}" +
+                $"Temp GPU warn/alert: {GetTempWarn(\"Gpu\")}°C / {GetTempAlert(\"Gpu\")}°C{Environment.NewLine}" +
+                $"Temp Disk warn/alert: {GetTempWarn(\"Disk\")}°C / {GetTempAlert(\"Disk\")}°C";
 
             InitTimers();
             Say("Salut, je suis Virgil 👋", Mood.Neutral);
             SetAvatarMood("neutral");
         }
+
+        // =========================
+        //   SAFE helpers (config)
+        // =========================
+        private CfgModel LoadConfigSafe()
+        {
+            try
+            {
+                // Essaye .LoadMerged()
+                var m = typeof(CfgService).GetMethod("LoadMerged", BindingFlags.Instance | BindingFlags.Public);
+                if (m != null)
+                {
+                    var v = m.Invoke(_config, null);
+                    if (v is CfgModel ok1) return ok1;
+                }
+                // Essaye .Load()
+                m = typeof(CfgService).GetMethod("Load", BindingFlags.Instance | BindingFlags.Public);
+                if (m != null)
+                {
+                    var v = m.Invoke(_config, null);
+                    if (v is CfgModel ok2) return ok2;
+                }
+            }
+            catch { /* ignore */ }
+
+            // Fallback: lecture directe %ProgramData% puis %AppData% (user override)
+            try
+            {
+                var machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
+                var user    = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)     , "Virgil", "user.json");
+                CfgModel cfg = new();
+
+                if (File.Exists(machine))
+                {
+                    var c = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(machine));
+                    if (c != null) cfg = c;
+                }
+                if (File.Exists(user))
+                {
+                    var u = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(user));
+                    if (u != null) cfg = MergeUserOnMachine(cfg, u);
+                }
+                return cfg;
+            }
+            catch { }
+
+            return new CfgModel(); // défaut
+        }
+
+        private object GetConfigLocationsSafe()
+        {
+            try
+            {
+                var m = typeof(CfgService).GetMethod("GetConfigLocations", BindingFlags.Instance | BindingFlags.Public);
+                if (m != null)
+                {
+                    return m.Invoke(_config, null) ?? new { Machine = "-", User = "-" };
+                }
+            }
+            catch { }
+            var machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
+            var user    = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)     , "Virgil", "user.json");
+            return new { Machine = machine, User = user };
+        }
+
+        private static CfgModel MergeUserOnMachine(CfgModel machine, CfgModel user)
+        {
+            // Merge ultra-sécurisée : si user a une valeur non-default, on remplace
+            try
+            {
+                if (user?.Thresholds != null)
+                {
+                    machine.Thresholds ??= new();
+                    // CPU
+                    if (user.Thresholds.Cpu != null)
+                    {
+                        machine.Thresholds.Cpu ??= new();
+                        if (user.Thresholds.Cpu.Warn > 0)  machine.Thresholds.Cpu.Warn  = user.Thresholds.Cpu.Warn;
+                        if (user.Thresholds.Cpu.Alert > 0) machine.Thresholds.Cpu.Alert = user.Thresholds.Cpu.Alert;
+                    }
+                    // RAM
+                    if (user.Thresholds.Ram != null)
+                    {
+                        machine.Thresholds.Ram ??= new();
+                        if (user.Thresholds.Ram.Warn > 0)  machine.Thresholds.Ram.Warn  = user.Thresholds.Ram.Warn;
+                        if (user.Thresholds.Ram.Alert > 0) machine.Thresholds.Ram.Alert = user.Thresholds.Ram.Alert;
+                    }
+                    // Temps
+                    if (user.Thresholds.Temps != null)
+                    {
+                        machine.Thresholds.Temps ??= new();
+                        // CPU temp
+                        if (user.Thresholds.Temps.Cpu != null)
+                        {
+                            machine.Thresholds.Temps.Cpu ??= new();
+                            if (user.Thresholds.Temps.Cpu.Warn > 0)  machine.Thresholds.Temps.Cpu.Warn  = user.Thresholds.Temps.Cpu.Warn;
+                            if (user.Thresholds.Temps.Cpu.Alert > 0) machine.Thresholds.Temps.Cpu.Alert = user.Thresholds.Temps.Cpu.Alert;
+                        }
+                        // GPU temp
+                        if (user.Thresholds.Temps.Gpu != null)
+                        {
+                            machine.Thresholds.Temps.Gpu ??= new();
+                            if (user.Thresholds.Temps.Gpu.Warn > 0)  machine.Thresholds.Temps.Gpu.Warn  = user.Thresholds.Temps.Gpu.Warn;
+                            if (user.Thresholds.Temps.Gpu.Alert > 0) machine.Thresholds.Temps.Gpu.Alert = user.Thresholds.Temps.Gpu.Alert;
+                        }
+                        // Disk temp
+                        if (user.Thresholds.Temps.Disk != null)
+                        {
+                            machine.Thresholds.Temps.Disk ??= new();
+                            if (user.Thresholds.Temps.Disk.Warn > 0)  machine.Thresholds.Temps.Disk.Warn  = user.Thresholds.Temps.Disk.Warn;
+                            if (user.Thresholds.Temps.Disk.Alert > 0) machine.Thresholds.Temps.Disk.Alert = user.Thresholds.Temps.Disk.Alert;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return machine;
+        }
+
+        private int GetCpuWarn()  => _cfg?.Thresholds?.Cpu?.Warn   ?? 70;
+        private int GetCpuAlert() => _cfg?.Thresholds?.Cpu?.Alert  ?? 90;
+        private int GetRamWarn()  => _cfg?.Thresholds?.Ram?.Warn   ?? 70;
+        private int GetRamAlert() => _cfg?.Thresholds?.Ram?.Alert  ?? 90;
+        private int GetTempWarn(string part)
+            => part switch {
+                "Cpu"  => _cfg?.Thresholds?.Temps?.Cpu?.Warn  ?? 75,
+                "Gpu"  => _cfg?.Thresholds?.Temps?.Gpu?.Warn  ?? 80,
+                "Disk" => _cfg?.Thresholds?.Temps?.Disk?.Warn ?? 55,
+                _ => 75
+            };
+        private int GetTempAlert(string part)
+            => part switch {
+                "Cpu"  => _cfg?.Thresholds?.Temps?.Cpu?.Alert  ?? 90,
+                "Gpu"  => _cfg?.Thresholds?.Temps?.Gpu?.Alert  ?? 92,
+                "Disk" => _cfg?.Thresholds?.Temps?.Disk?.Alert ?? 65,
+                _ => 90
+            };
 
         private void InitTimers()
         {
@@ -136,10 +277,11 @@ namespace Virgil.App
         {
             try
             {
-                var snap = await _monitor.ReadSnapshotAsync();
-                CpuBar.Value = snap.Cpu.UsagePercent;
-                GpuBar.Value = snap.Gpu.UsagePercent;
-                RamBar.Value = snap.Ram.UsagePercent;
+                var snap = await ReadSnapshotSafeAsync(); // usages + températures si dispo
+
+                CpuBar.Value  = snap.Cpu.UsagePercent;
+                GpuBar.Value  = snap.Gpu.UsagePercent;
+                RamBar.Value  = snap.Ram.UsagePercent;
                 DiskBar.Value = snap.Disk.UsagePercent;
 
                 CpuTempText.Text  = snap.Cpu.TemperatureC.HasValue  ? $"CPU: {snap.Cpu.TemperatureC.Value:F0} °C"  : "CPU: -- °C";
@@ -147,9 +289,13 @@ namespace Virgil.App
                 DiskTempText.Text = snap.Disk.TemperatureC.HasValue ? $"Disque: {snap.Disk.TemperatureC.Value:F0} °C" : "Disque: -- °C";
                 RamText.Text      = $"RAM: {snap.Ram.UsedGiB:F1} / {snap.Ram.TotalGiB:F1} GiB";
 
-                if (snap.Cpu.TemperatureC >= _cfg.Thresholds.Temps.Cpu.Alert ||
-                    snap.Gpu.TemperatureC >= _cfg.Thresholds.Temps.Gpu.Alert ||
-                    snap.Disk.TemperatureC >= _cfg.Thresholds.Temps.Disk.Alert)
+                // Alerte si dépassement
+                var cpuA = GetTempAlert("Cpu");
+                var gpuA = GetTempAlert("Gpu");
+                var dskA = GetTempAlert("Disk");
+                if ((snap.Cpu.TemperatureC ?? 0) >= cpuA ||
+                    (snap.Gpu.TemperatureC ?? 0) >= gpuA ||
+                    (snap.Disk.TemperatureC ?? 0) >= dskA)
                 {
                     Say("⚠️ Température élevée détectée.", Mood.Alert);
                     SetAvatarMood("devil");
@@ -160,6 +306,38 @@ namespace Virgil.App
                 Say("Surveillance: " + ex.Message, Mood.Alert);
             }
         }
+
+        private async Task<dynamic> ReadSnapshotSafeAsync()
+        {
+            // Essaie plusieurs noms/modes sur AdvancedMonitoringService (async/sync)
+            var t = _monitor.GetType();
+            var names = new[] { "GetSnapshotAsync", "ReadSnapshotAsync", "SnapshotAsync", "GetSnapshot", "ReadSnapshot" };
+
+            foreach (var n in names)
+            {
+                var m = t.GetMethod(n, BindingFlags.Instance | BindingFlags.Public);
+                if (m == null) continue;
+
+                var result = m.Invoke(_monitor, null);
+                if (result is Task task)
+                {
+                    await task.ConfigureAwait(false);
+                    var prop = task.GetType().GetProperty("Result");
+                    if (prop != null) return prop.GetValue(task) ?? MakeEmptySnapshot();
+                }
+                return result ?? MakeEmptySnapshot();
+            }
+
+            return MakeEmptySnapshot();
+        }
+
+        private static dynamic MakeEmptySnapshot() => new
+        {
+            Cpu  = new { UsagePercent = 0, TemperatureC = (double?)null },
+            Gpu  = new { UsagePercent = 0, TemperatureC = (double?)null },
+            Ram  = new { UsagePercent = 0, UsedGiB = 0.0, TotalGiB = 0.0 },
+            Disk = new { UsagePercent = 0, TemperatureC = (double?)null }
+        };
 
         // =========================
         //   Top bar
@@ -291,9 +469,11 @@ namespace Virgil.App
         {
             try
             {
-                var where = _config.GetConfigLocations();
+                var where = GetConfigLocationsSafe();
+                var machine = where.GetType().GetProperty("Machine")?.GetValue(where)?.ToString() ?? "-";
+                var user    = where.GetType().GetProperty("User")?.GetValue(where)?.ToString() ?? "-";
                 var nl = Environment.NewLine;
-                Say("Config machine: " + where.Machine + nl + "Config user: " + where.User, Mood.Neutral);
+                Say("Config machine: " + machine + nl + "Config user: " + user, Mood.Neutral);
             }
             catch (Exception ex)
             {
