@@ -1,237 +1,337 @@
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Linq;
-using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Virgil.App.Controls;
+using Virgil.Core;
 using Virgil.Core.Services;
 
-// Aliases
-using Cleaning       = Virgil.Core.Services.CleaningService;
-using Browsers       = Virgil.Core.Services.BrowserCleaningService;
-using ExtendedClean  = Virgil.Core.Services.ExtendedCleaningService;
-using AppsUpdate     = Virgil.Core.Services.ApplicationUpdateService;
-using WinUpdate      = Virgil.Core.Services.WindowsUpdateService;
-using DriverUpdate   = Virgil.Core.Services.DriverUpdateService;
-using DefenderUpdate = Virgil.Core.Services.DefenderUpdateService;
-using Presets        = Virgil.Core.Services.MaintenancePresetsService;
-using ConfigSvc      = Virgil.Core.Config.ConfigService;
-using Thresholds     = Virgil.Core.Config.Thresholds;
-using AdvMon         = Virgil.Core.Monitoring.AdvancedMonitoringService;
-
-namespace Virgil.App;
-
-public enum Mood { Neutral, Playful, Alert }
-
-public sealed class ChatMessage : INotifyPropertyChanged
+namespace Virgil.App
 {
-    private double _opacity = 1.0;
-    private double _scale = 1.0;
-
-    public string Text { get; set; } = string.Empty;
-    public Brush BubbleBrush { get; set; } = Brushes.DimGray;
-    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-
-    public double Opacity { get => _opacity; set { _opacity = value; OnPropertyChanged(); } }
-    public double Scale   { get => _scale;   set { _scale   = value; OnPropertyChanged(); } }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
-}
-
-public partial class MainWindow : Window
-{
-    private readonly ObservableCollection<ChatMessage> _chat = new();
-
-    private readonly DispatcherTimer _clockTimer   = new() { Interval = TimeSpan.FromSeconds(1) };
-    private readonly DispatcherTimer _survTimer    = new() { Interval = TimeSpan.FromSeconds(2) };
-    private readonly DispatcherTimer _thanosTimer  = new() { Interval = TimeSpan.FromSeconds(0.5) };
-    private readonly DispatcherTimer _banterTimer  = new(); // interval aléatoire 1–6 min
-
-    private bool _monitoringBanterEnabled = false;
-    private DateTime _nextPunch = DateTime.Now.AddMinutes(1);
-
-    private readonly AdvMon _monitor        = new();
-    private readonly ConfigSvc _config      = new();
-    private readonly Cleaning _cleaning     = new();
-    private readonly Browsers _browsers     = new();
-    private readonly ExtendedClean _extended= new();
-    private readonly AppsUpdate _apps       = new();
-    private readonly WinUpdate _wu          = new();
-    private readonly DriverUpdate _drivers  = new();
-    private readonly DefenderUpdate _def    = new();
-    private readonly Presets _presets       = new();
-
-    private readonly PunchlineService _punchlines = new();
-
-    private Thresholds T => _config.Get().Thresholds;
-
-    public MainWindow()
+    public partial class MainWindow : Window
     {
-        InitializeComponent();
-        ChatList.ItemsSource = _chat;
+        // Timers
+        private readonly DispatcherTimer _clockTimer = new();
+        private readonly DispatcherTimer _survTimer  = new();   // monitoring pulse
+        private readonly DispatcherTimer _banterTimer = new();  // punchlines 1-6 min
 
-        _clockTimer.Tick += (_, _) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
-        _clockTimer.Start();
+        // Services (Core)
+        private readonly ConfigService _config = new();
+        private readonly MaintenancePresetsService _presets = new();
+        private readonly CleaningService _cleaning = new();
+        private readonly BrowserCleaningService _browsers = new();
+        private readonly ExtendedCleaningService _extended = new();
+        private readonly ApplicationUpdateService _apps = new();
+        private readonly DriverUpdateService _drivers = new();
+        private readonly WindowsUpdateService _wu = new();
+        private readonly DefenderUpdateService _def = new();
+        private readonly AdvancedMonitoringService _monitor = new();
 
-        _survTimer.Tick += async (_, _) => await SurveillancePulseInternal();
+        // Chat
+        private readonly ObservableCollection<ChatItem> _chat = new();
 
-        _thanosTimer.Tick += (_, _) => ThanosSweep();
-        _thanosTimer.Start();
+        // Seuils (fusion machine + user)
+        private VirgilConfig _cfg;
 
-        _banterTimer.Tick += (_, _) =>
+        public MainWindow()
         {
-            if (_monitoringBanterEnabled) Say(_punchlines.Random(), Mood.Playful);
-            PlanNextBanter();
+            InitializeComponent();
+
+            // Chat binding
+            ChatList.ItemsSource = _chat;
+
+            // Config (fusion machine + user)
+            _cfg = _config.LoadMerged();
+            ThresholdsText.Text =
+                $"CPU warn/alert: {_cfg.Thresholds.Cpu.Warn}% / {_cfg.Thresholds.Cpu.Alert}%\n" +
+                $"RAM warn/alert: {_cfg.Thresholds.Ram.Warn}% / {_cfg.Thresholds.Ram.Alert}%\n" +
+                $"Temp CPU warn/alert: {_cfg.Thresholds.Temps.Cpu.Warn}°C / {_cfg.Thresholds.Temps.Cpu.Alert}°C\n" +
+                $"Temp GPU warn/alert: {_cfg.Thresholds.Temps.Gpu.Warn}°C / {_cfg.Thresholds.Temps.Gpu.Alert}°C\n" +
+                $"Temp Disk warn/alert: {_cfg.Thresholds.Temps.Disk.Warn}°C / {_cfg.Thresholds.Temps.Disk.Alert}°C";
+
+            InitTimers();
+            Say("Salut, je suis Virgil 👋", Mood.Neutral);
+            SetAvatarMood("neutral");
+        }
+
+        private void InitTimers()
+        {
+            // Horloge live
+            _clockTimer.Interval = TimeSpan.FromSeconds(1);
+            _clockTimer.Tick += (_, _) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+            _clockTimer.Start();
+
+            // Pulse de surveillance
+            _survTimer.Interval = TimeSpan.FromSeconds(2);
+            _survTimer.Tick += async (_, _) => await SurveillancePulse();
+
+            // Punchlines (1–6 min aléatoires) quand la surveillance est ON
+            _banterTimer.Tick += (_, _) =>
+            {
+                if (SurveillanceToggle.IsChecked == true)
+                {
+                    Say(PunchlineService.RandomBanter(), Mood.Playful);
+                    // prochaine occurrence 1-6 min
+                    _banterTimer.Interval = TimeSpan.FromMinutes(Random.Shared.Next(1, 7));
+                }
+            };
+            _banterTimer.Interval = TimeSpan.FromMinutes(Random.Shared.Next(1, 7));
+        }
+
+        // =========================
+        //   UI helpers
+        // =========================
+        private void ProgressIndeterminate()
+        {
+            ActionProgress.Visibility = Visibility.Visible;
+            ActionProgress.IsIndeterminate = true;
+        }
+        private void ProgressCollapsed()
+        {
+            ActionProgress.IsIndeterminate = false;
+            ActionProgress.Visibility = Visibility.Collapsed;
+        }
+
+        private void SetAvatarMood(string mood)
+        {
+            try { Avatar?.SetMood(mood); } catch { /* safe */ }
+        }
+
+        private void Say(string text, Mood mood)
+        {
+            // Choix couleur de bulle selon humeur
+            var brush = mood switch
+            {
+                Mood.Happy  => new SolidColorBrush(Color.FromRgb(0x22,0x4E,0x2E)),  // vert sombre
+                Mood.Alert  => new SolidColorBrush(Color.FromRgb(0x4E,0x22,0x22)),  // rouge sombre
+                Mood.Playful=> new SolidColorBrush(Color.FromRgb(0x2E,0x2A,0x4E)),  // violet sombre
+                _           => new SolidColorBrush(Color.FromRgb(0x22,0x2A,0x32))
+            };
+
+            _chat.Add(new ChatItem
+            {
+                Text = text,
+                BubbleBrush = brush,
+                Time = DateTime.Now.ToString("HH:mm:ss")
+            });
+
+            // Pilotage avatar
+            SetAvatarMood(mood.ToString().ToLower());
+            // Auto-scroll en bas
+            ChatScroll.ScrollToEnd();
+
+            // Minifie l’historique si trop long
+            while (_chat.Count > 200) _chat.RemoveAt(0);
+        }
+
+        private static string Summarize(string big, int maxLines = 30)
+        {
+            if (string.IsNullOrWhiteSpace(big)) return string.Empty;
+            var lines = big.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            if (lines.Length <= maxLines) return big;
+            return string.Join("\n", lines.Take(maxLines).Concat(new[] { $"… (+{lines.Length - maxLines} lignes)" }));
+        }
+
+        // =========================
+        //   Surveillance
+        // =========================
+        private async Task SurveillancePulse()
+        {
+            try
+            {
+                var snap = await _monitor.ReadSnapshotAsync(); // usages + températures si dispo
+                CpuBar.Value = snap.Cpu.UsagePercent;
+                GpuBar.Value = snap.Gpu.UsagePercent;
+                RamBar.Value = snap.Ram.UsagePercent;
+                DiskBar.Value = snap.Disk.UsagePercent;
+
+                CpuTempText.Text  = snap.Cpu.TemperatureC.HasValue  ? $"CPU: {snap.Cpu.TemperatureC.Value:F0} °C"  : "CPU: -- °C";
+                GpuTempText.Text  = snap.Gpu.TemperatureC.HasValue  ? $"GPU: {snap.Gpu.TemperatureC.Value:F0} °C"  : "GPU: -- °C";
+                DiskTempText.Text = snap.Disk.TemperatureC.HasValue ? $"Disque: {snap.Disk.TemperatureC.Value:F0} °C" : "Disque: -- °C";
+                RamText.Text      = $"RAM: {snap.Ram.UsedGiB:F1} / {snap.Ram.TotalGiB:F1} GiB";
+
+                // Alerte si dépassement
+                if (snap.Cpu.TemperatureC >= _cfg.Thresholds.Temps.Cpu.Alert ||
+                    snap.Gpu.TemperatureC >= _cfg.Thresholds.Temps.Gpu.Alert ||
+                    snap.Disk.TemperatureC >= _cfg.Thresholds.Temps.Disk.Alert)
+                {
+                    Say("⚠️ Température élevée détectée.", Mood.Alert);
+                    SetAvatarMood("devil");
+                }
+            }
+            catch (Exception ex)
+            {
+                Say("Surveillance: " + ex.Message, Mood.Alert);
+            }
+        }
+
+        // =========================
+        //   Top bar events
+        // =========================
+        private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            _survTimer.Start();
+            _banterTimer.Start();
+            StatusText.Text = "Surveillance ON";
+            Say("Surveillance en direct activée.", Mood.Happy);
+        }
+
+        private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            _survTimer.Stop();
+            _banterTimer.Stop();
+            StatusText.Text = "Surveillance OFF";
+            Say("Surveillance arrêtée.", Mood.Neutral);
+        }
+
+        // =========================
+        //   Actions
+        // =========================
+        private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
+        {
+            ProgressIndeterminate();
+            Say("Maintenance complète…", Mood.Neutral);
+            try
+            {
+                var log = await _presets.FullAsync(); // enchaîne cleaning/browsers/extended/winget/WU/drivers/defender
+                Say(Summarize(log), Mood.Neutral);
+                StatusText.Text = "Maintenance complète effectuée";
+            }
+            catch (Exception ex)
+            {
+                Say("❌ " + ex.Message, Mood.Alert);
+                StatusText.Text = "Erreur maintenance";
+            }
+            finally { ProgressCollapsed(); }
+        }
+
+        private async void Action_CleanTemp(object sender, RoutedEventArgs e)
+        {
+            ProgressIndeterminate();
+            Say("Nettoyage des fichiers temporaires…", Mood.Neutral);
+            try
+            {
+                var res = await _cleaning.CleanTempAsync();
+                Say(Summarize(res), Mood.Neutral);
+                StatusText.Text = "Nettoyage TEMP terminé";
+            }
+            catch (Exception ex)
+            {
+                Say("❌ " + ex.Message, Mood.Alert);
+            }
+            finally { ProgressCollapsed(); }
+        }
+
+        private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
+        {
+            ProgressIndeterminate();
+            Say("Nettoyage des navigateurs…", Mood.Neutral);
+            try
+            {
+                var report = await _browsers.AnalyzeAndCleanAsync();
+                Say(Summarize(report), Mood.Neutral);
+                StatusText.Text = "Navigateurs nettoyés";
+            }
+            catch (Exception ex)
+            {
+                Say("❌ " + ex.Message, Mood.Alert);
+            }
+            finally { ProgressCollapsed(); }
+        }
+
+        private async void Action_UpdateAll(object sender, RoutedEventArgs e)
+        {
+            ProgressIndeterminate();
+            Say("Mise à jour globale du système…", Mood.Neutral);
+            try
+            {
+                // Apps/jeux (winget)
+                var a = await _apps.UpgradeAllAsync(); // --all --include-unknown --silent (implémenté côté service)
+                // Pilotes
+                var d = await _drivers.UpgradeDriversAsync();
+                // Windows Update
+                var s = await _wu.StartScanAsync();
+                var dl = await _wu.StartDownloadAsync();
+                var ins = await _wu.StartInstallAsync();
+                // Defender
+                var sig = await _def.UpdateSignaturesAsync();
+                var scan = await _def.QuickScanAsync();
+
+                var all = string.Join("\n", new[] { a, d, s, dl, ins, sig, scan }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                Say(Summarize(all), Mood.Neutral);
+                StatusText.Text = "Mises à jour complètes effectuées";
+                Say("✅ Tout est à jour !", Mood.Happy);
+            }
+            catch (Exception ex)
+            {
+                Say("❌ " + ex.Message, Mood.Alert);
+                StatusText.Text = "Erreur mise à jour";
+            }
+            finally { ProgressCollapsed(); }
+        }
+
+        private async void Action_Defender(object sender, RoutedEventArgs e)
+        {
+            ProgressIndeterminate();
+            Say("Sécurité Windows Defender…", Mood.Neutral);
+            try
+            {
+                var sig = await _def.UpdateSignaturesAsync(); // MAJ signatures
+                var scan = await _def.QuickScanAsync();       // Quick scan (remplaçable par FullScanAsync)
+                Say(Summarize(string.Join("\n", new[] { sig, scan })), Mood.Neutral);
+                StatusText.Text = "Defender: signatures à jour + scan terminé";
+            }
+            catch (Exception ex)
+            {
+                Say("❌ Defender: " + ex.Message, Mood.Alert);
+                StatusText.Text = "Erreur Defender";
+            }
+            finally { ProgressCollapsed(); }
+        }
+
+        // =========================
+        //   Config
+        // =========================
+        private void OpenConfig_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var where = _config.GetConfigLocations();
+                Say("Config machine: " + where.Machine + "\nConfig user: " + where.User, Mood.Neutral);
+            }
+            catch (Exception ex)
+            {
+                Say("Config: " + ex.Message, Mood.Alert);
+            }
+        }
+    }
+
+    public enum Mood { Neutral, Happy, Alert, Playful }
+
+    public sealed class ChatItem
+    {
+        public string Text { get; set; } = "";
+        public string Time { get; set; } = "";
+        public Brush BubbleBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x22, 0x2A, 0x32));
+    }
+
+    // Punchlines (périodiques 1–6 min quand surveillance ON)
+    internal static class PunchlineService
+    {
+        private static readonly string[] Lines = new[]
+        {
+            "Routine ok. Tous les systèmes au vert.",
+            "Je veille sur tes températures.",
+            "Un petit nettoyage plus tard ?",
+            "Winget est prêt à upgrader ce qui traîne.",
+            "Si tu chauffes, je te préviens. Promis.",
+            "Un scan Defender rapide ?"
         };
-        PlanNextBanter();
 
-        Avatar?.SetMood("happy");
-        Say("Salut, c’est Virgil. Active la surveillance pour commencer.", Mood.Neutral);
-    }
-
-    private void PlanNextBanter()
-    {
-        var r = new Random();
-        _banterTimer.Interval = TimeSpan.FromMinutes(r.Next(1, 7)); // 1–6 min
-        _banterTimer.Start();
-    }
-
-    private void Say(string text, Mood mood)
-    {
-        Brush brush = mood switch
-        {
-            Mood.Alert   => new SolidColorBrush(Color.FromRgb(0xD9,0x3D,0x3D)),
-            Mood.Playful => new SolidColorBrush(Color.FromRgb(0x9B,0x59,0xB6)),
-            _            => new SolidColorBrush(Color.FromRgb(0x2C,0x3E,0x50)),
-        };
-        _chat.Add(new ChatMessage { Text = text, BubbleBrush = brush, CreatedUtc = DateTime.UtcNow, Opacity = 1.0, Scale = 1.0 });
-    }
-
-    private void PlanNextPunchline()
-    {
-        var r = new Random(); _nextPunch = DateTime.Now.AddMinutes(r.Next(1, 7));
-    }
-
-    private void SetAvatarMood(string mood)
-    {
-        try { Avatar?.SetMood(mood); } catch { }
-    }
-
-    private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        _survTimer.Start();
-        _monitoringBanterEnabled = true;
-        StatusText.Text = "Surveillance: ON";
-        Say("Surveillance démarrée.", Mood.Neutral);
-        PlanNextPunchline();
-    }
-
-    private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
-    {
-        _survTimer.Stop();
-        _monitoringBanterEnabled = false;
-        StatusText.Text = "Surveillance: OFF";
-        Say("Surveillance arrêtée.", Mood.Neutral);
-    }
-
-    private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
-    {
-        ActionProgress.Visibility = Visibility.Visible;
-        Say("Maintenance complète…", Mood.Neutral);
-        try
-        {
-            var log = await _presets.FullAsync();
-            Say(Summarize(log), Mood.Neutral);
-            StatusText.Text = "Maintenance complète terminée";
-        }
-        catch (Exception ex) { Say("❌ Maintenance: " + ex.Message, Mood.Alert); StatusText.Text = "Erreur maintenance"; }
-        finally { ActionProgress.Visibility = Visibility.Collapsed; }
-    }
-
-    private async void Action_CleanTemp(object sender, RoutedEventArgs e)
-    {
-        ActionProgress.Visibility = Visibility.Visible;
-        Say("Nettoyage TEMP…", Mood.Neutral);
-        try
-        {
-            var log = await _cleaning.CleanTempAsync();
-            Say(Summarize(log), Mood.Neutral);
-            StatusText.Text = "Nettoyage TEMP terminé";
-        }
-        catch (Exception ex) { Say("❌ Nettoyage TEMP: " + ex.Message, Mood.Alert); StatusText.Text = "Erreur nettoyage TEMP"; }
-        finally { ActionProgress.Visibility = Visibility.Collapsed; }
-    }
-
-    private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
-    {
-        ActionProgress.Visibility = Visibility.Visible;
-        Say("Nettoyage navigateurs…", Mood.Neutral);
-        try
-        {
-            var report = await _browsers.AnalyzeAndCleanAsync();
-            Say(Summarize(report), Mood.Neutral);
-            StatusText.Text = "Nettoyage navigateurs terminé";
-        }
-        catch (Exception ex) { Say("❌ Navigateurs: " + ex.Message, Mood.Alert); StatusText.Text = "Erreur navigateurs"; }
-        finally { ActionProgress.Visibility = Visibility.Collapsed; }
-    }
-
-    private async void Action_UpdateAll(object sender, RoutedEventArgs e)
-    {
-        ActionProgress.Visibility = Visibility.Visible;
-        Say("Mises à jour globales…", Mood.Neutral);
-        try
-        {
-            var a = await _apps.UpgradeAllAsync();
-            var s = await _wu.StartScanAsync();
-            var d = await _wu.StartDownloadAsync();
-            var i = await _wu.StartInstallAsync();
-            var r = await _drivers.UpgradeDriversAsync();
-            var m = await _def.UpdateSignaturesAsync();
-            var q = await _def.QuickScanAsync();
-
-            var merged = string.Join("\n", new[] { a, s + d + i, r, m, q });
-            Say(Summarize(merged), Mood.Neutral);
-            StatusText.Text = "Mises à jour terminées";
-        }
-        catch (Exception ex) { Say("❌ Mises à jour: " + ex.Message, Mood.Alert); StatusText.Text = "Erreur mises à jour"; }
-        finally { ActionProgress.Visibility = Visibility.Collapsed; }
-    }
-
-    private string Summarize(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return "(OK)";
-        var lines = text.Split('\n').Select(x => x.Trim()).Where(x => x.Length > 0);
-        return string.Join("\n", lines.Take(6)) + (lines.Count() > 6 ? "\n…" : "");
-    }
-
-    // "Thanos": à partir de 60s, fade + shrink sur 10s, puis suppression
-    private void ThanosSweep()
-    {
-        var now = DateTime.UtcNow;
-        for (int i = _chat.Count - 1; i >= 0; i--)
-        {
-            var msg = _chat[i];
-            var age = (now - msg.CreatedUtc).TotalSeconds;
-            if (age <= 60) continue;
-
-            var t = (age - 60) / 10.0; // 0..1
-            if (t >= 1.0) { _chat.RemoveAt(i); continue; }
-
-            var k = Math.Clamp(t, 0, 1);
-            msg.Opacity = 1.0 - k;
-            msg.Scale = 1.0 - 0.2 * k;
-        }
-    }
-
-    private void OpenConfig_Click(object sender, RoutedEventArgs e)
-    {
-        var cfg = _config.Get();
-        Say($"Seuils : CPU {cfg.Thresholds.CpuWarn}/{cfg.Thresholds.CpuAlert}% — GPU {cfg.Thresholds.GpuWarn}/{cfg.Thresholds.GpuAlert}% — MEM {cfg.Thresholds.MemWarn}/{cfg.Thresholds.MemAlert}%", Mood.Neutral);
-        Say($"Temp CPU {cfg.Thresholds.CpuTempWarn}/{cfg.Thresholds.CpuTempAlert}°C — GPU {cfg.Thresholds.GpuTempWarn}/{cfg.Thresholds.GpuTempAlert}°C — DISK {cfg.Thresholds.DiskTempWarn}/{cfg.Thresholds.DiskTempAlert}°C", Mood.Neutral);
-        Say("Édite %AppData%/Virgil/user.json pour override.", Mood.Neutral);
+        public static string RandomBanter()
+            => Lines[Random.Shared.Next(Lines.Length)];
     }
 }
