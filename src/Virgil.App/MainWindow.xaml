@@ -69,7 +69,7 @@
 
             <!-- Right: Actions -->
             <StackPanel Grid.Column="1" Margin="16" VerticalAlignment="Top">
-                <!-- Style local pour espacer les boutons (remplace Spacing) -->
+                <!-- Style local pour espacer les boutons -->
                 <StackPanel.Resources>
                     <Style TargetType="Button">
                         <Setter Property="Margin" Value="0,0,0,8"/>
@@ -83,7 +83,6 @@
                            Foreground="#E6EDF3"
                            Margin="0,0,0,8"/>
 
-                <!-- Les 5 boutons correspondant exactement aux handlers attendus -->
                 <Button Content="Maintenance complète"
                         Click="Action_MaintenanceComplete"/>
                 <Button Content="Nettoyage fichiers temporaires"
@@ -92,7 +91,7 @@
                         Click="Action_CleanBrowsers"/>
                 <Button Content="Mises à jour (winget + jeux + applis)"
                         Click="Action_UpdateAll"/>
-                <Button Content="Microsoft Defender (scan & update)"
+                <Button Content="Microsoft Defender (scan &amp; update)"
                         Click="Action_Defender"/>
 
                 <!-- Bloc statut -->
