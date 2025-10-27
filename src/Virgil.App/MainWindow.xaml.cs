@@ -6,8 +6,9 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Virgil.App.Controls;
-using Virgil.Core.Config;      // VirgilConfig est ici
-using Virgil.Core.Services;    // Services (Cleaning, Updates, etc.)
+using CfgService = Virgil.Core.Services.ConfigService;   // service de config côté Services
+using CfgModel   = Virgil.Core.Config.VirgilConfig;      // modèle de config côté Config
+using Virgil.Core.Services;                               // autres services (Cleaning, Updates, etc.)
 
 namespace Virgil.App
 {
@@ -19,22 +20,22 @@ namespace Virgil.App
         private readonly DispatcherTimer _banterTimer = new();   // punchlines 1–6 min
 
         // Services (Core)
-        private readonly ConfigService _config                          = new();
-        private readonly MaintenancePresetsService _presets             = new();
-        private readonly Virgil.Core.Services.CleaningService _cleaning = new(); // évite ambigüité
-        private readonly BrowserCleaningService _browsers               = new();
-        private readonly ExtendedCleaningService _extended              = new();
-        private readonly ApplicationUpdateService _apps                 = new();
-        private readonly DriverUpdateService _drivers                   = new();
-        private readonly WindowsUpdateService _wu                       = new();
-        private readonly DefenderUpdateService _def                     = new();
-        private readonly AdvancedMonitoringService _monitor             = new();
+        private readonly CfgService _config                     = new();
+        private readonly MaintenancePresetsService _presets     = new();
+        private readonly Virgil.Core.Services.CleaningService _cleaning = new();
+        private readonly BrowserCleaningService _browsers       = new();
+        private readonly ExtendedCleaningService _extended      = new();
+        private readonly ApplicationUpdateService _apps         = new();
+        private readonly DriverUpdateService _drivers           = new();
+        private readonly WindowsUpdateService _wu               = new();
+        private readonly DefenderUpdateService _def             = new();
+        private readonly AdvancedMonitoringService _monitor     = new();
 
         // Chat
         private readonly ObservableCollection<ChatItem> _chat = new();
 
         // Config fusionnée (machine + user)
-        private VirgilConfig _cfg;
+        private CfgModel _cfg;
 
         public MainWindow()
         {
@@ -59,16 +60,13 @@ namespace Virgil.App
 
         private void InitTimers()
         {
-            // Horloge live
             _clockTimer.Interval = TimeSpan.FromSeconds(1);
             _clockTimer.Tick += (_, _) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
             _clockTimer.Start();
 
-            // Pulse de surveillance
             _survTimer.Interval = TimeSpan.FromSeconds(2);
             _survTimer.Tick += async (_, _) => await SurveillancePulse();
 
-            // Punchlines (1–6 min aléatoires) quand la surveillance est ON
             _banterTimer.Tick += (_, _) =>
             {
                 if (SurveillanceToggle.IsChecked == true)
@@ -81,13 +79,14 @@ namespace Virgil.App
         }
 
         // =========================
-        //   UI helpers (renommés)
+        //   UI helpers
         // =========================
         private void ShowProgress()
         {
             ActionProgress.Visibility = Visibility.Visible;
             ActionProgress.IsIndeterminate = true;
         }
+
         private void HideProgress()
         {
             ActionProgress.IsIndeterminate = false;
@@ -96,16 +95,16 @@ namespace Virgil.App
 
         private void SetAvatarMood(string mood)
         {
-            try { Avatar?.SetMood(mood); } catch { /* safe */ }
+            try { Avatar?.SetMood(mood); } catch { }
         }
 
         private void Say(string text, Mood mood)
         {
             var brush = mood switch
             {
-                Mood.Happy   => new SolidColorBrush(Color.FromRgb(0x22,0x4E,0x2E)),  // vert sombre
-                Mood.Alert   => new SolidColorBrush(Color.FromRgb(0x4E,0x22,0x22)),  // rouge sombre
-                Mood.Playful => new SolidColorBrush(Color.FromRgb(0x2E,0x2A,0x4E)),  // violet sombre
+                Mood.Happy   => new SolidColorBrush(Color.FromRgb(0x22,0x4E,0x2E)),
+                Mood.Alert   => new SolidColorBrush(Color.FromRgb(0x4E,0x22,0x22)),
+                Mood.Playful => new SolidColorBrush(Color.FromRgb(0x2E,0x2A,0x4E)),
                 _            => new SolidColorBrush(Color.FromRgb(0x22,0x2A,0x32))
             };
 
@@ -137,7 +136,7 @@ namespace Virgil.App
         {
             try
             {
-                var snap = await _monitor.ReadSnapshotAsync(); // usages + températures si dispo
+                var snap = await _monitor.ReadSnapshotAsync();
                 CpuBar.Value = snap.Cpu.UsagePercent;
                 GpuBar.Value = snap.Gpu.UsagePercent;
                 RamBar.Value = snap.Ram.UsagePercent;
@@ -163,7 +162,7 @@ namespace Virgil.App
         }
 
         // =========================
-        //   Top bar events
+        //   Top bar
         // =========================
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
@@ -242,17 +241,16 @@ namespace Virgil.App
             Say("Mise à jour globale du système…", Mood.Neutral);
             try
             {
-                var a   = await _apps.UpgradeAllAsync();     // winget --all --include-unknown --silent (impl. service)
+                var a   = await _apps.UpgradeAllAsync();
                 var d   = await _drivers.UpgradeDriversAsync();
                 var s   = await _wu.StartScanAsync();
                 var dl  = await _wu.StartDownloadAsync();
                 var ins = await _wu.StartInstallAsync();
                 var sig = await _def.UpdateSignaturesAsync();
-                var scn = await _def.QuickScanAsync();       // FullScanAsync() possible si tu préfères
+                var scn = await _def.QuickScanAsync();
 
                 var nl  = Environment.NewLine;
-                var all = string.Join(nl, new[] { a, d, s, dl, ins, sig, scn }
-                                           .Where(x => !string.IsNullOrWhiteSpace(x)));
+                var all = string.Join(nl, new[] { a, d, s, dl, ins, sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
                 Say(Summarize(all), Mood.Neutral);
                 StatusText.Text = "Mises à jour complètes effectuées";
@@ -289,9 +287,6 @@ namespace Virgil.App
             finally { HideProgress(); }
         }
 
-        // =========================
-        //   Config
-        // =========================
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
             try
