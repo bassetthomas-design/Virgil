@@ -18,24 +18,24 @@ namespace Virgil.App
     public partial class MainWindow : Window
     {
         // Timers
-        private readonly DispatcherTimer _clockTimer  = new();
-        private readonly DispatcherTimer _survTimer   = new();   // monitoring pulse
-        private readonly DispatcherTimer _banterTimer = new();   // punchlines 1–6 min
+        private readonly DispatcherTimer _clockTimer  = new DispatcherTimer();
+        private readonly DispatcherTimer _survTimer   = new DispatcherTimer();   // monitoring pulse
+        private readonly DispatcherTimer _banterTimer = new DispatcherTimer();   // punchlines 1–6 min
 
         // Services (Core)
-        private readonly CfgService _config                     = new();
-        private readonly MaintenancePresetsService _presets     = new();
-        private readonly Virgil.Core.Services.CleaningService _cleaning = new();
-        private readonly BrowserCleaningService _browsers       = new();
-        private readonly ExtendedCleaningService _extended      = new();
-        private readonly ApplicationUpdateService _apps         = new();
-        private readonly DriverUpdateService _drivers           = new();
-        private readonly WindowsUpdateService _wu               = new();
-        private readonly DefenderUpdateService _def             = new();
-        private readonly AdvancedMonitoringService _monitor     = new();
+        private readonly CfgService _config = new CfgService();
+        private readonly MaintenancePresetsService _presets = new MaintenancePresetsService();
+        private readonly Virgil.Core.Services.CleaningService _cleaning = new Virgil.Core.Services.CleaningService();
+        private readonly BrowserCleaningService _browsers = new BrowserCleaningService();
+        private readonly ExtendedCleaningService _extended = new ExtendedCleaningService();
+        private readonly ApplicationUpdateService _apps = new ApplicationUpdateService();
+        private readonly DriverUpdateService _drivers = new DriverUpdateService();
+        private readonly WindowsUpdateService _wu = new WindowsUpdateService();
+        private readonly DefenderUpdateService _def = new DefenderUpdateService();
+        private readonly AdvancedMonitoringService _monitor = new AdvancedMonitoringService();
 
         // Chat
-        private readonly ObservableCollection<ChatItem> _chat = new();
+        private readonly ObservableCollection<ChatItem> _chat = new ObservableCollection<ChatItem>();
 
         // Config fusionnée (machine + user)
         private CfgModel _cfg = new CfgModel();
@@ -44,21 +44,21 @@ namespace Virgil.App
         {
             InitializeComponent();
 
-            // Chat binding
             ChatList.ItemsSource = _chat;
 
-            // Config (fusion machine + user) — safe
+            // Charger config en mode "safe"
             _cfg = LoadConfigSafe();
 
+            var nl = Environment.NewLine;
             ThresholdsText.Text =
-                $"CPU warn/alert: {GetCpuWarn()}% / {GetCpuAlert()}%{Environment.NewLine}" +
-                $"RAM warn/alert: {GetRamWarn()}% / {GetRamAlert()}%{Environment.NewLine}" +
-                $"Temp CPU warn/alert: {GetTempWarn(\"Cpu\")}°C / {GetTempAlert(\"Cpu\")}°C{Environment.NewLine}" +
-                $"Temp GPU warn/alert: {GetTempWarn(\"Gpu\")}°C / {GetTempAlert(\"Gpu\")}°C{Environment.NewLine}" +
-                $"Temp Disk warn/alert: {GetTempWarn(\"Disk\")}°C / {GetTempAlert(\"Disk\")}°C";
+                "CPU warn/alert: " + GetCpuWarn() + "% / " + GetCpuAlert() + "%" + nl +
+                "RAM warn/alert: " + GetRamWarn() + "% / " + GetRamAlert() + "%" + nl +
+                "Temp CPU warn/alert: " + GetTempWarn("Cpu") + "°C / " + GetTempAlert("Cpu") + "°C" + nl +
+                "Temp GPU warn/alert: " + GetTempWarn("Gpu") + "°C / " + GetTempAlert("Gpu") + "°C" + nl +
+                "Temp Disk warn/alert: " + GetTempWarn("Disk") + "°C / " + GetTempAlert("Disk") + "°C";
 
             InitTimers();
-            Say("Salut, je suis Virgil 👋", Mood.Neutral);
+            Say("Salut, je suis Virgil !", Mood.Neutral);
             SetAvatarMood("neutral");
         }
 
@@ -69,154 +69,168 @@ namespace Virgil.App
         {
             try
             {
-                // Essaye .LoadMerged()
-                var m = typeof(CfgService).GetMethod("LoadMerged", BindingFlags.Instance | BindingFlags.Public);
+                // Tente .LoadMerged()
+                MethodInfo m = typeof(CfgService).GetMethod("LoadMerged", BindingFlags.Instance | BindingFlags.Public);
                 if (m != null)
                 {
-                    var v = m.Invoke(_config, null);
+                    object v = m.Invoke(_config, null);
                     if (v is CfgModel ok1) return ok1;
                 }
-                // Essaye .Load()
+                // Tente .Load()
                 m = typeof(CfgService).GetMethod("Load", BindingFlags.Instance | BindingFlags.Public);
                 if (m != null)
                 {
-                    var v = m.Invoke(_config, null);
+                    object v = m.Invoke(_config, null);
                     if (v is CfgModel ok2) return ok2;
                 }
             }
-            catch { /* ignore */ }
+            catch
+            {
+                // ignore
+            }
 
-            // Fallback: lecture directe %ProgramData% puis %AppData% (user override)
+            // Fallback: lit %ProgramData% puis override %AppData%
             try
             {
-                var machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
-                var user    = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)     , "Virgil", "user.json");
-                CfgModel cfg = new();
+                string machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
+                string user = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "user.json");
+                CfgModel cfg = new CfgModel();
 
                 if (File.Exists(machine))
                 {
-                    var c = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(machine));
+                    CfgModel c = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(machine));
                     if (c != null) cfg = c;
                 }
                 if (File.Exists(user))
                 {
-                    var u = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(user));
+                    CfgModel u = JsonSerializer.Deserialize<CfgModel>(File.ReadAllText(user));
                     if (u != null) cfg = MergeUserOnMachine(cfg, u);
                 }
                 return cfg;
             }
-            catch { }
+            catch
+            {
+                // ignore
+            }
 
-            return new CfgModel(); // défaut
+            return new CfgModel();
         }
 
         private object GetConfigLocationsSafe()
         {
             try
             {
-                var m = typeof(CfgService).GetMethod("GetConfigLocations", BindingFlags.Instance | BindingFlags.Public);
+                MethodInfo m = typeof(CfgService).GetMethod("GetConfigLocations", BindingFlags.Instance | BindingFlags.Public);
                 if (m != null)
                 {
-                    return m.Invoke(_config, null) ?? new { Machine = "-", User = "-" };
+                    object v = m.Invoke(_config, null);
+                    if (v != null) return v;
                 }
             }
-            catch { }
-            var machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
-            var user    = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)     , "Virgil", "user.json");
+            catch
+            {
+                // ignore
+            }
+
+            string machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "config.json");
+            string user = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "user.json");
             return new { Machine = machine, User = user };
         }
 
         private static CfgModel MergeUserOnMachine(CfgModel machine, CfgModel user)
         {
-            // Merge ultra-sécurisée : si user a une valeur non-default, on remplace
             try
             {
-                if (user?.Thresholds != null)
+                if (user != null && user.Thresholds != null)
                 {
-                    machine.Thresholds ??= new();
+                    if (machine.Thresholds == null) machine.Thresholds = new CfgModel.ThresholdsModel();
+
                     // CPU
                     if (user.Thresholds.Cpu != null)
                     {
-                        machine.Thresholds.Cpu ??= new();
-                        if (user.Thresholds.Cpu.Warn > 0)  machine.Thresholds.Cpu.Warn  = user.Thresholds.Cpu.Warn;
+                        if (machine.Thresholds.Cpu == null) machine.Thresholds.Cpu = new CfgModel.PercentThreshold();
+                        if (user.Thresholds.Cpu.Warn > 0) machine.Thresholds.Cpu.Warn = user.Thresholds.Cpu.Warn;
                         if (user.Thresholds.Cpu.Alert > 0) machine.Thresholds.Cpu.Alert = user.Thresholds.Cpu.Alert;
                     }
                     // RAM
                     if (user.Thresholds.Ram != null)
                     {
-                        machine.Thresholds.Ram ??= new();
-                        if (user.Thresholds.Ram.Warn > 0)  machine.Thresholds.Ram.Warn  = user.Thresholds.Ram.Warn;
+                        if (machine.Thresholds.Ram == null) machine.Thresholds.Ram = new CfgModel.PercentThreshold();
+                        if (user.Thresholds.Ram.Warn > 0) machine.Thresholds.Ram.Warn = user.Thresholds.Ram.Warn;
                         if (user.Thresholds.Ram.Alert > 0) machine.Thresholds.Ram.Alert = user.Thresholds.Ram.Alert;
                     }
                     // Temps
                     if (user.Thresholds.Temps != null)
                     {
-                        machine.Thresholds.Temps ??= new();
-                        // CPU temp
+                        if (machine.Thresholds.Temps == null) machine.Thresholds.Temps = new CfgModel.TempThresholds();
+
                         if (user.Thresholds.Temps.Cpu != null)
                         {
-                            machine.Thresholds.Temps.Cpu ??= new();
-                            if (user.Thresholds.Temps.Cpu.Warn > 0)  machine.Thresholds.Temps.Cpu.Warn  = user.Thresholds.Temps.Cpu.Warn;
+                            if (machine.Thresholds.Temps.Cpu == null) machine.Thresholds.Temps.Cpu = new CfgModel.TempThreshold();
+                            if (user.Thresholds.Temps.Cpu.Warn > 0) machine.Thresholds.Temps.Cpu.Warn = user.Thresholds.Temps.Cpu.Warn;
                             if (user.Thresholds.Temps.Cpu.Alert > 0) machine.Thresholds.Temps.Cpu.Alert = user.Thresholds.Temps.Cpu.Alert;
                         }
-                        // GPU temp
                         if (user.Thresholds.Temps.Gpu != null)
                         {
-                            machine.Thresholds.Temps.Gpu ??= new();
-                            if (user.Thresholds.Temps.Gpu.Warn > 0)  machine.Thresholds.Temps.Gpu.Warn  = user.Thresholds.Temps.Gpu.Warn;
+                            if (machine.Thresholds.Temps.Gpu == null) machine.Thresholds.Temps.Gpu = new CfgModel.TempThreshold();
+                            if (user.Thresholds.Temps.Gpu.Warn > 0) machine.Thresholds.Temps.Gpu.Warn = user.Thresholds.Temps.Gpu.Warn;
                             if (user.Thresholds.Temps.Gpu.Alert > 0) machine.Thresholds.Temps.Gpu.Alert = user.Thresholds.Temps.Gpu.Alert;
                         }
-                        // Disk temp
                         if (user.Thresholds.Temps.Disk != null)
                         {
-                            machine.Thresholds.Temps.Disk ??= new();
-                            if (user.Thresholds.Temps.Disk.Warn > 0)  machine.Thresholds.Temps.Disk.Warn  = user.Thresholds.Temps.Disk.Warn;
+                            if (machine.Thresholds.Temps.Disk == null) machine.Thresholds.Temps.Disk = new CfgModel.TempThreshold();
+                            if (user.Thresholds.Temps.Disk.Warn > 0) machine.Thresholds.Temps.Disk.Warn = user.Thresholds.Temps.Disk.Warn;
                             if (user.Thresholds.Temps.Disk.Alert > 0) machine.Thresholds.Temps.Disk.Alert = user.Thresholds.Temps.Disk.Alert;
                         }
                     }
                 }
             }
-            catch { }
+            catch
+            {
+                // ignore
+            }
             return machine;
         }
 
-        private int GetCpuWarn()  => _cfg?.Thresholds?.Cpu?.Warn   ?? 70;
-        private int GetCpuAlert() => _cfg?.Thresholds?.Cpu?.Alert  ?? 90;
-        private int GetRamWarn()  => _cfg?.Thresholds?.Ram?.Warn   ?? 70;
-        private int GetRamAlert() => _cfg?.Thresholds?.Ram?.Alert  ?? 90;
+        private int GetCpuWarn() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Cpu != null) ? _cfg.Thresholds.Cpu.Warn : 70; }
+        private int GetCpuAlert() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Cpu != null) ? _cfg.Thresholds.Cpu.Alert : 90; }
+        private int GetRamWarn() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Ram != null) ? _cfg.Thresholds.Ram.Warn : 70; }
+        private int GetRamAlert() { return (_cfg != null && _cfg.Thresholds != null && _cfg.Thresholds.Ram != null) ? _cfg.Thresholds.Ram.Alert : 90; }
         private int GetTempWarn(string part)
-            => part switch {
-                "Cpu"  => _cfg?.Thresholds?.Temps?.Cpu?.Warn  ?? 75,
-                "Gpu"  => _cfg?.Thresholds?.Temps?.Gpu?.Warn  ?? 80,
-                "Disk" => _cfg?.Thresholds?.Temps?.Disk?.Warn ?? 55,
-                _ => 75
-            };
+        {
+            if (_cfg == null || _cfg.Thresholds == null || _cfg.Thresholds.Temps == null) return 75;
+            if (part == "Cpu" && _cfg.Thresholds.Temps.Cpu != null) return _cfg.Thresholds.Temps.Cpu.Warn;
+            if (part == "Gpu" && _cfg.Thresholds.Temps.Gpu != null) return _cfg.Thresholds.Temps.Gpu.Warn;
+            if (part == "Disk" && _cfg.Thresholds.Temps.Disk != null) return _cfg.Thresholds.Temps.Disk.Warn;
+            return 75;
+        }
         private int GetTempAlert(string part)
-            => part switch {
-                "Cpu"  => _cfg?.Thresholds?.Temps?.Cpu?.Alert  ?? 90,
-                "Gpu"  => _cfg?.Thresholds?.Temps?.Gpu?.Alert  ?? 92,
-                "Disk" => _cfg?.Thresholds?.Temps?.Disk?.Alert ?? 65,
-                _ => 90
-            };
+        {
+            if (_cfg == null || _cfg.Thresholds == null || _cfg.Thresholds.Temps == null) return 90;
+            if (part == "Cpu" && _cfg.Thresholds.Temps.Cpu != null) return _cfg.Thresholds.Temps.Cpu.Alert;
+            if (part == "Gpu" && _cfg.Thresholds.Temps.Gpu != null) return _cfg.Thresholds.Temps.Gpu.Alert;
+            if (part == "Disk" && _cfg.Thresholds.Temps.Disk != null) return _cfg.Thresholds.Temps.Disk.Alert;
+            return 90;
+        }
 
         private void InitTimers()
         {
             _clockTimer.Interval = TimeSpan.FromSeconds(1);
-            _clockTimer.Tick += (_, _) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+            _clockTimer.Tick += (s, e) => { ClockText.Text = DateTime.Now.ToString("HH:mm:ss"); };
             _clockTimer.Start();
 
             _survTimer.Interval = TimeSpan.FromSeconds(2);
-            _survTimer.Tick += async (_, _) => await SurveillancePulse();
+            _survTimer.Tick += async (s, e) => { await SurveillancePulse(); };
 
-            _banterTimer.Tick += (_, _) =>
+            _banterTimer.Tick += (s, e) =>
             {
                 if (SurveillanceToggle.IsChecked == true)
                 {
                     Say(PunchlineService.RandomBanter(), Mood.Playful);
-                    _banterTimer.Interval = TimeSpan.FromMinutes(Random.Shared.Next(1, 7));
+                    _banterTimer.Interval = TimeSpan.FromMinutes(new Random().Next(1, 7));
                 }
             };
-            _banterTimer.Interval = TimeSpan.FromMinutes(Random.Shared.Next(1, 7));
+            _banterTimer.Interval = TimeSpan.FromMinutes(new Random().Next(1, 7));
         }
 
         // =========================
@@ -236,18 +250,16 @@ namespace Virgil.App
 
         private void SetAvatarMood(string mood)
         {
-            try { Avatar?.SetMood(mood); } catch { }
+            try { if (Avatar != null) Avatar.SetMood(mood); } catch { }
         }
 
         private void Say(string text, Mood mood)
         {
-            var brush = mood switch
-            {
-                Mood.Happy   => new SolidColorBrush(Color.FromRgb(0x22,0x4E,0x2E)),
-                Mood.Alert   => new SolidColorBrush(Color.FromRgb(0x4E,0x22,0x22)),
-                Mood.Playful => new SolidColorBrush(Color.FromRgb(0x2E,0x2A,0x4E)),
-                _            => new SolidColorBrush(Color.FromRgb(0x22,0x2A,0x32))
-            };
+            SolidColorBrush brush;
+            if (mood == Mood.Happy) brush = new SolidColorBrush(Color.FromRgb(0x22, 0x4E, 0x2E));
+            else if (mood == Mood.Alert) brush = new SolidColorBrush(Color.FromRgb(0x4E, 0x22, 0x22));
+            else if (mood == Mood.Playful) brush = new SolidColorBrush(Color.FromRgb(0x2E, 0x2A, 0x4E));
+            else brush = new SolidColorBrush(Color.FromRgb(0x22, 0x2A, 0x32));
 
             _chat.Add(new ChatItem
             {
@@ -262,12 +274,12 @@ namespace Virgil.App
             while (_chat.Count > 200) _chat.RemoveAt(0);
         }
 
-        private static string Summarize(string big, int maxLines = 30)
+        private static string Summarize(string big, int maxLines)
         {
             if (string.IsNullOrWhiteSpace(big)) return string.Empty;
-            var lines = big.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            string[] lines = big.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None);
             if (lines.Length <= maxLines) return big;
-            return string.Join("\n", lines.Take(maxLines).Concat(new[] { $"… (+{lines.Length - maxLines} lignes)" }));
+            return string.Join("\n", lines.Take(maxLines).Concat(new string[] { "… (+" + (lines.Length - maxLines) + " lignes)" }));
         }
 
         // =========================
@@ -277,25 +289,28 @@ namespace Virgil.App
         {
             try
             {
-                var snap = await ReadSnapshotSafeAsync(); // usages + températures si dispo
+                dynamic snap = await ReadSnapshotSafeAsync();
 
-                CpuBar.Value  = snap.Cpu.UsagePercent;
-                GpuBar.Value  = snap.Gpu.UsagePercent;
-                RamBar.Value  = snap.Ram.UsagePercent;
-                DiskBar.Value = snap.Disk.UsagePercent;
+                CpuBar.Value  = Convert.ToDouble(GetDyn(snap, "Cpu", "UsagePercent", 0.0));
+                GpuBar.Value  = Convert.ToDouble(GetDyn(snap, "Gpu", "UsagePercent", 0.0));
+                RamBar.Value  = Convert.ToDouble(GetDyn(snap, "Ram", "UsagePercent", 0.0));
+                DiskBar.Value = Convert.ToDouble(GetDyn(snap, "Disk", "UsagePercent", 0.0));
 
-                CpuTempText.Text  = snap.Cpu.TemperatureC.HasValue  ? $"CPU: {snap.Cpu.TemperatureC.Value:F0} °C"  : "CPU: -- °C";
-                GpuTempText.Text  = snap.Gpu.TemperatureC.HasValue  ? $"GPU: {snap.Gpu.TemperatureC.Value:F0} °C"  : "GPU: -- °C";
-                DiskTempText.Text = snap.Disk.TemperatureC.HasValue ? $"Disque: {snap.Disk.TemperatureC.Value:F0} °C" : "Disque: -- °C";
-                RamText.Text      = $"RAM: {snap.Ram.UsedGiB:F1} / {snap.Ram.TotalGiB:F1} GiB";
+                double? cpuT  = GetDynNullableDouble(snap, "Cpu", "TemperatureC");
+                double? gpuT  = GetDynNullableDouble(snap, "Gpu", "TemperatureC");
+                double? dskT  = GetDynNullableDouble(snap, "Disk", "TemperatureC");
+                double usedGiB = Convert.ToDouble(GetDyn(snap, "Ram", "UsedGiB", 0.0));
+                double totGiB  = Convert.ToDouble(GetDyn(snap, "Ram", "TotalGiB", 0.0));
 
-                // Alerte si dépassement
-                var cpuA = GetTempAlert("Cpu");
-                var gpuA = GetTempAlert("Gpu");
-                var dskA = GetTempAlert("Disk");
-                if ((snap.Cpu.TemperatureC ?? 0) >= cpuA ||
-                    (snap.Gpu.TemperatureC ?? 0) >= gpuA ||
-                    (snap.Disk.TemperatureC ?? 0) >= dskA)
+                CpuTempText.Text  = (cpuT.HasValue ? "CPU: " + cpuT.Value.ToString("F0") + " °C" : "CPU: -- °C");
+                GpuTempText.Text  = (gpuT.HasValue ? "GPU: " + gpuT.Value.ToString("F0") + " °C" : "GPU: -- °C");
+                DiskTempText.Text = (dskT.HasValue ? "Disque: " + dskT.Value.ToString("F0") + " °C" : "Disque: -- °C");
+                RamText.Text      = "RAM: " + usedGiB.ToString("F1") + " / " + totGiB.ToString("F1") + " GiB";
+
+                int cpuA = GetTempAlert("Cpu");
+                int gpuA = GetTempAlert("Gpu");
+                int dskA = GetTempAlert("Disk");
+                if ((cpuT ?? 0) >= cpuA || (gpuT ?? 0) >= gpuA || (dskT ?? 0) >= dskA)
                 {
                     Say("⚠️ Température élevée détectée.", Mood.Alert);
                     SetAvatarMood("devil");
@@ -309,21 +324,25 @@ namespace Virgil.App
 
         private async Task<dynamic> ReadSnapshotSafeAsync()
         {
-            // Essaie plusieurs noms/modes sur AdvancedMonitoringService (async/sync)
-            var t = _monitor.GetType();
-            var names = new[] { "GetSnapshotAsync", "ReadSnapshotAsync", "SnapshotAsync", "GetSnapshot", "ReadSnapshot" };
+            Type t = _monitor.GetType();
+            string[] names = new string[] { "GetSnapshotAsync", "ReadSnapshotAsync", "SnapshotAsync", "GetSnapshot", "ReadSnapshot" };
 
-            foreach (var n in names)
+            for (int i = 0; i < names.Length; i++)
             {
-                var m = t.GetMethod(n, BindingFlags.Instance | BindingFlags.Public);
+                MethodInfo m = t.GetMethod(names[i], BindingFlags.Instance | BindingFlags.Public);
                 if (m == null) continue;
 
-                var result = m.Invoke(_monitor, null);
+                object result = m.Invoke(_monitor, null);
                 if (result is Task task)
                 {
                     await task.ConfigureAwait(false);
-                    var prop = task.GetType().GetProperty("Result");
-                    if (prop != null) return prop.GetValue(task) ?? MakeEmptySnapshot();
+                    PropertyInfo pr = task.GetType().GetProperty("Result");
+                    if (pr != null)
+                    {
+                        object val = pr.GetValue(task);
+                        return val ?? MakeEmptySnapshot();
+                    }
+                    return MakeEmptySnapshot();
                 }
                 return result ?? MakeEmptySnapshot();
             }
@@ -331,13 +350,36 @@ namespace Virgil.App
             return MakeEmptySnapshot();
         }
 
-        private static dynamic MakeEmptySnapshot() => new
+        private static object MakeEmptySnapshot()
         {
-            Cpu  = new { UsagePercent = 0, TemperatureC = (double?)null },
-            Gpu  = new { UsagePercent = 0, TemperatureC = (double?)null },
-            Ram  = new { UsagePercent = 0, UsedGiB = 0.0, TotalGiB = 0.0 },
-            Disk = new { UsagePercent = 0, TemperatureC = (double?)null }
-        };
+            return new
+            {
+                Cpu = new { UsagePercent = 0.0, TemperatureC = (double?)null },
+                Gpu = new { UsagePercent = 0.0, TemperatureC = (double?)null },
+                Ram = new { UsagePercent = 0.0, UsedGiB = 0.0, TotalGiB = 0.0 },
+                Disk = new { UsagePercent = 0.0, TemperatureC = (double?)null }
+            };
+        }
+
+        private static object GetDyn(object root, string part, string prop, object fallback)
+        {
+            if (root == null) return fallback;
+            PropertyInfo pPart = root.GetType().GetProperty(part);
+            if (pPart == null) return fallback;
+            object vPart = pPart.GetValue(root);
+            if (vPart == null) return fallback;
+            PropertyInfo pProp = vPart.GetType().GetProperty(prop);
+            if (pProp == null) return fallback;
+            object v = pProp.GetValue(vPart);
+            return v ?? fallback;
+        }
+
+        private static double? GetDynNullableDouble(object root, string part, string prop)
+        {
+            object v = GetDyn(root, part, prop, null);
+            if (v == null) return null;
+            try { return Convert.ToDouble(v); } catch { return null; }
+        }
 
         // =========================
         //   Top bar
@@ -367,8 +409,8 @@ namespace Virgil.App
             Say("Maintenance complète…", Mood.Neutral);
             try
             {
-                var log = await _presets.FullAsync();
-                Say(Summarize(log), Mood.Neutral);
+                string log = await _presets.FullAsync();
+                Say(Summarize(log, 30), Mood.Neutral);
                 StatusText.Text = "Maintenance complète effectuée";
             }
             catch (Exception ex)
@@ -385,8 +427,8 @@ namespace Virgil.App
             Say("Nettoyage des fichiers temporaires…", Mood.Neutral);
             try
             {
-                var res = await _cleaning.CleanTempAsync();
-                Say(Summarize(res), Mood.Neutral);
+                string res = await _cleaning.CleanTempAsync();
+                Say(Summarize(res, 30), Mood.Neutral);
                 StatusText.Text = "Nettoyage TEMP terminé";
             }
             catch (Exception ex)
@@ -402,8 +444,8 @@ namespace Virgil.App
             Say("Nettoyage des navigateurs…", Mood.Neutral);
             try
             {
-                var report = await _browsers.AnalyzeAndCleanAsync();
-                Say(Summarize(report), Mood.Neutral);
+                string report = await _browsers.AnalyzeAndCleanAsync();
+                Say(Summarize(report, 30), Mood.Neutral);
                 StatusText.Text = "Navigateurs nettoyés";
             }
             catch (Exception ex)
@@ -419,20 +461,20 @@ namespace Virgil.App
             Say("Mise à jour globale du système…", Mood.Neutral);
             try
             {
-                var a   = await _apps.UpgradeAllAsync();
-                var d   = await _drivers.UpgradeDriversAsync();
-                var s   = await _wu.StartScanAsync();
-                var dl  = await _wu.StartDownloadAsync();
-                var ins = await _wu.StartInstallAsync();
-                var sig = await _def.UpdateSignaturesAsync();
-                var scn = await _def.QuickScanAsync();
+                string a   = await _apps.UpgradeAllAsync();
+                string d   = await _drivers.UpgradeDriversAsync();
+                string s   = await _wu.StartScanAsync();
+                string dl  = await _wu.StartDownloadAsync();
+                string ins = await _wu.StartInstallAsync();
+                string sig = await _def.UpdateSignaturesAsync();
+                string scn = await _def.QuickScanAsync();
 
-                var nl  = Environment.NewLine;
-                var all = string.Join(nl, new[] { a, d, s, dl, ins, sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                string nl = Environment.NewLine;
+                string all = string.Join(nl, new string[] { a, d, s, dl, ins, sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
-                Say(Summarize(all), Mood.Neutral);
+                Say(Summarize(all, 30), Mood.Neutral);
                 StatusText.Text = "Mises à jour complètes effectuées";
-                Say("✅ Tout est à jour !", Mood.Happy);
+                Say("Tout est à jour !", Mood.Happy);
             }
             catch (Exception ex)
             {
@@ -448,13 +490,13 @@ namespace Virgil.App
             Say("Sécurité Windows Defender…", Mood.Neutral);
             try
             {
-                var sig = await _def.UpdateSignaturesAsync();
-                var scn = await _def.QuickScanAsync();
+                string sig = await _def.UpdateSignaturesAsync();
+                string scn = await _def.QuickScanAsync();
 
-                var nl  = Environment.NewLine;
-                var msg = string.Join(nl, new[] { sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                string nl = Environment.NewLine;
+                string msg = string.Join(nl, new string[] { sig, scn }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
-                Say(Summarize(msg), Mood.Neutral);
+                Say(Summarize(msg, 30), Mood.Neutral);
                 StatusText.Text = "Defender: signatures à jour + scan terminé";
             }
             catch (Exception ex)
@@ -469,10 +511,12 @@ namespace Virgil.App
         {
             try
             {
-                var where = GetConfigLocationsSafe();
-                var machine = where.GetType().GetProperty("Machine")?.GetValue(where)?.ToString() ?? "-";
-                var user    = where.GetType().GetProperty("User")?.GetValue(where)?.ToString() ?? "-";
-                var nl = Environment.NewLine;
+                object where = GetConfigLocationsSafe();
+                PropertyInfo pM = where.GetType().GetProperty("Machine");
+                PropertyInfo pU = where.GetType().GetProperty("User");
+                string machine = (pM != null ? Convert.ToString(pM.GetValue(where)) : "-") ?? "-";
+                string user = (pU != null ? Convert.ToString(pU.GetValue(where)) : "-") ?? "-";
+                string nl = Environment.NewLine;
                 Say("Config machine: " + machine + nl + "Config user: " + user, Mood.Neutral);
             }
             catch (Exception ex)
