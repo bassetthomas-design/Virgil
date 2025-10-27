@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Threading.Tasks;
 
 namespace Virgil.App
 {
@@ -32,7 +33,7 @@ namespace Virgil.App
             try
             {
                 Say("Ouverture de la configuration...", "neutral");
-                // TODO: ouvre ton écran/volet de config
+                // TODO: ouvre l’écran/volet de config
             }
             catch { /* safe */ }
         }
@@ -43,9 +44,13 @@ namespace Virgil.App
             try
             {
                 Say("Maintenance complète : démarrage...", "info");
-                // TODO (core): enchaîner CleaningService -> BrowserCleaningService -> ExtendedCleaningService
-                // -> ApplicationUpdateService (winget) -> WindowsUpdateService (UsoClient)
+
+                // TODO (core) quand dispo :
                 // await MaintenancePresetsService.FullAsync();
+
+                // Temporaire : évite l’avertissement CS1998
+                await Task.CompletedTask;
+
                 Say("Maintenance complète : terminé.", "success");
             }
             catch (Exception ex)
@@ -60,8 +65,12 @@ namespace Virgil.App
             try
             {
                 Say("Nettoyage TEMP : analyse...", "info");
-                // TODO (core): analyse + suppression + stats
+
+                // TODO (core) quand dispo :
                 // await CleaningService.CleanTempAsync(progress => {/*update UI*/});
+
+                await Task.CompletedTask;
+
                 Say("Nettoyage TEMP : terminé.", "success");
             }
             catch (Exception ex)
@@ -76,7 +85,12 @@ namespace Virgil.App
             try
             {
                 Say("Nettoyage navigateurs : démarrage...", "info");
-                // TODO (core): BrowserCleaningService.AnalyzeAndClean(...)
+
+                // TODO (core) quand dispo :
+                // await BrowserCleaningService.AnalyzeAndClean(...);
+
+                await Task.CompletedTask;
+
                 Say("Nettoyage navigateurs : terminé.", "success");
             }
             catch (Exception ex)
@@ -91,10 +105,14 @@ namespace Virgil.App
             try
             {
                 Say("Mises à jour (apps/jeux/drivers/Windows) : démarrage...", "info");
-                // TODO (core): winget upgrade --all --include-unknown (mode silencieux si possible)
+
+                // TODO (core) quand dispo :
                 // await ApplicationUpdateService.UpgradeAllAsync(...);
                 // await DriverUpdateService.UpgradeDriversAsync();
                 // await WindowsUpdateService.RunAsync(); // Scan/Download/Install/Restart
+
+                await Task.CompletedTask;
+
                 Say("Mises à jour : terminé.", "success");
             }
             catch (Exception ex)
@@ -108,8 +126,14 @@ namespace Virgil.App
         {
             try
             {
-                Say("Microsoft Defender : mise à jour des signatures + scan...", "info");
-                // TODO (core): déclenchement update signatures + démarrage d’un scan quick/full
+                Say("Microsoft Defender : MAJ signatures + scan...", "info");
+
+                // TODO (core) quand dispo :
+                // await DefenderService.UpdateSignaturesAsync();
+                // await DefenderService.RunScanAsync();
+
+                await Task.CompletedTask;
+
                 Say("Microsoft Defender : opérations terminées.", "success");
             }
             catch (Exception ex)
