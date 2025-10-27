@@ -12,7 +12,7 @@ namespace Virgil.App.Controls
             InitializeComponent();
         }
 
-        // Définir une DP pour la couleur du visage (liaison XAML)
+        // Couleur du visage (liaison XAML)
         public static readonly DependencyProperty FaceFillProperty =
             DependencyProperty.Register(
                 nameof(FaceFill),
@@ -27,64 +27,34 @@ namespace Virgil.App.Controls
         }
 
         /// <summary>
-        /// Change l’humeur (couleur du visage + halo) et lance l’animation “MoodPulse”.
-        /// Affiche certains ornements en fonction de l’humeur :
-        ///  - happy : cœurs dans les yeux
-        ///  - playful : moustaches de chat
-        ///  - alert : cornes rouges
+        /// Couleur du visage + halo selon l'humeur, puis animation de pulse.
+        /// (Yeux toujours blancs dans le XAML)
         /// </summary>
         public void SetMood(string mood)
         {
-            // Déterminer la couleur en fonction de l’humeur
             var lower = (mood ?? string.Empty).Trim().ToLowerInvariant();
             var color = lower switch
             {
-                "happy"   => Color.FromRgb(0x54, 0xC5, 0x6C), // vert clair
+                "happy"   => Color.FromRgb(0x54, 0xC5, 0x6C), // vert
                 "alert"   => Color.FromRgb(0xD9, 0x3D, 0x3D), // rouge
                 "playful" => Color.FromRgb(0x9B, 0x59, 0xB6), // violet
-                _          => Color.FromRgb(0x44, 0x55, 0x66), // neutre
+                _         => Color.FromRgb(0x44, 0x55, 0x66), // neutre
             };
 
-            // Mettre à jour la brosse du visage
             FaceFill = new SolidColorBrush(color);
 
-            // Mettre à jour le halo
             if (Glow != null)
             {
                 var haloColor = Color.FromArgb(0x55, color.R, color.G, color.B);
                 Glow.Fill = new SolidColorBrush(haloColor);
             }
 
-            // Afficher/masquer les éléments décoratifs selon l'humeur
-            if (HeartLeft != null && HeartRight != null)
-            {
-                var happy = lower == "happy";
-                HeartLeft.Visibility = happy ? Visibility.Visible : Visibility.Collapsed;
-                HeartRight.Visibility = happy ? Visibility.Visible : Visibility.Collapsed;
-            }
-            if (WhiskersLeft != null && WhiskersRight != null)
-            {
-                var playful = lower == "playful";
-                WhiskersLeft.Visibility = playful ? Visibility.Visible : Visibility.Collapsed;
-                WhiskersRight.Visibility = playful ? Visibility.Visible : Visibility.Collapsed;
-            }
-            if (HornLeft != null && HornRight != null)
-            {
-                var alertMood = lower == "alert";
-                HornLeft.Visibility = alertMood ? Visibility.Visible : Visibility.Collapsed;
-                HornRight.Visibility = alertMood ? Visibility.Visible : Visibility.Collapsed;
-            }
-
-            // Lancer l’animation de pulse
             try
             {
                 if (FindResource("MoodPulse") is Storyboard sb)
                     sb.Begin();
             }
-            catch
-            {
-                // Si l’animation n’existe pas, ne rien faire
-            }
+            catch { /* pas d'animation -> ignorer */ }
         }
     }
 }
