@@ -1,3 +1,4 @@
+// src/Virgil.App/MainWindow.xaml.cs
 using System;
 using System.Windows;
 using System.Windows.Threading;
@@ -6,127 +7,96 @@ namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
-        // === Fields (unique) ===
-        private readonly DispatcherTimer _clockTimer;
+        // === Champs privés (UN SEUL exemplaire) ===
+        private readonly DispatcherTimer _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
 
-        // === Constructor (unique) ===
+        // === Constructeur (UN SEUL) ===
         public MainWindow()
         {
             InitializeComponent();
 
-            // Clock
-            _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _clockTimer.Tick += (s, e) =>
+            // Horloge en direct (top bar)
+            _clockTimer.Tick += (_, __) =>
             {
-                try
-                {
-                    if (ClockText != null)
-                        ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
-                }
-                catch { /* no-op */ }
+                try { ClockText?.SetCurrentValue(System.Windows.Controls.TextBlock.TextProperty, DateTime.Now.ToString("HH:mm:ss")); }
+                catch { /* ignore UI timing errors */ }
             };
             _clockTimer.Start();
 
-            // UI init
-            try
-            {
-                if (StatusText != null)
-                    StatusText.Text = "En attente...";
-            }
-            catch { /* no-op */ }
+            // Texte d’état par défaut
+            TrySetStatus("Prêt.");
+            // Avatar à l’humeur "idle"
+            SetAvatarMood("idle");
         }
 
-        // === Avatar helper (unique) ===
+        // === Utilitaires UI sûrs ===
+        private void TrySetStatus(string message)
+        {
+            try { StatusText?.SetCurrentValue(System.Windows.Controls.TextBlock.TextProperty, message); }
+            catch { /* ignore */ }
+        }
+
         private void SetAvatarMood(string mood)
         {
-            try { AvatarControl?.SetMood(mood); } catch { /* no-op */ }
+            try { AvatarControl?.SetMood(mood); } catch { /* ignore */ }
         }
 
-        // === Top bar handlers ===
+        // === Handlers top-bar Surveillance (référencés par MainWindow.xaml) ===
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Surveillance : ON";
-                SetAvatarMood("focused");
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Surveillance : ON");
+            SetAvatarMood("focused");
+            // TODO: démarrer le monitoring temps réel ici (timers, services, etc.)
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Surveillance : OFF";
-                SetAvatarMood("idle");
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Surveillance : OFF");
+            SetAvatarMood("idle");
+            // TODO: arrêter le monitoring temps réel ici
         }
 
+        // === Handler bouton configuration ===
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Ouverture de la configuration (à implémenter)…";
-                // TODO: ouvrir le fichier de config / fenêtre de config
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Ouverture de la configuration...");
+            // TODO: ouvrir l’UI/éditeur pour la config (machine + user)
         }
 
-        // === Actions rapides (stubs sûrs qui compilent) ===
+        // === Actions (boutons dans le panneau d’outils) ===
         private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Maintenance complète en cours (stub)…";
-                SetAvatarMood("working");
-                // TODO: appeler la logique réelle
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Maintenance complète en cours...");
+            SetAvatarMood("working");
+            // TODO: enchaîner nettoyage, updates, défense, etc.
         }
 
         private void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Nettoyage des fichiers temporaires (stub)…";
-                SetAvatarMood("working");
-                // TODO: implémentation
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Nettoyage des fichiers temporaires...");
+            SetAvatarMood("working");
+            // TODO: appeler ton service de nettoyage (temp)
         }
 
         private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Nettoyage navigateurs (stub)…";
-                SetAvatarMood("working");
-                // TODO: implémentation
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Nettoyage navigateurs...");
+            SetAvatarMood("working");
+            // TODO: appeler ton service de nettoyage (browsers)
         }
 
         private void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Mises à jour (winget + jeux + applis) (stub)…";
-                SetAvatarMood("working");
-                // TODO: implémentation
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Mises à jour en cours...");
+            SetAvatarMood("working");
+            // TODO: enchaîner winget/choco/driver/game/etc. suivant ta logique
         }
 
         private void Action_Defender(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                StatusText.Text = "Microsoft Defender (scan & update) (stub)…";
-                SetAvatarMood("working");
-                // TODO: implémentation
-            }
-            catch { /* no-op */ }
+            TrySetStatus("Analyse Microsoft Defender...");
+            SetAvatarMood("working");
+            // TODO: lancer l’analyse Defender / sécurité
         }
     }
 }
