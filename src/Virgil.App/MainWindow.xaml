@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="Virgil"
         Width="1280"
-        Height="720"
+        Height="760"
         Background="#0E1116"
         Foreground="White"
         WindowStartupLocation="CenterScreen">
@@ -16,7 +16,7 @@
     <!-- =========================
          BARRE SUPÉRIEURE
          ========================= -->
-    <DockPanel LastChildFill="False" Height="42" Background="#1A1D24">
+    <DockPanel LastChildFill="False" Height="44" Background="#1A1D24">
       <TextBlock x:Name="ClockText"
                  Text="--:--:--"
                  DockPanel.Dock="Left"
@@ -30,38 +30,70 @@
                     Margin="0,0,16,0"
                     Padding="12,4"
                     VerticalAlignment="Center"
-                    Click="ToggleSurveillance_Click"/>
+                    Checked="SurveillanceToggle_Checked"
+                    Unchecked="SurveillanceToggle_Unchecked"/>
     </DockPanel>
 
     <!-- =========================
          CONTENU PRINCIPAL
          ========================= -->
-    <Grid Margin="0,42,0,0">
+    <Grid Margin="0,44,0,0">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="260"/>
+        <ColumnDefinition Width="280"/>
         <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="380"/>
+        <ColumnDefinition Width="420"/>
       </Grid.ColumnDefinitions>
 
       <!-- Panneau gauche (avatar + stats) -->
-      <StackPanel Grid.Column="0" Background="#15191F" Padding="16">
+      <StackPanel Grid.Column="0" Background="#15191F" Padding="16" >
         <controls:VirgilAvatar x:Name="Avatar" Width="200" Height="200" HorizontalAlignment="Center"/>
-        <StackPanel Margin="0,20,0,0">
-          <TextBlock Text="CPU" FontSize="14" Margin="0,6"/>
-          <ProgressBar x:Name="CpuBar" Height="10" Maximum="100" Value="0"/>
-          <TextBlock Text="GPU" FontSize="14" Margin="0,6"/>
-          <ProgressBar x:Name="GpuBar" Height="10" Maximum="100" Value="0"/>
-          <TextBlock Text="Mémoire" FontSize="14" Margin="0,6"/>
-          <ProgressBar x:Name="RamBar" Height="10" Maximum="100" Value="0"/>
-          <TextBlock Text="Disque" FontSize="14" Margin="0,6"/>
-          <ProgressBar x:Name="DiskBar" Height="10" Maximum="100" Value="0"/>
-        </StackPanel>
+        <Border BorderBrush="#2A2F36" BorderThickness="1" Margin="0,16,0,0" Padding="12">
+          <StackPanel>
+            <TextBlock Text="Surveillance" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <TextBlock Text="CPU" FontSize="12"/>
+            <ProgressBar x:Name="CpuBar" Height="10" Maximum="100" Value="0" />
+            <TextBlock x:Name="CpuTempText" Text="CPU: -- °C" FontSize="11" Opacity="0.75" Margin="0,2,0,8"/>
+
+            <TextBlock Text="GPU" FontSize="12"/>
+            <ProgressBar x:Name="GpuBar" Height="10" Maximum="100" Value="0" />
+            <TextBlock x:Name="GpuTempText" Text="GPU: -- °C" FontSize="11" Opacity="0.75" Margin="0,2,0,8"/>
+
+            <TextBlock Text="Mémoire" FontSize="12"/>
+            <ProgressBar x:Name="RamBar" Height="10" Maximum="100" Value="0" />
+            <TextBlock x:Name="RamText" Text="RAM: -- / --" FontSize="11" Opacity="0.75" Margin="0,2,0,8"/>
+
+            <TextBlock Text="Disque" FontSize="12"/>
+            <ProgressBar x:Name="DiskBar" Height="10" Maximum="100" Value="0" />
+            <TextBlock x:Name="DiskTempText" Text="Disque: -- °C" FontSize="11" Opacity="0.75" Margin="0,2,0,0"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Seuils -->
+        <Border BorderBrush="#2A2F36" BorderThickness="1" Margin="0,12,0,0" Padding="12">
+          <StackPanel>
+            <TextBlock Text="Seuils (fusion machine + user)" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <TextBlock x:Name="ThresholdsText" Text="Chargement..." FontSize="11" Opacity="0.9" TextWrapping="Wrap"/>
+            <Button x:Name="OpenConfigButton" Content="Ouvrir config" Margin="0,8,0,0" Click="OpenConfig_Click"/>
+          </StackPanel>
+        </Border>
       </StackPanel>
 
       <!-- Zone centrale (chat) -->
-      <DockPanel Grid.Column="1" Background="#0E1116">
+      <DockPanel Grid.Column="1" Background="#0E1116" LastChildFill="True">
         <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
-          <ItemsControl x:Name="ChatMessages"/>
+          <ItemsControl x:Name="ChatList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border CornerRadius="6" Padding="8" Margin="6"
+                        Background="{Binding BubbleBrush}">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding Time}" FontSize="10" Opacity="0.7" HorizontalAlignment="Right"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
         </ScrollViewer>
       </DockPanel>
 
@@ -69,7 +101,7 @@
       <StackPanel Grid.Column="2" Background="#15191F" Padding="12">
         <!-- ======== BOUTONS D’ACTION ======== -->
         <GroupBox Header="Actions" Foreground="White" BorderBrush="#2A2F36" Margin="0,8,0,0">
-          <WrapPanel Margin="10" ItemWidth="220" ItemHeight="36">
+          <WrapPanel Margin="10" ItemWidth="240" ItemHeight="36">
             <Button Click="Action_MaintenanceComplete" Margin="6">Maintenance complète</Button>
             <Button Click="Action_CleanTemp"          Margin="6">Nettoyer TEMP</Button>
             <Button Click="Action_CleanBrowsers"      Margin="6">Nettoyer navigateurs</Button>
@@ -81,7 +113,7 @@
         <!-- ======== STATUT ======== -->
         <StackPanel Margin="0,10,0,0">
           <ProgressBar x:Name="ActionProgress" Height="8" IsIndeterminate="False" Visibility="Collapsed"/>
-          <TextBlock x:Name="StatusText" Text="Prêt." FontSize="13" Margin="0,4,0,0"/>
+          <TextBlock x:Name="StatusText" Text="Prêt." FontSize="13" Margin="0,6,0,0"/>
         </StackPanel>
       </StackPanel>
     </Grid>
