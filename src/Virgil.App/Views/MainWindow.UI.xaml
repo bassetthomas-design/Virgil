@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MainWindow.UI.xaml (corrigé) -->
+<!-- MainWindow.UI.xaml (corrigé - suppression de ColumnSpacing/RowSpacing sur UniformGrid) -->
 <Window x:Class="Virgil.App.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -60,7 +60,7 @@
             <!-- Left panel -->
             <Border Grid.Column="0" Padding="16" CornerRadius="12" Background="#151821">
                 <StackPanel>
-                    <!-- ICI: suppression de Mood=... pour éviter MC3072 -->
+                    <!-- Avatar: pas de propriété Mood (inexistante) -->
                     <controls:AvatarControl Height="220" />
                     <TextBlock Text="{Binding MoodLabel}" Foreground="#AAB4CF" Margin="0,8,0,12"/>
 
@@ -120,7 +120,16 @@
 
                 <!-- Actions -->
                 <Border Grid.Row="1" Margin="0,12,0,0" Padding="12" CornerRadius="12" Background="#121826">
-                    <UniformGrid Columns="3" Rows="2" ColumnSpacing="10" RowSpacing="10">
+                    <!-- Style local: marge uniforme pour tous les boutons -->
+                    <Border.Resources>
+                        <Style TargetType="Button">
+                            <Setter Property="Margin" Value="5"/>
+                            <Setter Property="Height" Value="36"/>
+                        </Style>
+                    </Border.Resources>
+
+                    <!-- WPF UniformGrid ne supporte pas ColumnSpacing/RowSpacing -->
+                    <UniformGrid Columns="3" Rows="2">
                         <Button Content="Maintenance complète" Click="MaintenanceComplete_Click"/>
                         <Button Content="Nettoyage intelligent" Click="CleanSmart_Click"/>
                         <Button Content="Nettoyer navigateurs" Click="CleanBrowsers_Click"/>
