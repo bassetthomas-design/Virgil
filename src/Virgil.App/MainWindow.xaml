@@ -1,112 +1,79 @@
 <Window x:Class="Virgil.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Virgil.App"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
-        mc:Ignorable="d"
-        Title="Virgil" Height="640" Width="1024"
+        Title="Virgil" Height="720" Width="1180"
         WindowStartupLocation="CenterScreen"
-        Background="#111316">
+        Background="#0F1013">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="48"/>   <!-- top bar -->
+            <RowDefinition Height="*"/>    <!-- main -->
         </Grid.RowDefinitions>
 
-        <!-- Top Bar -->
-        <Border Grid.Row="0" Background="#1B1F24">
-            <DockPanel Margin="12,0" VerticalAlignment="Center">
-                <!-- Left: Clock text -->
-                <TextBlock x:Name="ClockText"
-                           DockPanel.Dock="Left"
-                           VerticalAlignment="Center"
-                           FontSize="14"
-                           Foreground="#DDE3EA"
-                           Text="--:--:--"/>
-                <!-- Spacer -->
-                <DockPanel DockPanel.Dock="Left" Width="16"/>
+        <!-- Top bar -->
+        <DockPanel Grid.Row="0" LastChildFill="False" Margin="10,0,10,0">
+            <TextBlock x:Name="ClockText"
+                       DockPanel.Dock="Left"
+                       VerticalAlignment="Center"
+                       FontSize="16"
+                       Foreground="#DDE1E8"
+                       Text="--:--:--"/>
+            <ToggleButton x:Name="SurveillanceToggle"
+                          DockPanel.Dock="Right"
+                          Width="180" Height="28"
+                          Margin="8,0,0,0"
+                          Content="{Binding SurveillanceToggleText}"
+                          Checked="SurveillanceToggle_Checked"
+                          Unchecked="SurveillanceToggle_Unchecked"/>
+            <Button x:Name="OpenConfig"
+                    DockPanel.Dock="Right"
+                    Width="150" Height="28"
+                    Content="Ouvrir configuration"
+                    Click="OpenConfig_Click"/>
+        </DockPanel>
 
-                <!-- Monitoring toggle -->
-                <ToggleButton x:Name="SurveillanceToggle"
-                              DockPanel.Dock="Left"
-                              Width="180" Height="28"
-                              VerticalAlignment="Center"
-                              Margin="0,0,8,0"
-                              Content="Démarrer la surveillance"
-                              Checked="SurveillanceToggle_Checked"
-                              Unchecked="SurveillanceToggle_Unchecked"/>
-                <!-- Spacer -->
-                <DockPanel DockPanel.Dock="Left" Width="8"/>
-
-                <!-- Open Config -->
-                <Button x:Name="OpenConfigBtn"
-                        DockPanel.Dock="Left"
-                        Height="28"
-                        Content="Ouvrir la config"
-                        Click="OpenConfig_Click"/>
-
-                <!-- Right side filler -->
-                <DockPanel DockPanel.Dock="Right" Width="0"/>
-            </DockPanel>
-        </Border>
-
-        <!-- Content -->
+        <!-- Main split -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="360"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="360"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left: Avatar -->
-            <StackPanel Grid.Column="0" Margin="16" VerticalAlignment="Top">
-                <Border CornerRadius="12" Background="#15181D" Padding="12">
-                    <!-- IMPORTANT: expose 'AvatarControl' au code-behind -->
-                    <controls:AvatarControl x:Name="AvatarControl"
-                        Width="220"
-                        Height="220"
-                        Mood="happy"
-                        AssetsRoot="assets/avatar"
-                        Margin="0,8,0,8"/>
-
-                </Border>
+            <!-- Panneau gauche : Avatar + stats -->
+            <StackPanel Grid.Column="0" Margin="16" >
+                <controls:AvatarControl x:Name="AvatarControl"
+                                        Height="220" />
+                <!-- Jauges simples -->
+                <StackPanel Margin="0,16,0,0">
+                    <TextBlock Text="CPU" Foreground="#B8C0CC" Margin="0,0,0,4"/>
+                    <ProgressBar x:Name="CpuBar" Height="10"/>
+                    <TextBlock Text="GPU" Foreground="#B8C0CC" Margin="0,12,0,4"/>
+                    <ProgressBar x:Name="GpuBar" Height="10"/>
+                    <TextBlock Text="RAM" Foreground="#B8C0CC" Margin="0,12,0,4"/>
+                    <ProgressBar x:Name="RamBar" Height="10"/>
+                    <TextBlock Text="Disque" Foreground="#B8C0CC" Margin="0,12,0,4"/>
+                    <ProgressBar x:Name="DiskBar" Height="10"/>
+                </StackPanel>
             </StackPanel>
 
-            <!-- Right: Actions -->
-            <StackPanel Grid.Column="1" Margin="16" VerticalAlignment="Top">
-                <!-- Style local pour espacer les boutons -->
-                <StackPanel.Resources>
-                    <Style TargetType="Button">
-                        <Setter Property="Margin" Value="0,0,0,8"/>
-                        <Setter Property="Height" Value="36"/>
-                    </Style>
-                </StackPanel.Resources>
+            <!-- Zone de chat -->
+            <Border Grid.Column="1" Margin="8" CornerRadius="8" Background="#151821">
+                <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="ChatItems"/>
+                </ScrollViewer>
+            </Border>
 
-                <TextBlock Text="Actions rapides"
-                           FontSize="16"
-                           FontWeight="Bold"
-                           Foreground="#E6EDF3"
-                           Margin="0,0,0,8"/>
-
-                <Button Content="Maintenance complète"
-                        Click="Action_MaintenanceComplete"/>
-                <Button Content="Nettoyage fichiers temporaires"
-                        Click="Action_CleanTemp"/>
-                <Button Content="Nettoyage navigateurs"
-                        Click="Action_CleanBrowsers"/>
-                <Button Content="Mises à jour (winget + jeux + applis)"
-                        Click="Action_UpdateAll"/>
-                <Button Content="Microsoft Defender (scan &amp; update)"
-                        Click="Action_Defender"/>
-
-                <!-- Bloc statut -->
-                <Border Margin="0,16,0,0" Background="#15181D" CornerRadius="8" Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="Statuts" Foreground="#AABACB"/>
-                        <TextBlock x:Name="StatusText" Text="En attente..."
-                                   Foreground="#DDE3EA" Margin="0,8,0,0"/>
-                    </StackPanel>
-                </Border>
+            <!-- Zone actions -->
+            <StackPanel Grid.Column="2" Margin="16">
+                <TextBlock Text="Actions" Foreground="#DDE1E8" FontSize="18" Margin="0,0,0,12"/>
+                <Button Content="Maintenance complète" Margin="0,0,0,8" Click="Action_MaintenanceComplete"/>
+                <Button Content="Nettoyage intelligent" Margin="0,0,0,8" Click="Action_CleanTemp"/>
+                <Button Content="Nettoyer navigateurs" Margin="0,0,0,8" Click="Action_CleanBrowsers"/>
+                <Button Content="Tout mettre à jour" Margin="0,0,0,8" Click="Action_UpdateAll"/>
+                <Button Content="Defender (MAJ + Scan)" Margin="0,0,0,8" Click="Action_Defender"/>
             </StackPanel>
         </Grid>
     </Grid>
