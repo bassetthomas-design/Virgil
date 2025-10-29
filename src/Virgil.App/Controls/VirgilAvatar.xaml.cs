@@ -1,122 +1,111 @@
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace Virgil.App.Controls
 {
+    public enum VirgilMood
+    {
+        Neutral,
+        Happy,
+        Focused,
+        Warn,
+        Alert,
+        Sleepy,
+        Proud,
+        Tired
+    }
+
     public partial class VirgilAvatar : UserControl
     {
-        public VirgilAvatar()
-        {
-            InitializeComponent();
-
-            // Valeurs par défaut visuelles si rien n'est renseigné
-            if (Mood is null) Mood = "focused";
-            if (MoodGlyph is null) MoodGlyph = GlyphFor(Mood);
-            if (MoodOverlayBrush is null) MoodOverlayBrush = OverlayFor(Mood);
-        }
-
-        // ======================
-        // Dépendency Properties
-        // ======================
-
-        /// <summary>
-        /// Humeur logique (happy, focused, warn, alert, sleepy, tired, proud, …)
-        /// </summary>
-        public string? Mood
-        {
-            get => (string?)GetValue(MoodProperty);
-            set => SetValue(MoodProperty, value);
-        }
-
+        // DependencyProperty 'Mood' utilisée par la XAML (ex: <controls:VirgilAvatar Mood="Happy" />)
         public static readonly DependencyProperty MoodProperty =
             DependencyProperty.Register(
                 nameof(Mood),
-                typeof(string),
+                typeof(VirgilMood),
                 typeof(VirgilAvatar),
-                new PropertyMetadata("focused", OnMoodChanged));
+                new PropertyMetadata(VirgilMood.Neutral, OnMoodChanged));
 
-        /// <summary>
-        /// Chemin du sprite affiché (ex: /Assets/avatar/moods/happy.png)
-        /// </summary>
-        public string? MoodGlyph
+        public VirgilMood Mood
         {
-            get => (string?)GetValue(MoodGlyphProperty);
-            set => SetValue(MoodGlyphProperty, value);
+            get => (VirgilMood)GetValue(MoodProperty);
+            set => SetValue(MoodProperty, value);
         }
 
-        public static readonly DependencyProperty MoodGlyphProperty =
-            DependencyProperty.Register(
-                nameof(MoodGlyph),
-                typeof(string),
-                typeof(VirgilAvatar),
-                new PropertyMetadata(null));
-
-        /// <summary>
-        /// Pinceau d’overlay coloré selon l’humeur.
-        /// </summary>
-        public Brush? MoodOverlayBrush
+        public VirgilAvatar()
         {
-            get => (Brush?)GetValue(MoodOverlayBrushProperty);
-            set => SetValue(MoodOverlayBrushProperty, value);
+            InitializeComponent();
+            // Initialise l’image au démarrage
+            ApplyMoodSprite(Mood);
         }
 
-        public static readonly DependencyProperty MoodOverlayBrushProperty =
-            DependencyProperty.Register(
-                nameof(MoodOverlayBrush),
-                typeof(Brush),
-                typeof(VirgilAvatar),
-                new PropertyMetadata(null));
-
-        // ======================
-        // Callbacks & helpers
-        // ======================
+        /// <summary>
+        /// Compat : permet d’appeler depuis le code existant SetAvatarMood("happy") etc.
+        /// </summary>
+        public void SetMood(string mood)
+        {
+            if (Enum.TryParse<VirgilMood>(ToTitleCaseSafe(mood), out var parsed))
+            {
+                Mood = parsed;
+            }
+            else
+            {
+                Mood = VirgilMood.Neutral;
+            }
+        }
 
         private static void OnMoodChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var ctrl = (VirgilAvatar)d;
-            var mood = (e.NewValue as string) ?? "focused";
-
-            // Si l’appelant n’a pas fixé explicitement le sprite / overlay,
-            // on fournit des valeurs cohérentes par défaut pour l’humeur.
-            if (ctrl.MoodGlyph is null)
-                ctrl.MoodGlyph = GlyphFor(mood);
-
-            if (ctrl.MoodOverlayBrush is null)
-                ctrl.MoodOverlayBrush = OverlayFor(mood);
+            if (d is VirgilAvatar avatar && e.NewValue is VirgilMood m)
+            {
+                avatar.ApplyMoodSprite(m);
+            }
         }
 
-        private static string GlyphFor(string mood)
+        private void ApplyMoodSprite(VirgilMood mood)
         {
-            // Fallback sur focused si mood inconnu
-            return mood switch
+            // Map humeur → fichier image (place tes sprites dans /assets/avatar/)
+            // Noms attendus (exemple) : neutral.png, happy.png, focused.png, warn.png, alert.png, sleepy.png, proud.png, tired.png
+            string fileName = mood.ToString().ToLowerInvariant() + ".png";
+
+            // Pack URI vers les ressources de l’application si copiées en "Content" (Build Action) et "Copy to Output Directory" = "Copy if newer"
+            // Tu peux aussi utiliser un pack URI de Resource intégrée. Ici, on charge depuis le dossier de sortie pour rester simple.
+            // Exemple d’emplacement recommandé : src/Virgil.App/assets/avatar/*.png → Copy to Output Directory
+            string candidate = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "avatar", fileName);
+
+            if (File.Exists(candidate))
             {
-                "happy"  => "/Assets/avatar/moods/happy.png",
-                "warn"   => "/Assets/avatar/moods/warn.png",
-                "alert"  => "/Assets/avatar/moods/alert.png",
-                "sleepy" => "/Assets/avatar/moods/sleepy.png",
-                "tired"  => "/Assets/avatar/moods/tired.png",
-                "proud"  => "/Assets/avatar/moods/proud.png",
-                _        => "/Assets/avatar/moods/focused.png"
-            };
+                try
+                {
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.UriSource = new Uri(candidate, UriKind.Absolute);
+                    bmp.EndInit();
+                    bmp.Freeze();
+                    AvatarImage.Source = bmp; // <- avertissement nullability : AvatarImage est défini dans XAML (chargé par InitializeComponent)
+                }
+                catch
+                {
+                    AvatarImage.Source = null;
+                }
+            }
+            else
+            {
+                // fallback si sprite manquant
+                AvatarImage.Source = null;
+            }
         }
 
-        private static Brush OverlayFor(string mood)
+        private static string ToTitleCaseSafe(string? input)
         {
-            // Couleurs translucides cohérentes avec le reste de l’app
-            // (A,R,G,B) ici A=36 (~14%) pour un halo léger
-            Color c = mood switch
-            {
-                "happy"  => Color.FromArgb(36,  76, 175,  80),
-                "warn"   => Color.FromArgb(36, 241, 196,  15),
-                "alert"  => Color.FromArgb(36, 231,  76,  60),
-                "sleepy" => Color.FromArgb(36, 149, 165, 166),
-                "tired"  => Color.FromArgb(36, 127, 140, 141),
-                "proud"  => Color.FromArgb(36,  52,  73,  94),
-                _        => Color.FromArgb(36,  52, 152, 219) // focused (bleu)
-            };
-            return new SolidColorBrush(c);
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            input = input.Trim();
+            if (input.Length == 0) return string.Empty;
+            // "happy" -> "Happy"
+            return char.ToUpperInvariant(input[0]) + (input.Length > 1 ? input.Substring(1).ToLowerInvariant() : string.Empty);
         }
     }
 }
