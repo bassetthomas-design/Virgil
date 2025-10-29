@@ -1,28 +1,22 @@
 <UserControl x:Class="Virgil.App.Controls.VirgilAvatar"
+             x:Name="Root"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             d:DesignHeight="220"
-             d:DesignWidth="220">
+             d:DesignHeight="200" d:DesignWidth="200">
     <Grid>
-        <!-- Image principale de l’avatar -->
-        <Image x:Name="AvatarImage"
+        <!-- Image de l’humeur (sprite/PNG) -->
+        <Image x:Name="MoodImage"
+               Source="{Binding ElementName=Root, Path=MoodGlyph}"
                Stretch="Uniform"
-               HorizontalAlignment="Center"
-               VerticalAlignment="Center"
-               Width="200" Height="200"/>
+               SnapsToDevicePixels="True"
+               RenderOptions.BitmapScalingMode="HighQuality"/>
 
-        <!-- Petite aura/couleur d’humeur -->
-        <Ellipse x:Name="MoodGlow"
-                 Width="210" Height="210"
-                 StrokeThickness="0"
-                 Opacity="0.25"
-                 IsHitTestVisible="False">
-            <Ellipse.Fill>
-                <SolidColorBrush Color="#000000"/>
-            </Ellipse.Fill>
-        </Ellipse>
+        <!-- Overlay couleur selon l’humeur -->
+        <Rectangle x:Name="MoodOverlay"
+                   Fill="{Binding ElementName=Root, Path=MoodOverlayBrush}"
+                   IsHitTestVisible="False"/>
     </Grid>
 </UserControl>
