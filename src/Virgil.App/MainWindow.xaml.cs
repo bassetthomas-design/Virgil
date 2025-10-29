@@ -1,20 +1,21 @@
 using System;
-using System.Timers;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Virgil.App.Controls;
 
 namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
-        private readonly Timer _clockTimer = new(1000);
-        private readonly Timer _surveillanceTimer = new(1500);
+        // Timers WPF (plus d’ambiguïté avec System.Timers ou Windows.Forms)
+        private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+        private readonly DispatcherTimer _surveillanceTimer = new() { Interval = TimeSpan.FromMilliseconds(1500) };
 
         public string SurveillanceToggleText
         {
-            get => (string) (FindResource("SurveillanceToggleText") ?? "Démarrer la surveillance");
+            get => (string)(FindResource("SurveillanceToggleText") ?? "Démarrer la surveillance");
             set => Resources["SurveillanceToggleText"] = value;
         }
 
@@ -22,16 +23,14 @@ namespace Virgil.App
         {
             InitializeComponent();
 
-            // Timer horloge
-            _clockTimer.Elapsed += (_, __) => Dispatcher.Invoke(UpdateClock);
-            _clockTimer.AutoReset = true;
+            // Horloge en direct
+            _clockTimer.Tick += (_, __) => UpdateClock();
             _clockTimer.Start();
 
-            // Timer surveillance
-            _surveillanceTimer.Elapsed += (_, __) => Dispatcher.Invoke(SurveillancePulse);
-            _surveillanceTimer.AutoReset = true;
+            // Rafraîchissement de la surveillance
+            _surveillanceTimer.Tick += (_, __) => SurveillancePulse();
 
-            // Valeur init
+            // Texte par défaut
             SurveillanceToggleText = "Démarrer la surveillance";
 
             // Message d’accueil
@@ -39,15 +38,15 @@ namespace Virgil.App
             SetAvatarMood("happy");
         }
 
+        // === Mise à jour de l’horloge ===
         private void UpdateClock()
         {
             ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
         }
 
+        // === Surveillance système (valeurs factices pour l’instant) ===
         private void SurveillancePulse()
         {
-            // TODO: brancher tes sondes CPU/GPU/RAM/Disque et couleurs de seuils
-            // Ci-dessous, placeholder pour la démo
             CpuBar.Value = (DateTime.Now.Second * 100.0 / 60.0);
             RamBar.Value = (DateTime.Now.Millisecond % 100);
             GpuBar.Value = (DateTime.Now.Second * 100.0 / 60.0);
@@ -56,19 +55,19 @@ namespace Virgil.App
             if (CpuBar.Value > 85)
             {
                 SetAvatarMood("warn");
-                Say("Je chauffe un peu (CPU > 85%). Je garde un œil ouvert.");
+                Say("Je chauffe un peu (CPU > 85 %). Je garde un œil ouvert !");
             }
         }
 
-        // ============ CHAT ============
-        private void Say(string text, string mood = "focused")
+        // === Chat ===
+        private void Say(string texte, string humeur = "focused")
         {
-            var bubble = new Border
+            var bulle = new Border
             {
                 CornerRadius = new CornerRadius(8),
                 Margin = new Thickness(12),
                 Padding = new Thickness(12),
-                Background = mood switch
+                Background = humeur switch
                 {
                     "happy" => new SolidColorBrush(Color.FromArgb(50, 64, 201, 112)),
                     "warn" => new SolidColorBrush(Color.FromArgb(50, 241, 196, 15)),
@@ -77,55 +76,54 @@ namespace Virgil.App
                 },
                 Child = new TextBlock
                 {
-                    Text = text,
+                    Text = texte,
                     Foreground = Brushes.White,
                     TextWrapping = TextWrapping.Wrap
                 }
             };
 
-            ChatItems.Items.Add(bubble);
+            ChatItems.Items.Add(bulle);
             ChatScroll.ScrollToBottom();
         }
 
-        // ============ AVATAR / HUMEUR ============
-        private void SetAvatarMood(string mood)
+        // === Gestion des humeurs de l’avatar ===
+        private void SetAvatarMood(string humeur)
         {
             try
             {
-                // Map humeur → overlay + glyph
-                Brush overlay = mood switch
+                Brush overlay = humeur switch
                 {
                     "happy" => new SolidColorBrush(Color.FromArgb(36, 76, 175, 80)),
-                    "warn"  => new SolidColorBrush(Color.FromArgb(36, 241, 196, 15)),
+                    "warn" => new SolidColorBrush(Color.FromArgb(36, 241, 196, 15)),
                     "alert" => new SolidColorBrush(Color.FromArgb(36, 231, 76, 60)),
-                    "sleepy"=> new SolidColorBrush(Color.FromArgb(36, 149, 165, 166)),
-                    _       => new SolidColorBrush(Color.FromArgb(36, 52, 152, 219)),
+                    "sleepy" => new SolidColorBrush(Color.FromArgb(36, 149, 165, 166)),
+                    _ => new SolidColorBrush(Color.FromArgb(36, 52, 152, 219)),
                 };
 
-                string glyph = mood switch
+                string glyph = humeur switch
                 {
                     "happy" => "/Assets/avatar/moods/happy.png",
-                    "warn"  => "/Assets/avatar/moods/warn.png",
+                    "warn" => "/Assets/avatar/moods/warn.png",
                     "alert" => "/Assets/avatar/moods/alert.png",
-                    "sleepy"=> "/Assets/avatar/moods/sleepy.png",
+                    "sleepy" => "/Assets/avatar/moods/sleepy.png",
                     "tired" => "/Assets/avatar/moods/tired.png",
                     "proud" => "/Assets/avatar/moods/proud.png",
-                    _       => "/Assets/avatar/moods/focused.png"
+                    _ => "/Assets/avatar/moods/focused.png"
                 };
 
                 AvatarControl.MoodOverlayBrush = overlay;
                 AvatarControl.MoodGlyph = glyph;
             }
-            catch { /* safe */ }
+            catch { /* Sécurité : on ignore les erreurs visuelles */ }
         }
 
-        // ============ HANDLERS (déclarés une seule fois) ============
+        // === Gestion des boutons ===
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
             _surveillanceTimer.Start();
             SurveillanceToggleText = "Surveillance activée";
             SetAvatarMood("focused");
-            Say("Surveillance ON. Je prends le pouls de la machine.");
+            Say("Surveillance activée. J’observe le système en continu.");
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
@@ -133,50 +131,48 @@ namespace Virgil.App
             _surveillanceTimer.Stop();
             SurveillanceToggleText = "Surveillance arrêtée";
             SetAvatarMood("sleepy");
-            Say("Surveillance OFF. Je me mets en veille.");
+            Say("Surveillance désactivée. Je me repose un peu.");
         }
 
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
-            Say("Ouverture de la configuration…");
-            // TODO: ouvrir la fenêtre/config
+            Say("Ouverture de la configuration utilisateur…");
+            // TODO : ouvrir la fenêtre de configuration
         }
 
         private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            Say("Mode maintenance activé. J’enchaîne nettoyage + MAJ.", "proud");
-            // TODO: appeler les services core (cleaning, browsers, updates, defender)
+            Say("Lancement du mode maintenance complète…", "focused");
             await System.Threading.Tasks.Task.CompletedTask;
-            Say("Maintenance terminée. Le PC respire mieux. 😌", "happy");
+            Say("Maintenance terminée. Tout est propre et à jour !", "happy");
         }
 
         private async void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            Say("Nettoyage intelligent en cours…", "focused");
-            // TODO: cleaning intelligent (simple/complet/pro) + effet ‘Thanos’ si complet
+            Say("Nettoyage intelligent des fichiers temporaires…", "focused");
             await System.Threading.Tasks.Task.CompletedTask;
-            Say("Nettoyage terminé. Tout propre.", "happy");
+            Say("Nettoyage terminé, plus un grain de poussière numérique.", "happy");
         }
 
         private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            Say("Nettoyage navigateurs (profils/caches)…", "focused");
+            Say("Nettoyage des navigateurs en cours…", "focused");
             await System.Threading.Tasks.Task.CompletedTask;
-            Say("Navigateurs nettoyés.", "happy");
+            Say("Navigateurs nettoyés. Plus légers que jamais !", "happy");
         }
 
         private async void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            Say("Je lance les mises à jour : apps/jeux/pilotes/Windows/Defender.", "focused");
+            Say("Je lance les mises à jour complètes du système.", "focused");
             await System.Threading.Tasks.Task.CompletedTask;
-            Say("Tout est à jour. Nickel.", "happy");
+            Say("Toutes les mises à jour ont été appliquées avec succès !", "happy");
         }
 
         private async void Action_Defender(object sender, RoutedEventArgs e)
         {
-            Say("Microsoft Defender : MAJ des signatures + scan rapide…", "focused");
+            Say("Mise à jour de Defender + scan rapide…", "focused");
             await System.Threading.Tasks.Task.CompletedTask;
-            Say("Defender OK.", "happy");
+            Say("Microsoft Defender est à jour et ton système est sain.", "happy");
         }
     }
 }
