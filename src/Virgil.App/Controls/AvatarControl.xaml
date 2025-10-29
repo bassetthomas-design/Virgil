@@ -1,0 +1,16 @@
+<UserControl x:Class="Virgil.App.Controls.AvatarControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="mc" Height="220">
+    <Grid>
+        <Border CornerRadius="999" Width="180" Height="180" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border.Background>
+                <!-- Couleur simple suivant l'humeur (bind côté code-behind) -->
+                <SolidColorBrush x:Name="MoodBrush" Color="#3A4663"/>
+            </Border.Background>
+        </Border>
+        <TextBlock Text="V" FontSize="72" FontWeight="Bold" Foreground="White"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Grid>
+</UserControl>
