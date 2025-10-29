@@ -1,9 +1,7 @@
 using System;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace Virgil.App.Controls
 {
@@ -12,7 +10,24 @@ namespace Virgil.App.Controls
         public VirgilAvatar()
         {
             InitializeComponent();
-            UpdateVisuals();
+
+            // Valeurs par défaut visuelles si rien n'est renseigné
+            if (Mood is null) Mood = "focused";
+            if (MoodGlyph is null) MoodGlyph = GlyphFor(Mood);
+            if (MoodOverlayBrush is null) MoodOverlayBrush = OverlayFor(Mood);
+        }
+
+        // ======================
+        // Dépendency Properties
+        // ======================
+
+        /// <summary>
+        /// Humeur logique (happy, focused, warn, alert, sleepy, tired, proud, …)
+        /// </summary>
+        public string? Mood
+        {
+            get => (string?)GetValue(MoodProperty);
+            set => SetValue(MoodProperty, value);
         }
 
         public static readonly DependencyProperty MoodProperty =
@@ -20,78 +35,88 @@ namespace Virgil.App.Controls
                 nameof(Mood),
                 typeof(string),
                 typeof(VirgilAvatar),
-                new PropertyMetadata("happy", OnMoodChanged));
+                new PropertyMetadata("focused", OnMoodChanged));
 
-        public string Mood
+        /// <summary>
+        /// Chemin du sprite affiché (ex: /Assets/avatar/moods/happy.png)
+        /// </summary>
+        public string? MoodGlyph
         {
-            get => (string)GetValue(MoodProperty);
-            set => SetValue(MoodProperty, value);
+            get => (string?)GetValue(MoodGlyphProperty);
+            set => SetValue(MoodGlyphProperty, value);
         }
+
+        public static readonly DependencyProperty MoodGlyphProperty =
+            DependencyProperty.Register(
+                nameof(MoodGlyph),
+                typeof(string),
+                typeof(VirgilAvatar),
+                new PropertyMetadata(null));
+
+        /// <summary>
+        /// Pinceau d’overlay coloré selon l’humeur.
+        /// </summary>
+        public Brush? MoodOverlayBrush
+        {
+            get => (Brush?)GetValue(MoodOverlayBrushProperty);
+            set => SetValue(MoodOverlayBrushProperty, value);
+        }
+
+        public static readonly DependencyProperty MoodOverlayBrushProperty =
+            DependencyProperty.Register(
+                nameof(MoodOverlayBrush),
+                typeof(Brush),
+                typeof(VirgilAvatar),
+                new PropertyMetadata(null));
+
+        // ======================
+        // Callbacks & helpers
+        // ======================
 
         private static void OnMoodChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is VirgilAvatar v) v.UpdateVisuals();
+            var ctrl = (VirgilAvatar)d;
+            var mood = (e.NewValue as string) ?? "focused";
+
+            // Si l’appelant n’a pas fixé explicitement le sprite / overlay,
+            // on fournit des valeurs cohérentes par défaut pour l’humeur.
+            if (ctrl.MoodGlyph is null)
+                ctrl.MoodGlyph = GlyphFor(mood);
+
+            if (ctrl.MoodOverlayBrush is null)
+                ctrl.MoodOverlayBrush = OverlayFor(mood);
         }
 
-        /// <summary>
-        /// Appel pratique depuis MainWindow : AvatarControl?.SetMood("warn")
-        /// </summary>
-        public void SetMood(string mood)
+        private static string GlyphFor(string mood)
         {
-            try { Mood = mood?.Trim().ToLowerInvariant(); } catch { }
-        }
-
-        private void UpdateVisuals()
-        {
-            // Map humeur -> fichier + couleur d’aura
-            var (fileName, color) = Mood switch
+            // Fallback sur focused si mood inconnu
+            return mood switch
             {
-                "focused" => ("focused.png", FromHex("#0094FF")),
-                "warn"    => ("warn.png",    FromHex("#FFB300")),
-                "alert"   => ("alert.png",   FromHex("#FF3B30")),
-                "sleepy"  => ("sleepy.png",  FromHex("#8E8E93")),
-                "proud"   => ("proud.png",   FromHex("#34C759")),
-                "tired"   => ("tired.png",   FromHex("#A2845E")),
-                _         => ("happy.png",   FromHex("#34C759")),
+                "happy"  => "/Assets/avatar/moods/happy.png",
+                "warn"   => "/Assets/avatar/moods/warn.png",
+                "alert"  => "/Assets/avatar/moods/alert.png",
+                "sleepy" => "/Assets/avatar/moods/sleepy.png",
+                "tired"  => "/Assets/avatar/moods/tired.png",
+                "proud"  => "/Assets/avatar/moods/proud.png",
+                _        => "/Assets/avatar/moods/focused.png"
             };
-
-            var basePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory ?? "", "assets", "avatar");
-            var path = System.IO.Path.Combine(basePath, fileName);
-
-            if (File.Exists(path))
-            {
-                try
-                {
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    bmp.UriSource = new Uri(path, UriKind.Absolute);
-                    bmp.EndInit();
-                    AvatarImage.Source = bmp;
-                }
-                catch { AvatarImage.Source = null; }
-            }
-            else
-            {
-                AvatarImage.Source = null; // fallback si pas d’asset
-            }
-
-            if (MoodGlow.Fill is SolidColorBrush b)
-            {
-                b.Color = color;
-            }
         }
 
-        private static Color FromHex(string hex)
+        private static Brush OverlayFor(string mood)
         {
-            try
+            // Couleurs translucides cohérentes avec le reste de l’app
+            // (A,R,G,B) ici A=36 (~14%) pour un halo léger
+            Color c = mood switch
             {
-                return (Color)ColorConverter.ConvertFromString(hex);
-            }
-            catch
-            {
-                return Colors.Black;
-            }
+                "happy"  => Color.FromArgb(36,  76, 175,  80),
+                "warn"   => Color.FromArgb(36, 241, 196,  15),
+                "alert"  => Color.FromArgb(36, 231,  76,  60),
+                "sleepy" => Color.FromArgb(36, 149, 165, 166),
+                "tired"  => Color.FromArgb(36, 127, 140, 141),
+                "proud"  => Color.FromArgb(36,  52,  73,  94),
+                _        => Color.FromArgb(36,  52, 152, 219) // focused (bleu)
+            };
+            return new SolidColorBrush(c);
         }
     }
 }
