@@ -1,14 +1,26 @@
-<UserControl
-    x:Class="Virgil.App.Controls.VirgilAvatar"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    mc:Ignorable="d"
-    d:DesignWidth="220" d:DesignHeight="220">
-
+<UserControl x:Class="Virgil.App.Controls.VirgilAvatar"
+             x:Name="Root"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="220"
+             d:DesignWidth="220">
     <Grid>
-        <!-- Image de l’avatar qui change selon l’humeur -->
-        <Image x:Name="AvatarImage" Stretch="Uniform" />
+        <!-- Image principale de l’avatar. 
+             Tu peux remplacer par des VisualState + sprites si tu préfères. -->
+        <Image x:Name="AvatarImage"
+               Stretch="Uniform"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               Width="200" Height="200" />
+        <!-- (Optionnel) un petit libellé d’humeur pour debug -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" 
+                Margin="4" Padding="4" CornerRadius="3"
+                Background="#66000000">
+            <TextBlock Text="{Binding ElementName=Root, Path=Mood}"
+                       Foreground="White" FontSize="12"/>
+        </Border>
     </Grid>
 </UserControl>
