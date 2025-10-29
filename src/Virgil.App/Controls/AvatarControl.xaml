@@ -3,47 +3,23 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d"
-             d:DesignHeight="240"
-             d:DesignWidth="240">
+             mc:Ignorable="d" d:DesignHeight="220" d:DesignWidth="220">
     <Grid>
-        <!-- Conteneur avatar -->
-        <Border x:Name="AvatarBorder"
-                CornerRadius="120"
-                Width="200"
-                Height="200"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                BorderThickness="4"
-                BorderBrush="#222"
-                Background="{Binding AvatarBackgroundBrush, RelativeSource={RelativeSource AncestorType=UserControl}}">
-            <Grid>
-                <!-- Image d’humeur si dispo -->
-                <Image x:Name="MoodImage"
-                       Stretch="Uniform"
-                       SnapsToDevicePixels="True"
-                       UseLayoutRounding="True"
-                       Visibility="Collapsed"/>
-                <!-- Fallback : emoji/texte -->
-                <TextBlock x:Name="MoodGlyph"
-                           Text="{Binding MoodGlyph, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                           FontSize="80"
-                           VerticalAlignment="Center"
-                           HorizontalAlignment="Center"/>
-            </Grid>
-        </Border>
+        <!-- Image de base de l’avatar -->
+        <Image x:Name="AvatarImage"
+               Stretch="Uniform"
+               Source="/Assets/avatar/base.png"/>
 
-        <!-- Etiquette d’humeur -->
-        <Border HorizontalAlignment="Center"
-                VerticalAlignment="Bottom"
-                Margin="0,0,0,8"
-                Padding="10,4"
-                Background="#AA000000"
-                CornerRadius="6">
-            <TextBlock x:Name="MoodLabel"
-                       Foreground="White"
-                       FontSize="14"
-                       Text="{Binding MoodText, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-        </Border>
+        <!-- Humeur en overlay (couleur/élément graphique) -->
+        <Border x:Name="MoodOverlay"
+                Background="{Binding MoodOverlayBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                Opacity="0.18"/>
+
+        <!-- Glyph d’humeur -->
+        <Image x:Name="MoodGlyphImage"
+               Width="48" Height="48"
+               HorizontalAlignment="Right" VerticalAlignment="Top"
+               Margin="8"
+               Source="{Binding MoodGlyph, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
     </Grid>
 </UserControl>
