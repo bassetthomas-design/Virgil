@@ -1,7 +1,7 @@
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace Virgil.App.Controls
@@ -11,88 +11,77 @@ namespace Virgil.App.Controls
         public VirgilAvatar()
         {
             InitializeComponent();
+            // Initialise l'image avec la valeur actuelle de Mood (default: neutral)
+            ApplyMood(Mood);
         }
 
-        // ─────────────────────────────────────────────────────────────
-        // 1) DépendencyProperty "Mood" attendue par le XAML (MainWindow.UI.xaml)
-        //    Type string pour rester tolérant (ex: "happy", "warn", "alert", etc.)
-        // ─────────────────────────────────────────────────────────────
-        public static readonly DependencyProperty MoodProperty =
-            DependencyProperty.Register(
-                nameof(Mood),
-                typeof(string),
-                typeof(VirgilAvatar),
-                new PropertyMetadata("neutral", OnMoodChanged)
-            );
-
+        /// <summary>
+        /// Humeur actuelle de l’avatar (ex: "neutral", "happy", "focused", "warn", "alert", "sleepy", ...).
+        /// </summary>
         public string Mood
         {
             get => (string)GetValue(MoodProperty);
             set => SetValue(MoodProperty, value);
         }
 
+        public static readonly DependencyProperty MoodProperty =
+            DependencyProperty.Register(
+                nameof(Mood),
+                typeof(string),
+                typeof(VirgilAvatar),
+                new PropertyMetadata("neutral", OnMoodChanged));
+
         private static void OnMoodChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is VirgilAvatar avatar)
+            if (d is VirgilAvatar control)
             {
-                avatar.ApplyMood(e.NewValue as string ?? "neutral");
+                control.ApplyMood(e.NewValue as string ?? "neutral");
             }
         }
 
-        // ─────────────────────────────────────────────────────────────
-        // 2) Logique d’application visuelle de l’humeur
-        //    Adapte selon tes assets (couleurs, images, sprites, etc.)
-        // ─────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Applique visuellement l’humeur. 
+        /// Ici, on essaie de charger un sprite en fonction du nom (PNG/SVG converti en PNG).
+        /// Chemins d’exemple: /assets/avatar/neutral.png, /happy.png, etc.
+        /// Adapte les chemins à ton repo si besoin.
+        /// </summary>
         private void ApplyMood(string mood)
         {
-            // Exemple simple : changer une brush/une image selon le mood.
-            // Adapte aux noms de tes éléments XAML (ex: MoodBorder, MoodGlyph, etc.)
             try
             {
-                // Couleur de fond indicative (remplace par ton design réel)
-                Brush bg = mood switch
+                // Exemple de recherche simple de sprite dans assets/avatar/
+                // Priorité: dossier app (build output) puis dossier du projet si en dev.
+                var fileName = $"{mood.ToLowerInvariant()}.png";
+                var probing = new[]
                 {
-                    "happy" => new SolidColorBrush(Color.FromArgb(32, 46, 204, 113)),
-                    "focused" => new SolidColorBrush(Color.FromArgb(32, 52, 152, 219)),
-                    "warn" => new SolidColorBrush(Color.FromArgb(32, 241, 196, 15)),
-                    "alert" => new SolidColorBrush(Color.FromArgb(32, 231, 76, 60)),
-                    "sleepy" => new SolidColorBrush(Color.FromArgb(32, 155, 89, 182)),
-                    "proud" => new SolidColorBrush(Color.FromArgb(32, 230, 126, 34)),
-                    "tired" => new SolidColorBrush(Color.FromArgb(32, 149, 165, 166)),
-                    _ => new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "avatar", fileName),
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "avatar", "default", fileName),
                 };
 
-                // Exemple: si tu as un Border nommé "MoodBackdrop"
-                var backdrop = this.FindName("MoodBackdrop") as Border;
-                if (backdrop != null)
-                    backdrop.Background = bg;
-
-                // Exemple: si tu as une Image nommée "MoodGlyph"
-                // Mappe le sprite selon ton arborescence assets (PNG/SVG).
-                var glyph = this.FindName("MoodGlyph") as Image;
-                if (glyph != null)
+                string? found = null;
+                foreach (var p in probing)
                 {
-                    // Remplace par les chemins réels des assets
-                    string assetName = mood switch
-                    {
-                        "happy" => "happy",
-                        "focused" => "focused",
-                        "warn" => "warn",
-                        "alert" => "alert",
-                        "sleepy" => "sleepy",
-                        "proud" => "proud",
-                        "tired" => "tired",
-                        _ => "neutral"
-                    };
+                    if (File.Exists(p)) { found = p; break; }
+                }
 
-                    // Exemple: /assets/avatar/{assetName}.png (copie-locale Ressource)
-                    var uri = new Uri($"/assets/avatar/{assetName}.png", UriKind.Relative);
-                    glyph.Source = new BitmapImage(uri);
+                if (found is not null)
+                {
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.UriSource = new Uri(found, UriKind.Absolute);
+                    bmp.EndInit();
+                    AvatarImage.Source = bmp;
+                }
+                else
+                {
+                    // Fallback: on efface l’image si rien trouvé
+                    AvatarImage.Source = null;
                 }
             }
             catch
             {
-                // On ne plante pas l’UI si un asset manque
+                AvatarImage.Source = null;
             }
         }
     }
