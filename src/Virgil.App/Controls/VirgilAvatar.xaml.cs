@@ -1,9 +1,9 @@
-using System.Collections.Generic;
-using System.Linq;
+using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 
 namespace Virgil.App.Controls
 {
@@ -12,109 +12,86 @@ namespace Virgil.App.Controls
         public VirgilAvatar()
         {
             InitializeComponent();
-            // Sécurité : on force les yeux par défaut au démarrage
-            ShowEyes("default");
+            UpdateVisuals();
         }
 
-        // Couleur du visage (liaison XAML)
-        public static readonly DependencyProperty FaceFillProperty =
+        public static readonly DependencyProperty MoodProperty =
             DependencyProperty.Register(
-                nameof(FaceFill),
-                typeof(Brush),
+                nameof(Mood),
+                typeof(string),
                 typeof(VirgilAvatar),
-                new PropertyMetadata(new SolidColorBrush(Color.FromRgb(0x4F, 0x6D, 0x3A)))); // vert doux
+                new PropertyMetadata("happy", OnMoodChanged));
 
-        public Brush FaceFill
+        public string Mood
         {
-            get => (Brush)GetValue(FaceFillProperty);
-            set => SetValue(FaceFillProperty, value);
+            get => (string)GetValue(MoodProperty);
+            set => SetValue(MoodProperty, value);
         }
 
-        // Helpers pour basculer les groupes d’yeux et décos
-        private IEnumerable<UIElement> AllEyeGroups()
+        private static void OnMoodChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            yield return EyesDefault;
-            yield return EyesAngry;
-            yield return EyesLove;
-            yield return EyesTear;
-            yield return EyesSleepy;
-            yield return EyesWink;
-            yield return EyesCat;
-        }
-
-        private void ShowEyes(string preset)
-        {
-            foreach (var g in AllEyeGroups()) g.Visibility = Visibility.Collapsed;
-
-            switch ((preset ?? "default").ToLowerInvariant())
-            {
-                case "angry":  EyesAngry.Visibility  = Visibility.Visible;  break;
-                case "love":   EyesLove.Visibility   = Visibility.Visible;  break;
-                case "tear":   EyesTear.Visibility   = Visibility.Visible;  break;
-                case "sleepy": EyesSleepy.Visibility = Visibility.Visible;  break;
-                case "wink":   EyesWink.Visibility   = Visibility.Visible;  break;
-                case "cat":    EyesCat.Visibility    = Visibility.Visible;  break;
-                default:       EyesDefault.Visibility = Visibility.Visible;  break;
-            }
-        }
-
-        private void ShowCat(bool on)
-        {
-            CatDecor.Visibility   = on ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        private void ShowDevil(bool on)
-        {
-            DevilDecor.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            if (d is VirgilAvatar v) v.UpdateVisuals();
         }
 
         /// <summary>
-        /// Humeurs supportées (mapping visuel collé à l’image) :
-        /// - "neutral"  → yeux ronds blancs
-        /// - "angry"    → yeux plissés (obliques)
-        /// - "love"     → cœurs roses
-        /// - "tear"     → larme à droite
-        /// - "sleepy"   → demi-lunes
-        /// - "wink"     → clin d'œil
-        /// - "cat"      → oreilles+moustaches + yeux ronds blancs
-        /// - "devil"    → cornes + yeux plissés ; disque rouge
+        /// Appel pratique depuis MainWindow : AvatarControl?.SetMood("warn")
         /// </summary>
         public void SetMood(string mood)
         {
-            var key = (mood ?? "neutral").Trim().ToLowerInvariant();
+            try { Mood = mood?.Trim().ToLowerInvariant(); } catch { }
+        }
 
-            // Couleur du visage + halo selon la “famille”
-            Color face = Color.FromRgb(0x4F, 0x6D, 0x3A); // vert de base
-            if (key == "devil") face = Color.FromRgb(0xD9, 0x3D, 0x3D); // rouge
-            if (key == "love")  face = Color.FromRgb(0x4F, 0x6D, 0x3A); // reste vert sur la planche
-
-            FaceFill = new SolidColorBrush(face);
-            if (Glow != null)
+        private void UpdateVisuals()
+        {
+            // Map humeur -> fichier + couleur d’aura
+            var (fileName, color) = Mood switch
             {
-                var halo = Color.FromArgb(0x55, face.R, face.G, face.B);
-                Glow.Fill = new SolidColorBrush(halo);
+                "focused" => ("focused.png", FromHex("#0094FF")),
+                "warn"    => ("warn.png",    FromHex("#FFB300")),
+                "alert"   => ("alert.png",   FromHex("#FF3B30")),
+                "sleepy"  => ("sleepy.png",  FromHex("#8E8E93")),
+                "proud"   => ("proud.png",   FromHex("#34C759")),
+                "tired"   => ("tired.png",   FromHex("#A2845E")),
+                _         => ("happy.png",   FromHex("#34C759")),
+            };
+
+            var basePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory ?? "", "assets", "avatar");
+            var path = System.IO.Path.Combine(basePath, fileName);
+
+            if (File.Exists(path))
+            {
+                try
+                {
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.UriSource = new Uri(path, UriKind.Absolute);
+                    bmp.EndInit();
+                    AvatarImage.Source = bmp;
+                }
+                catch { AvatarImage.Source = null; }
+            }
+            else
+            {
+                AvatarImage.Source = null; // fallback si pas d’asset
             }
 
-            // Décors spéciaux
-            ShowCat(key == "cat");
-            ShowDevil(key == "devil");
-
-            // Choix des yeux (toujours blancs, sauf "love" → cœurs roses)
-            var eyesPreset = key switch
+            if (MoodGlow.Fill is SolidColorBrush b)
             {
-                "angry"  => "angry",
-                "love"   => "love",
-                "tear"   => "tear",
-                "sleepy" => "sleepy",
-                "wink"   => "wink",
-                "cat"    => "cat",
-                "devil"  => "angry", // comme sur la planche : yeux plissés + cornes
-                _        => "default"
-            };
-            ShowEyes(eyesPreset);
+                b.Color = color;
+            }
+        }
 
-            // Animation de halo
-            try { if (FindResource("MoodPulse") is Storyboard sb) sb.Begin(); } catch { }
+        private static Color FromHex(string hex)
+        {
+            try
+            {
+                return (Color)ColorConverter.ConvertFromString(hex);
+            }
+            catch
+            {
+                return Colors.Black;
+            }
         }
     }
 }
