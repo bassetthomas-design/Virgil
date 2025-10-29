@@ -62,8 +62,13 @@
             <StackPanel Grid.Column="0" Margin="16" VerticalAlignment="Top">
                 <Border CornerRadius="12" Background="#15181D" Padding="12">
                     <!-- IMPORTANT: expose 'AvatarControl' au code-behind -->
-                    <controls:VirgilAvatar x:Name="AvatarControl"
-                                           Width="280" Height="280"/>
+                    <controls:AvatarControl x:Name="AvatarControl"
+                        Width="220"
+                        Height="220"
+                        Mood="happy"
+                        AssetsRoot="assets/avatar"
+                        Margin="0,8,0,8"/>
+
                 </Border>
             </StackPanel>
 
