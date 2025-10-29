@@ -3,13 +3,13 @@ using System.Windows;
 using System.Windows.Threading;
 using Virgil.App.ViewModels;
 
-namespace Virgil.App.Views
+namespace Virgil.App
 {
-    public partial class MainWindowUI : Window
+    public partial class MainWindow : Window
     {
         private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
 
-        public MainWindowUI()
+   public MainWindow()
         {
             InitializeComponent();
             if (DataContext is DashboardViewModel vm)
