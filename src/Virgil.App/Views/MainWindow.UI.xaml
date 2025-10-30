@@ -7,7 +7,8 @@
 
     <!-- Le code-behind met à jour ce texte via Resources["SurveillanceToggleText"] -->
     <Window.Resources>
-        <String x:Key="SurveillanceToggleText">Démarrer la surveillance</String>
+        <x:String x:Key="SurveillanceToggleText">Démarrer la surveillance</x:String>
+
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="White"/>
         </Style>
@@ -18,6 +19,7 @@
             <Setter Property="Height" Value="10"/>
             <Setter Property="Margin" Value="0,6,0,12"/>
         </Style>
+
         <SolidColorBrush x:Key="CardBrush" Color="#1D232A"/>
     </Window.Resources>
 
@@ -29,7 +31,7 @@
         </Grid.RowDefinitions>
 
         <!-- ========== TOP BAR ========== -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,12">
+        <DockPanel Grid.Row="0" Margin="0,0,0,12" LastChildFill="False">
             <TextBlock Text="VIRGIL — Assistant Système" FontSize="18" FontWeight="Bold"
                        VerticalAlignment="Center" DockPanel.Dock="Left"/>
             <TextBlock x:Name="ClockText" Text="--:--:--" FontSize="16"
@@ -45,11 +47,14 @@
         </DockPanel>
 
         <!-- ========== MAIN CONTENT ========== -->
-        <Grid Grid.Row="1" ColumnDefinitions="2*,3*"
-              ColumnSpacing="16" RowSpacing="16">
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="3*"/>
+            </Grid.ColumnDefinitions>
 
             <!-- Avatar + petit panneau -->
-            <Border Background="{StaticResource CardBrush}" CornerRadius="10" Padding="16">
+            <Border Background="{StaticResource CardBrush}" CornerRadius="10" Padding="16" Margin="0,0,8,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
@@ -61,7 +66,7 @@
 
                     <!-- Indicateurs rapides -->
                     <StackPanel Grid.Row="1" Margin="0,16,0,0">
-                        <Label Content="CPU" />
+                        <Label Content="CPU"/>
                         <ProgressBar x:Name="CpuBar" Minimum="0" Maximum="100"/>
                         <Label Content="RAM"/>
                         <ProgressBar x:Name="RamBar" Minimum="0" Maximum="100"/>
@@ -74,7 +79,7 @@
             </Border>
 
             <!-- Chat -->
-            <Border Grid.Column="1" Background="{StaticResource CardBrush}" CornerRadius="10" Padding="12">
+            <Border Grid.Column="1" Background="{StaticResource CardBrush}" CornerRadius="10" Padding="12" Margin="8,0,0,0">
                 <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="ChatItems">
                         <ItemsControl.ItemsPanel>
@@ -89,7 +94,7 @@
 
         <!-- ========== ACTIONS ========== -->
         <Border Grid.Row="2" Background="{StaticResource CardBrush}" CornerRadius="10" Padding="12" Margin="0,12,0,0">
-            <UniformGrid Rows="1" Columns="6" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,0,0">
+            <UniformGrid Rows="1" Columns="6" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                 <Button Content="Maintenance complète"  Margin="6" Height="36" Click="Action_MaintenanceComplete"/>
                 <Button Content="Nettoyage intelligent" Margin="6" Height="36" Click="Action_CleanTemp"/>
                 <Button Content="Nettoyer navigateurs"  Margin="6" Height="36" Click="Action_CleanBrowsers"/>
