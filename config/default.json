@@ -1,0 +1,11 @@
+﻿{
+  "CpuWarn": 80,
+  "GpuWarn": 80,
+  "RamWarn": 85,
+  "TempWarn": 75,
+  "TempAlert": 85,
+  "PunchlineFrequency": 180,
+  "MoodFrequency": 5,
+  "Tone": "humor",
+  "Theme": "dark"
+}
