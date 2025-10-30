@@ -1,60 +1,50 @@
-using System;
-
-namespace Virgil.Core
-{
-    /// <summary>
-    /// Represents the different moods that the Virgil avatar can display. Changing the mood
-    /// triggers a MoodChanged event so that bound UI elements can update accordingly.
-    /// </summary>
-    public enum Mood
-    {
-        Neutral,
-        Vigilant,
-        Alert,
-        Resting,
-        Proud
-    }
-
-    public class MoodService
-    {
-        private Mood _currentMood = Mood.Neutral;
-
-        /// <summary>
-        /// Raised whenever the current mood changes.
-        /// </summary>
-        public event EventHandler? MoodChanged;
-
-        /// <summary>
-        /// Gets or sets the current mood. Setting the mood triggers the MoodChanged event.
-        /// </summary>
-        public Mood CurrentMood
-        {
-            get => _currentMood;
-            set
-            {
-                if (_currentMood != value)
-                {
-                    _currentMood = value;
-                    MoodChanged?.Invoke(this, EventArgs.Empty);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Returns a hexadecimal color string associated with the current mood. These values are used by the UI
-        /// to update the avatar's appearance.
-        /// </summary>
-        public string GetMoodColor()
-        {
-            return _currentMood switch
-            {
-                Mood.Neutral => "#007ACC",    // blue
-                Mood.Vigilant => "#FFA500",   // orange
-                Mood.Alert => "#FF4500",      // red
-                Mood.Resting => "#00CED1",    // cyan
-                Mood.Proud => "#32CD32",      // green
-                _ => "#007ACC"
-            };
-        }
-    }
-}
+*** Begin Patch
+*** Update File: src/Virgil.Core/MoodService.cs
+@@
+-    public enum Mood
++    public enum AvatarMood
+     {
+         Neutral,
+         Vigilant,
+         Alert,
+         Resting,
+         Proud
+     }
+@@
+-        private Mood _currentMood = Mood.Neutral;
++        private AvatarMood _currentMood = AvatarMood.Neutral;
+@@
+-        public Mood CurrentMood
++        public AvatarMood CurrentMood
+         {
+             get => _currentMood;
+             set
+             {
+                 if (_currentMood != value)
+                 {
+                     _currentMood = value;
+                     MoodChanged?.Invoke(this, EventArgs.Empty);
+                 }
+             }
+         }
+@@
+-        public string GetMoodColor()
++        public string GetMoodColor()
+         {
+             return _currentMood switch
+             {
+-                Mood.Neutral  => "#007ACC",
+-                Mood.Vigilant => "#FFA500",
+-                Mood.Alert    => "#FF4500",
+-                Mood.Resting  => "#00CED1",
+-                Mood.Proud    => "#32CD32",
+-                _             => "#007ACC"
++                AvatarMood.Neutral  => "#007ACC",
++                AvatarMood.Vigilant => "#FFA500",
++                AvatarMood.Alert    => "#FF4500",
++                AvatarMood.Resting  => "#00CED1",
++                AvatarMood.Proud    => "#32CD32",
++                _                  => "#007ACC"
+             };
+         }
+*** End Patch
