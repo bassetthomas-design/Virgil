@@ -1,53 +1,54 @@
 <Window x:Class="Virgil.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Paramètres Virgil" Height="420" Width="520" WindowStartupLocation="CenterOwner">
-    <Grid Margin="16">
+        Title="Paramètres Virgil"
+        Height="420"
+        Width="520"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="White"
+        FontFamily="Segoe UI">
+
+    <Grid Margin="26">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width=""*"" />
-        </Grid.ColumnDefinitions>
 
-        <StackPanel Spacing=""8"">
-            <TextBlock Text=""Seuils & Fréquences"" FontWeight=""Bold"" Margin=""0,0,0,8""/>
-            <UniformGrid Columns="2" Rows="6" Margin="0,0,0,8" HorizontalAlignment="Stretch">
-                <TextBlock Text=""CPU Warn (%)"" VerticalAlignment=""Center""/>
-                <TextBox x:Name=""CpuWarnBox""/>
-                <TextBlock Text=""GPU Warn (%)"" VerticalAlignment=""Center""/>
-                <TextBox x:Name=""GpuWarnBox""/>
-                <TextBlock Text=""RAM Warn (%)"" VerticalAlignment=""Center""/>
-                <TextBox x:Name=""RamWarnBox""/>
-                <TextBlock Text=""Temp Warn (°C)"" VerticalAlignment=""Center""/>
-                <TextBox x:Name=""TempWarnBox""/>
-                <TextBlock Text=""Temp Alert (°C)"" VerticalAlignment=""Center""/>
-                <TextBox x:Name=""TempAlertBox""/>
-                <TextBlock Text=""Punchlines (s)"" VerticalAlignment=""Center""/>
-                <TextBox x:Name=""PunchFreqBox""/>
-                <TextBlock Text=""Mood (s)"" VerticalAlignment=""Center""/>
-                <TextBox x:Name=""MoodFreqBox""/>
-            </UniformGrid>
+        <!-- Section principale des paramètres -->
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical" Spacing="12">
+                <TextBlock Text="Paramètres Système"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Margin="0,0,0,10" />
 
-            <TextBlock Text=""Style"" FontWeight=""Bold"" Margin=""0,8,0,8""/>
-            <UniformGrid Columns=""2"">
-                <TextBlock Text=""Ton"" VerticalAlignment=""Center""/>
-                <ComboBox x:Name=""ToneBox"">
-                    <ComboBoxItem Content=""humor"" IsSelected=""True""/>
-                    <ComboBoxItem Content=""pro""/>
-                </ComboBox>
-                <TextBlock Text=""Thème"" VerticalAlignment=""Center""/>
-                <ComboBox x:Name=""ThemeBox"">
-                    <ComboBoxItem Content=""dark"" IsSelected=""True""/>
-                    <ComboBoxItem Content=""light""/>
-                </ComboBox>
-            </UniformGrid>
-        </StackPanel>
+                <UniformGrid Columns="2" Rows="6" Margin="0,0,0,8" HorizontalAlignment="Stretch">
+                    <TextBlock Text="CPU Warn (%)" VerticalAlignment="Center" />
+                    <TextBox Width="80" Text="80" />
 
-        <StackPanel Grid.Row=""1"" Orientation=""Horizontal"" HorizontalAlignment=""Right"" Spacing=""8"">
-            <Button x:Name=""BtnCancel"" Content=""Annuler"" MinWidth=""100""/>
-            <Button x:Name=""BtnSave"" Content=""Enregistrer"" MinWidth=""120""/>
+                    <TextBlock Text="CPU Alert (%)" VerticalAlignment="Center" />
+                    <TextBox Width="80" Text="95" />
+
+                    <TextBlock Text="RAM Warn (%)" VerticalAlignment="Center" />
+                    <TextBox Width="80" Text="80" />
+
+                    <TextBlock Text="RAM Alert (%)" VerticalAlignment="Center" />
+                    <TextBox Width="80" Text="95" />
+
+                    <TextBlock Text="Température Max (°C)" VerticalAlignment="Center" />
+                    <TextBox Width="80" Text="85" />
+
+                    <TextBlock Text="Intervalle de Scan (s)" VerticalAlignment="Center" />
+                    <TextBox Width="80" Text="5" />
+                </UniformGrid>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Boutons d’action -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+            <Button Content="Enregistrer" Width="110" Height="32" Margin="0,10,0,0" Background="#007ACC" Foreground="White" />
+            <Button Content="Annuler" Width="90" Height="32" Margin="0,10,0,0" Background="#444" Foreground="White" />
         </StackPanel>
     </Grid>
 </Window>
