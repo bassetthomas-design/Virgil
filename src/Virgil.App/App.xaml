@@ -1,8 +1,7 @@
-<Application x:Class="Virgil.App.App"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="Views/MainWindow.UI.xaml">
-    <Application.Resources>
-        <!-- tes resources globales peuvent rester ici -->
-    </Application.Resources>
+﻿<Application x:Class=""Virgil.App.App""
+ xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation""
+ xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml""
+ StartupUri=""MainWindow.xaml"">
+  <Application.Resources/>
 </Application>
+

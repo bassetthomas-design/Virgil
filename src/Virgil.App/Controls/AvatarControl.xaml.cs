@@ -1,42 +1,72 @@
-using System.Windows;
+﻿using System;
+using System.IO;
 using System.Windows.Controls;
-using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Virgil.Core;
 
 namespace Virgil.App.Controls
 {
     public partial class AvatarControl : UserControl
     {
-        public AvatarControl()
+        public AvatarControl() => InitializeComponent();
+
+        public void SetMood(string mood)
         {
-            InitializeComponent();
+            if (Enum.TryParse<Mood>(mood, true, out var m)) SetMood(m);
+            else SetMood(Mood.Happy);
         }
 
-        // ====== Humeur → fichier glyph (UNE SEULE définition) ======
-        public static readonly DependencyProperty MoodGlyphProperty =
-            DependencyProperty.Register(
-                nameof(MoodGlyph),
-                typeof(string),
-                typeof(AvatarControl),
-                new PropertyMetadata(null));
-
-        public string MoodGlyph
+        public void SetMood(Mood mood)
         {
-            get => (string)GetValue(MoodGlyphProperty);
-            set => SetValue(MoodGlyphProperty, value);
-        }
+            string fileName = mood switch {
+                Mood.Happy   => "happy.png",
+                Mood.Focused => "focused.png",
+                Mood.Warn    => "warn.png",
+                Mood.Alert   => "alert.png",
+                Mood.Sleepy  => "sleepy.png",
+                Mood.Proud   => "proud.png",
+                Mood.Tired   => "tired.png",
+                _            => "neutral.png"
+            };
 
-        // ====== Pinceau overlay selon l’humeur ======
-        public static readonly DependencyProperty MoodOverlayBrushProperty =
-            DependencyProperty.Register(
-                nameof(MoodOverlayBrush),
-                typeof(Brush),
-                typeof(AvatarControl),
-                new PropertyMetadata(Brushes.Transparent));
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string path = Path.Combine(baseDir, "assets", "avatar", fileName);
 
-        public Brush MoodOverlayBrush
-        {
-            get => (Brush)GetValue(MoodOverlayBrushProperty);
-            set => SetValue(MoodOverlayBrushProperty, value);
+                if (File.Exists(path))
+                {
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.UriSource = new Uri(path, UriKind.Absolute);
+                    bmp.EndInit();
+                    MoodImage.Source = bmp;
+                    FallbackGlyph.Visibility = System.Windows.Visibility.Collapsed;
+                }
+                else
+                {
+                    // Fallback emoji si l'image est absente
+                    MoodImage.Source = null;
+                    FallbackGlyph.Text = mood switch {
+                        Mood.Happy   => "😊",
+                        Mood.Focused => "🧐",
+                        Mood.Warn    => "😬",
+                        Mood.Alert   => "😱",
+                        Mood.Sleepy  => "😴",
+                        Mood.Proud   => "😏",
+                        Mood.Tired   => "🥱",
+                        _            => "😐"
+                    };
+                    FallbackGlyph.Visibility = System.Windows.Visibility.Visible;
+                }
+            }
+            catch
+            {
+                MoodImage.Source = null;
+                FallbackGlyph.Text = "😐";
+                FallbackGlyph.Visibility = System.Windows.Visibility.Visible;
+            }
         }
     }
 }
