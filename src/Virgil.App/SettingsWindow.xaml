@@ -17,38 +17,44 @@
 
         <!-- Section principale des paramètres -->
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel Orientation="Vertical" Spacing="12">
+            <StackPanel Orientation="Vertical">
                 <TextBlock Text="Paramètres Système"
                            FontSize="18"
                            FontWeight="Bold"
                            Margin="0,0,0,10" />
 
                 <UniformGrid Columns="2" Rows="6" Margin="0,0,0,8" HorizontalAlignment="Stretch">
-                    <TextBlock Text="CPU Warn (%)" VerticalAlignment="Center" />
-                    <TextBox Width="80" Text="80" />
+                    <TextBlock Text="CPU Warn (%)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox Width="80" Text="80" Margin="0,0,0,8" />
 
-                    <TextBlock Text="CPU Alert (%)" VerticalAlignment="Center" />
-                    <TextBox Width="80" Text="95" />
+                    <TextBlock Text="CPU Alert (%)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox Width="80" Text="95" Margin="0,0,0,8" />
 
-                    <TextBlock Text="RAM Warn (%)" VerticalAlignment="Center" />
-                    <TextBox Width="80" Text="80" />
+                    <TextBlock Text="RAM Warn (%)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox Width="80" Text="80" Margin="0,0,0,8" />
 
-                    <TextBlock Text="RAM Alert (%)" VerticalAlignment="Center" />
-                    <TextBox Width="80" Text="95" />
+                    <TextBlock Text="RAM Alert (%)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox Width="80" Text="95" Margin="0,0,0,8" />
 
-                    <TextBlock Text="Température Max (°C)" VerticalAlignment="Center" />
-                    <TextBox Width="80" Text="85" />
+                    <TextBlock Text="Température Max (°C)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox Width="80" Text="85" Margin="0,0,0,8" />
 
-                    <TextBlock Text="Intervalle de Scan (s)" VerticalAlignment="Center" />
-                    <TextBox Width="80" Text="5" />
+                    <TextBlock Text="Intervalle de Scan (s)" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox Width="80" Text="5" Margin="0,0,0,0" />
                 </UniformGrid>
             </StackPanel>
         </ScrollViewer>
 
         <!-- Boutons d’action -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
-            <Button Content="Enregistrer" Width="110" Height="32" Margin="0,10,0,0" Background="#007ACC" Foreground="White" />
-            <Button Content="Annuler" Width="90" Height="32" Margin="0,10,0,0" Background="#444" Foreground="White" />
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Enregistrer"
+                    Width="110" Height="32"
+                    Margin="0,10,10,0"
+                    Background="#007ACC" Foreground="White" />
+            <Button Content="Annuler"
+                    Width="90" Height="32"
+                    Margin="0,10,0,0"
+                    Background="#444" Foreground="White" />
         </StackPanel>
     </Grid>
 </Window>
