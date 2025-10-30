@@ -1,24 +1,6 @@
-﻿<Window x:Class=""Virgil.App.MainWindow""
- xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation""
- xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml""
- Title=""Virgil 2.0"" Height=""720"" Width=""1080"" Background=""#111"">
-  <Grid Margin=""10"">
-    <Grid.RowDefinitions><RowDefinition Height=""Auto""/><RowDefinition Height=""*""/></Grid.RowDefinitions>
-    <DockPanel Grid.Row=""0""><TextBlock x:Name=""ClockText"" Foreground=""White"" FontSize=""16""/></DockPanel>
-    <StackPanel Grid.Row=""1"">
-      <UniformGrid Rows=""2"">
-        <Button x:Name=""BtnCleanSmart"" Content=""Nettoyage intelligent""/>
-        <Button x:Name=""BtnUpdateAll"" Content=""Tout mettre à jour""/>
-      </UniformGrid>
-      <ScrollViewer VerticalScrollBarVisibility=""Auto"">
-        <ItemsControl x:Name=""ChatList"">
-          <ItemsControl.ItemTemplate><DataTemplate>
-            <TextBlock Text=""{Binding}"" Foreground=""White"" TextWrapping=""Wrap""/>
-          </DataTemplate></ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
-    </StackPanel>
-  </Grid>
+<Window x:Class="Virgil.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Virgil 2.0" Height="720" Width="1080" Background="#111">
+  <!-- … contenu de la fenêtre … -->
 </Window>
-
-
