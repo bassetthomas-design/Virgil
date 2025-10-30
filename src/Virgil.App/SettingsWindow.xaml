@@ -1,7 +1,7 @@
-﻿<Window x:Class=""Virgil.App.SettingsWindow""
-        xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation""
-        xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml""
-        Title=""Paramètres Virgil"" Height=""420"" Width=""520"" WindowStartupLocation=""CenterOwner"">
+<Window x:Class="Virgil.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Paramètres Virgil" Height="420" Width="520" WindowStartupLocation="CenterOwner"
     <Grid Margin=""16"">
         <Grid.RowDefinitions>
             <RowDefinition Height=""*"" />
