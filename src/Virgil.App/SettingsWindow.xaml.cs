@@ -1,52 +1,86 @@
-﻿using System;
-using System.Linq;
-using System.Windows;
-using Virgil.Core.Config;
+// src/Virgil.App/MainWindow.xaml.cs
+// Code-behind propre : AUCUNE infra WPF (pas d'IComponentConnector, pas de _contentLoaded,
+// pas de définition de InitializeComponent). On ne fait qu'APPELER InitializeComponent().
+
+using System.Windows;           // RoutedEventArgs
+using System.Windows.Threading; // si tu utilises un DispatcherTimer
+using Virgil.Core;              // si tu utilises Mood, services, etc.
 
 namespace Virgil.App
 {
-    public partial class SettingsWindow : Window
+    public partial class MainWindow : Window
     {
-        private VirgilConfig _cfg;
-        public SettingsWindow(VirgilConfig cfg)
+        public MainWindow()
         {
+            // IMPORTANT : on APPELLE InitializeComponent() (définie dans le .g.cs auto-généré)
             InitializeComponent();
-            _cfg = cfg;
-            LoadUi();
-            BtnSave.Click += (_,__) => { SaveUi(); DialogResult = true; Close(); };
-            BtnCancel.Click += (_,__) => { DialogResult = false; Close(); };
+
+            // ----- Ton initialisation UI/app ici (sans infra WPF) -----
+            // Exemples :
+            // this.Title = "Virgil";
+            // ClockStart();
+            // if (AvatarControl != null) AvatarControl.SetMood(Mood.Focused);
         }
 
-        private void LoadUi()
+        // =========================
+        // Handlers d’événements UI
+        // =========================
+
+        private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
-            CpuWarnBox.Text   = _cfg.CpuWarn.ToString();
-            GpuWarnBox.Text   = _cfg.GpuWarn.ToString();
-            RamWarnBox.Text   = _cfg.RamWarn.ToString();
-            TempWarnBox.Text  = _cfg.TempWarn.ToString();
-            TempAlertBox.Text = _cfg.TempAlert.ToString();
-            PunchFreqBox.Text = _cfg.PunchlineFrequency.ToString();
-            MoodFreqBox.Text  = _cfg.MoodFrequency.ToString();
-
-            ToneBox.SelectedItem  = ToneBox.Items.Cast<System.Windows.Controls.ComboBoxItem>()
-                                        .FirstOrDefault(i => (string)i.Content == _cfg.Tone);
-            ThemeBox.SelectedItem = ThemeBox.Items.Cast<System.Windows.Controls.ComboBoxItem>()
-                                        .FirstOrDefault(i => (string)i.Content == _cfg.Theme);
+            // TODO: démarrer la surveillance
+            // StartMonitoring();
         }
 
-        private void SaveUi()
+        private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
-            int.TryParse(CpuWarnBox.Text, out _cfg.CpuWarn);
-            int.TryParse(GpuWarnBox.Text, out _cfg.GpuWarn);
-            int.TryParse(RamWarnBox.Text, out _cfg.RamWarn);
-            int.TryParse(TempWarnBox.Text, out _cfg.TempWarn);
-            int.TryParse(TempAlertBox.Text, out _cfg.TempAlert);
-            int.TryParse(PunchFreqBox.Text, out _cfg.PunchlineFrequency);
-            int.TryParse(MoodFreqBox.Text, out _cfg.MoodFrequency);
-
-            _cfg.Tone  = ((System.Windows.Controls.ComboBoxItem)ToneBox.SelectedItem).Content?.ToString() ?? "humor";
-            _cfg.Theme = ((System.Windows.Controls.ComboBoxItem)ThemeBox.SelectedItem).Content?.ToString() ?? "dark";
-
-            _cfg.Save(); // vers %AppData%\Virgil\config\settings.json
+            // TODO: arrêter la surveillance
+            // StopMonitoring();
         }
+
+        private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
+        {
+            // TODO: appeler ton service de maintenance complète (async/await si nécessaire)
+            // await _virgilService.FullMaintenanceAsync();
+        }
+
+        private void Action_CleanTemp(object sender, RoutedEventArgs e)
+        {
+            // TODO: nettoyage intelligent
+        }
+
+        private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
+        {
+            // TODO: nettoyage navigateurs
+        }
+
+        private void Action_UpdateAll(object sender, RoutedEventArgs e)
+        {
+            // TODO: mises à jour complètes
+        }
+
+        private void Action_Defender(object sender, RoutedEventArgs e)
+        {
+            // TODO: maj + scan Defender
+        }
+
+        private void OpenConfig_Click(object sender, RoutedEventArgs e)
+        {
+            // TODO: ouvrir la fenêtre des paramètres
+            // new SettingsWindow().ShowDialog();
+        }
+
+        // =========================
+        // Méthodes utilitaires UI
+        // =========================
+
+        // Exemple si tu as une horloge :
+        // private DispatcherTimer? _clockTimer;
+        // private void ClockStart()
+        // {
+        //     _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        //     _clockTimer.Tick += (_, __) => { ClockText.Text = DateTime.Now.ToString("HH:mm:ss"); };
+        //     _clockTimer.Start();
+        // }
     }
 }
