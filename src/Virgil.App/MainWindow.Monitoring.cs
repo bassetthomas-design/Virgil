@@ -22,7 +22,7 @@ namespace Virgil.App
         private void RefreshSensors()
         {
             // TODO: MAJ CPU/RAM/GPU/Disk + températures via services
-            // Ex: CpuBar.Value = ...
+            // UI.CpuBar.Value = ...
         }
     }
 }
