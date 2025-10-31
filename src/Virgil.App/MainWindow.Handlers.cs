@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -6,70 +5,58 @@ namespace Virgil.App
 {
     public partial class MainWindow
     {
-        // === Handlers du Toggle Surveillance ===
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
-            Resources["SurveillanceToggleText"] = "Arrêter la surveillance";
-            PostChat("Surveillance activée.");
-            // TODO: démarrer le monitoring (timers, sondes, etc.)
+            Resources["SurveillanceToggleText"] = "Surveillance activée";
+            // TODO: démarrer la surveillance réelle ici
+            AddChat("👁️ Surveillance activée.");
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
             Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
-            PostChat("Surveillance arrêtée.");
-            // TODO: arrêter le monitoring
+            // TODO: arrêter la surveillance réelle ici
+            AddChat("😴 Surveillance arrêtée.");
         }
 
-        // === Handlers des actions bas de page ===
-        private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
+        private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            PostChat("Maintenance complète : démarrage…");
-            await Task.Run(() => { /* TODO: enchaîner nettoyage + navigateurs + updates */ });
-            PostChat("Maintenance complète terminée.");
+            AddChat("🔧 Maintenance complète lancée (placeholder).");
+            // TODO: appeler le workflow réel
         }
 
-        private async void Action_CleanTemp(object sender, RoutedEventArgs e)
+        private void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            PostChat("Nettoyage intelligent : démarrage…");
-            await Task.Run(() => { /* TODO: Clean smart */ });
-            PostChat("Nettoyage intelligent terminé.");
+            AddChat("🧹 Nettoyage intelligent lancé (placeholder).");
         }
 
-        private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
+        private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            PostChat("Nettoyage navigateurs : démarrage…");
-            await Task.Run(() => { /* TODO: Clean browsers */ });
-            PostChat("Navigateurs nettoyés.");
+            AddChat("🌐 Nettoyage navigateurs lancé (placeholder).");
         }
 
-        private async void Action_UpdateAll(object sender, RoutedEventArgs e)
+        private void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            PostChat("Mises à jour globales : démarrage…");
-            await Task.Run(() => { /* TODO: winget + pilotes + Windows Update + Defender */ });
-            PostChat("Mises à jour complètes terminées.");
+            AddChat("⬆️ Mises à jour totales lancées (placeholder).");
         }
 
-        private async void Action_Defender(object sender, RoutedEventArgs e)
+        private void Action_Defender(object sender, RoutedEventArgs e)
         {
-            PostChat("Microsoft Defender : MAJ + Scan rapide…");
-            await Task.Run(() => { /* TODO: Defender update + quick scan */ });
-            PostChat("Defender : opération terminée.");
+            AddChat("🛡️ Microsoft Defender (MAJ + Scan) lancé (placeholder).");
         }
 
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
-            var w = new SettingsWindow
-            {
-                Owner = this
-            };
-            w.ShowDialog();
+            var win = new SettingsWindow();
+            win.Owner = this;
+            win.ShowDialog();
         }
 
-        // === Utilitaire d’affichage chat (existant côté XAML : ItemsControl x:Name=\"ChatItems\") ===
-        private void PostChat(string text)
+        // Utilitaire chat
+        private void AddChat(string message)
         {
-            ChatItems.Items.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap });
+            var tb = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap };
+            ChatItems.Items.Add(tb);
             ChatScroll.ScrollToEnd();
         }
     }
