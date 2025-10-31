@@ -24,7 +24,7 @@
         <Border Grid.Row="1" CornerRadius="10" Background="#1D232A" Padding="16" Margin="0,12,0,12">
             <!-- Un SEUL conteneur à l'intérieur du Border -->
             <StackPanel>
-                <TextBlock Text="Seuils & Options" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                <TextBlock Text="Seuils &amp; Options" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,10"/>
 
                 <UniformGrid Rows="3" Columns="2" Margin="0,0,0,12">
                     <TextBlock Text="Seuil CPU (%)" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0"/>
