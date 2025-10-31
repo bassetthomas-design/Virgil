@@ -1,72 +1,83 @@
-﻿using System;
-using System.IO;
+// src/Virgil.App/Controls/AvatarControl.xaml.cs
+using System;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
-using Virgil.Core;
+using System.Windows.Threading;
+using Virgil.Core; // << important : Mood est dans Virgil.Core
 
 namespace Virgil.App.Controls
 {
     public partial class AvatarControl : UserControl
     {
-        public AvatarControl() => InitializeComponent();
+        public static readonly DependencyProperty MoodProperty =
+            DependencyProperty.Register(
+                nameof(Mood),
+                typeof(Mood),
+                typeof(AvatarControl),
+                new PropertyMetadata(Mood.Focused, OnMoodChanged));
 
-        public void SetMood(string mood)
+        public Mood Mood
         {
-            if (Enum.TryParse<Mood>(mood, true, out var m)) SetMood(m);
-            else SetMood(Mood.Happy);
+            get => (Mood)GetValue(MoodProperty);
+            set => SetValue(MoodProperty, value);
         }
 
-        public void SetMood(Mood mood)
+        private readonly DispatcherTimer _blinkTimer = new DispatcherTimer();
+
+        public AvatarControl()
         {
-            string fileName = mood switch {
-                Mood.Happy   => "happy.png",
-                Mood.Focused => "focused.png",
-                Mood.Warn    => "warn.png",
-                Mood.Alert   => "alert.png",
-                Mood.Sleepy  => "sleepy.png",
-                Mood.Proud   => "proud.png",
-                Mood.Tired   => "tired.png",
-                _            => "neutral.png"
+            InitializeComponent();
+
+            // clignement simple (si ton XAML a une Image nommée SpriteImage)
+            _blinkTimer.Interval = TimeSpan.FromSeconds(4);
+            _blinkTimer.Tick += (_, __) => BlinkOnce();
+            _blinkTimer.Start();
+
+            // mood par défaut
+            ApplyMoodSprite(Mood);
+        }
+
+        private static void OnMoodChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is AvatarControl ctrl && e.NewValue is Mood m)
+                ctrl.ApplyMoodSprite(m);
+        }
+
+        private void ApplyMoodSprite(Mood mood)
+        {
+            // Mappe l’énum vers tes sprites (à ajuster selon tes assets)
+            // ex. pack URI: "pack://application:,,,/Virgil.App;component/Assets/Avatar/mood_focused.png"
+            string key = mood switch
+            {
+                Mood.Happy   => "mood_happy.png",
+                Mood.Warn    => "mood_warn.png",
+                Mood.Alert   => "mood_alert.png",
+                Mood.Sleepy  => "mood_sleepy.png",
+                Mood.Proud   => "mood_proud.png",
+                Mood.Tired   => "mood_tired.png",
+                _            => "mood_focused.png",
             };
 
             try
             {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string path = Path.Combine(baseDir, "assets", "avatar", fileName);
-
-                if (File.Exists(path))
-                {
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    bmp.UriSource = new Uri(path, UriKind.Absolute);
-                    bmp.EndInit();
-                    MoodImage.Source = bmp;
-                    FallbackGlyph.Visibility = System.Windows.Visibility.Collapsed;
-                }
-                else
-                {
-                    // Fallback emoji si l'image est absente
-                    MoodImage.Source = null;
-                    FallbackGlyph.Text = mood switch {
-                        Mood.Happy   => "😊",
-                        Mood.Focused => "🧐",
-                        Mood.Warn    => "😬",
-                        Mood.Alert   => "😱",
-                        Mood.Sleepy  => "😴",
-                        Mood.Proud   => "😏",
-                        Mood.Tired   => "🥱",
-                        _            => "😐"
-                    };
-                    FallbackGlyph.Visibility = System.Windows.Visibility.Visible;
-                }
+                var uri = new Uri($"pack://application:,,,/Virgil.App;component/Assets/Avatar/{key}", UriKind.Absolute);
+                SpriteImage.Source = new BitmapImage(uri);
             }
             catch
             {
-                MoodImage.Source = null;
-                FallbackGlyph.Text = "😐";
-                FallbackGlyph.Visibility = System.Windows.Visibility.Visible;
+                // fallback silencieux si le sprite n’existe pas
             }
+        }
+
+        private async void BlinkOnce()
+        {
+            // Si tu as deux images superposées (œil ouvert/fermé), gère l’opacité ici
+            // Ici on fait un blink “rapide” en jouant sur l’opacité de SpriteImage (exemple minimal)
+            var s = SpriteImage.Opacity;
+            SpriteImage.Opacity = 0.2;
+            await System.Threading.Tasks.Task.Delay(120);
+            SpriteImage.Opacity = s;
         }
     }
 }
