@@ -48,16 +48,20 @@ namespace Virgil.App.Controls
         {
             // Mappe l’énum vers tes sprites (à ajuster selon tes assets)
             // ex. pack URI: "pack://application:,,,/Virgil.App;component/Assets/Avatar/mood_focused.png"
-            string key = mood switch
-            {
-                Mood.Happy   => "mood_happy.png",
-                Mood.Warn    => "mood_warn.png",
-                Mood.Alert   => "mood_alert.png",
-                Mood.Sleepy  => "mood_sleepy.png",
-                Mood.Proud   => "mood_proud.png",
-                Mood.Tired   => "mood_tired.png",
-                _            => "mood_focused.png",
-            };
+           string key = mood switch
+{
+    Mood.Happy    => "mood_happy.png",
+    Mood.Warn     => "mood_warn.png",
+    Mood.Alert    => "mood_alert.png",
+    Mood.Sleepy   => "mood_sleepy.png",
+    Mood.Proud    => "mood_proud.png",
+    Mood.Tired    => "mood_tired.png",
+    Mood.Neutral  => "mood_focused.png",  // fallback provisoire
+    Mood.Vigilant => "mood_focused.png",  // fallback provisoire
+    Mood.Resting  => "mood_sleepy.png",   // fallback provisoire
+    _             => "mood_focused.png",
+};
+
 
             try
             {
