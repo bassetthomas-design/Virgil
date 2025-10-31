@@ -1,4 +1,5 @@
 using System;
+using AvatarMood = Virgil.Core.Mood;
 
 namespace Virgil.Core
 {
