@@ -1,40 +1,33 @@
 using System;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Windows.Threading;
 
 namespace Virgil.App
 {
     public partial class MainWindow
     {
-        private CancellationTokenSource? _monCts;
+        private readonly DispatcherTimer _monitorTimer = new DispatcherTimer();
 
-        private void StartSurveillance()
+        private void StartMonitoring()
         {
-            _monCts?.Cancel();
-            _monCts = new CancellationTokenSource();
-            _ = MonitorLoopAsync(_monCts.Token);
+            _monitorTimer.Interval = TimeSpan.FromSeconds(2);
+            _monitorTimer.Tick += (s, e) => RefreshMetrics();
+            _monitorTimer.Start();
         }
 
-        private void StopSurveillance()
+        private void StopMonitoring()
         {
-            _monCts?.Cancel();
+            _monitorTimer.Stop();
         }
 
-        private async Task MonitorLoopAsync(CancellationToken ct)
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                // TODO: brancher sur ton service capteurs réel
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    CpuBar.Value = 20;  // remplacer par vraies valeurs
-                    RamBar.Value = 30;
-                    GpuBar.Value = 15;
-                    DiskBar.Value = 5;
-                });
+        private readonly Random _rng = new Random();
 
-                await Task.Delay(1500, ct);
-            }
+        private void RefreshMetrics()
+        {
+            // Placeholder : valeurs aléatoires pour vérifier le binding UI
+            CpuBar.Value  = _rng.Next(0, 100);
+            RamBar.Value  = _rng.Next(0, 100);
+            GpuBar.Value  = _rng.Next(0, 100);
+            DiskBar.Value = _rng.Next(0, 100);
         }
     }
 }
