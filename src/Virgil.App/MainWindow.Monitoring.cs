@@ -10,24 +10,19 @@ namespace Virgil.App
         private void StartMonitoring()
         {
             _monitorTimer.Interval = TimeSpan.FromSeconds(2);
-            _monitorTimer.Tick += (s, e) => RefreshMetrics();
+            _monitorTimer.Tick += (s, e) => RefreshSensors();
             _monitorTimer.Start();
         }
 
         private void StopMonitoring()
         {
-            _monitorTimer.Stop();
+            try { _monitorTimer.Stop(); } catch { }
         }
 
-        private readonly Random _rng = new Random();
-
-        private void RefreshMetrics()
+        private void RefreshSensors()
         {
-            // Placeholder : valeurs aléatoires pour vérifier le binding UI
-            CpuBar.Value  = _rng.Next(0, 100);
-            RamBar.Value  = _rng.Next(0, 100);
-            GpuBar.Value  = _rng.Next(0, 100);
-            DiskBar.Value = _rng.Next(0, 100);
+            // TODO: MAJ CPU/RAM/GPU/Disk + températures via services
+            // Ex: CpuBar.Value = ...
         }
     }
 }
