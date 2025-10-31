@@ -2,75 +2,63 @@ using System.Windows;
 
 namespace Virgil.App
 {
-    // Un simple partial qui contient UNIQUEMENT des handlers et helpers
     public partial class MainWindow
     {
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
-            try { Resources["SurveillanceToggleText"] = "Arrêter la surveillance"; } catch { }
-            // TODO: démarrer la surveillance (timers, capteurs, etc.)
+            Resources["SurveillanceToggleText"] = "Arrêter la surveillance";
+            StartMonitoring();
             AddChat("Surveillance activée.");
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
-            try { Resources["SurveillanceToggleText"] = "Démarrer la surveillance"; } catch { }
-            // TODO: arrêter la surveillance
+            Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
+            StopMonitoring();
             AddChat("Surveillance arrêtée.");
         }
 
         private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            // TODO: enchaîner Nettoyage intelligent + Navigateurs + Mises à jour
-            AddChat("Maintenance complète : démarrage…");
+            AddChat("Mode maintenance activé…");
+            // TODO: enchaîner nettoyage total + navigateurs + updates (log + retours)
         }
 
         private void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            // TODO: nettoyage intelligent seul
-            AddChat("Nettoyage intelligent lancé.");
+            AddChat("Nettoyage intelligent en cours…");
+            // TODO: logique de nettoyage intelligent
         }
 
         private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            // TODO: nettoyage des navigateurs
-            AddChat("Nettoyage navigateurs en cours.");
+            AddChat("Nettoyage navigateurs…");
+            // TODO
         }
 
         private void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            // TODO: winget + pilotes + Windows Update + Defender
-            AddChat("Mises à jour complètes démarrées.");
+            AddChat("Mises à jour totales (apps/jeux/pilotes/Windows/Defender)…");
+            // TODO
         }
 
         private void Action_Defender(object sender, RoutedEventArgs e)
         {
-            // TODO: MAJ Defender + scan rapide
-            AddChat("Microsoft Defender : mise à jour + scan.");
+            AddChat("Microsoft Defender (MAJ + Scan rapide)…");
+            // TODO
         }
 
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: ouvrir la fenêtre de configuration
             AddChat("Ouverture de la configuration…");
-            try
-            {
-                var win = new SettingsWindow();
-                win.Owner = this;
-                win.ShowDialog();
-            }
-            catch { /* ignore si SettingsWindow pas encore prêt */ }
+            // TODO: Show SettingsWindow
         }
 
-        // Affichage dans la zone de chat (ItemsControl x:Name="ChatItems")
-        private void AddChat(string message)
+        private void AddChat(string text)
         {
-            try
-            {
-                ChatItems?.Items?.Add(message);
-                ChatScroll?.ScrollToEnd();
-            }
-            catch { /* en cas d’absence de l’UI */ }
+            // Ajoute une ligne simple au chat (tu remplaceras par ton template bulles + Thanos)
+            UI.ChatItems.Items.Add(text);
+            UI.ChatScroll.ScrollToEnd();
         }
     }
 }
