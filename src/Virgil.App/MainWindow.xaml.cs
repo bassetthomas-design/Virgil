@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 
 namespace Virgil.App
@@ -10,25 +11,23 @@ namespace Virgil.App
 
         public MainWindow()
         {
-            InitializeComponent();   // ← unique endroit !
-            Loaded += MainWindow_Loaded;
-            Unloaded += MainWindow_Unloaded;
-        }
+            InitializeComponent();
 
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            // Horloge en haut à droite si le TextBlock existe dans le XAML (x:Name="ClockText")
+            // Branche les handlers sur le UserControl (évite les Click dans le XAML)
+            UI.SurveillanceToggle.Checked   += SurveillanceToggle_Checked;
+            UI.SurveillanceToggle.Unchecked += SurveillanceToggle_Unchecked;
+
+            UI.BtnMaintenance.Click   += Action_MaintenanceComplete;
+            UI.BtnCleanTemp.Click     += Action_CleanTemp;
+            UI.BtnCleanBrowsers.Click += Action_CleanBrowsers;
+            UI.BtnUpdateAll.Click     += Action_UpdateAll;
+            UI.BtnDefender.Click      += Action_Defender;
+            UI.BtnOpenConfig.Click    += OpenConfig_Click;
+
+            // Horloge
             _clockTimer.Interval = TimeSpan.FromSeconds(1);
-            _clockTimer.Tick += (s, _) =>
-            {
-                try { ClockText.Text = DateTime.Now.ToString("HH:mm:ss"); } catch { /* ignore si absent */ }
-            };
+            _clockTimer.Tick += (s, e) => UI.ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
             _clockTimer.Start();
-        }
-
-        private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
-        {
-            try { _clockTimer.Stop(); } catch { }
         }
     }
 }
