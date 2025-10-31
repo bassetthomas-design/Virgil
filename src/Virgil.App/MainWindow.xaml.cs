@@ -6,21 +6,29 @@ namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
-        private readonly DispatcherTimer _uiTimer = new DispatcherTimer();
+        private readonly DispatcherTimer _clockTimer = new DispatcherTimer();
 
         public MainWindow()
         {
-            InitializeComponent(); // NE PAS enlever
-            Loaded += OnLoaded;
-
-            _uiTimer.Interval = TimeSpan.FromSeconds(1);
-            _uiTimer.Tick += (s, e) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
-            _uiTimer.Start();
+            InitializeComponent();   // ← unique endroit !
+            Loaded += MainWindow_Loaded;
+            Unloaded += MainWindow_Unloaded;
         }
 
-        private void OnLoaded(object? sender, RoutedEventArgs e)
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Init au chargement de la fenêtre (si nécessaire)
+            // Horloge en haut à droite si le TextBlock existe dans le XAML (x:Name="ClockText")
+            _clockTimer.Interval = TimeSpan.FromSeconds(1);
+            _clockTimer.Tick += (s, _) =>
+            {
+                try { ClockText.Text = DateTime.Now.ToString("HH:mm:ss"); } catch { /* ignore si absent */ }
+            };
+            _clockTimer.Start();
+        }
+
+        private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
+        {
+            try { _clockTimer.Stop(); } catch { }
         }
     }
 }
