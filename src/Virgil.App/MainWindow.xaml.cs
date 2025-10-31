@@ -1,77 +1,88 @@
-// src/Virgil.App/MainWindow.xaml.cs
-// Code-behind PROPRE : aucune infra WPF (pas d'IComponentConnector, pas de _contentLoaded,
-// pas de définition d'InitializeComponent). On FAIT SEULEMENT L'APPEL à InitializeComponent().
-
-using System.Windows;           // RoutedEventArgs
-using System.Windows.Threading; // si tu utilises un DispatcherTimer
-using Virgil.Core;              // si tu utilises Mood, services, etc.
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
+        private readonly DispatcherTimer _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+
         public MainWindow()
         {
-            InitializeComponent(); // définie dans le .g.cs auto-généré par WPF
+            InitializeComponent();
 
-            // -- ton init UI ICI (exemples) --
-            // this.Title = "Virgil";
-            // if (AvatarControl != null) AvatarControl.SetMood(Mood.Focused);
-            // ClockStart();
+            // Horloge UI
+            _clockTimer.Tick += (_, __) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+            _clockTimer.Start();
+
+            // Texte initial du toggle
+            Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
         }
 
-        // ===== Handlers de la fenêtre principale =====
+        // ========= Handlers UI (référencés dans MainWindow.UI.xaml) =========
 
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
-            // TODO: start monitoring
+            Resources["SurveillanceToggleText"] = "Arrêter la surveillance";
+            // TODO: démarrer la surveillance ici
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
-            // TODO: stop monitoring
+            Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
+            // TODO: arrêter la surveillance ici
         }
 
-        private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
+        private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            // TODO
+            // TODO: appelle ton service de maintenance complète
+            await System.Threading.Tasks.Task.CompletedTask;
+            AppendChat("Maintenance complète lancée → terminé.");
         }
 
-        private void Action_CleanTemp(object sender, RoutedEventArgs e)
+        private async void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            // TODO
+            // TODO: nettoyage intelligent
+            await System.Threading.Tasks.Task.CompletedTask;
+            AppendChat("Nettoyage intelligent terminé.");
         }
 
-        private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
+        private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            // TODO
+            // TODO: nettoyage navigateurs
+            await System.Threading.Tasks.Task.CompletedTask;
+            AppendChat("Navigateurs nettoyés.");
         }
 
-        private void Action_UpdateAll(object sender, RoutedEventArgs e)
+        private async void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            // TODO
+            // TODO: mises à jour (apps / pilotes / Windows)
+            await System.Threading.Tasks.Task.CompletedTask;
+            AppendChat("Mises à jour effectuées.");
         }
 
-        private void Action_Defender(object sender, RoutedEventArgs e)
+        private async void Action_Defender(object sender, RoutedEventArgs e)
         {
-            // TODO
+            // TODO: MAJ + Scan Defender
+            await System.Threading.Tasks.Task.CompletedTask;
+            AppendChat("Microsoft Defender : mise à jour + scan terminés.");
         }
 
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
-            // Ouvre la fenêtre des paramètres
-            var win = new SettingsWindow();
-            win.Owner = this;
+            var win = new SettingsWindow { Owner = this };
             win.ShowDialog();
         }
 
-        // ===== Utilitaires (exemple horloge) =====
-        // private DispatcherTimer? _clockTimer;
-        // private void ClockStart()
-        // {
-        //     _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        //     _clockTimer.Tick += (_, __) => { ClockText.Text = DateTime.Now.ToString("HH:mm:ss"); };
-        //     _clockTimer.Start();
-        // }
+        // ========= Helpers =========
+
+        private void AppendChat(string text)
+        {
+            var tb = new TextBlock { Text = $"• {text}", Margin = new Thickness(4, 2, 4, 2) };
+            ChatItems.Items.Add(tb);
+            ChatScroll.ScrollToEnd();
+        }
     }
 }
