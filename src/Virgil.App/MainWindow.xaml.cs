@@ -6,21 +6,21 @@ namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
-        private readonly DispatcherTimer _clockTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(1)
-        };
+        private readonly DispatcherTimer _uiTimer = new DispatcherTimer();
 
         public MainWindow()
         {
-            InitializeComponent(); // L’InitializeComponent généré par WPF (ne pas re-définir)
+            InitializeComponent(); // NE PAS enlever
+            Loaded += OnLoaded;
 
-            // Horloge
-            _clockTimer.Tick += (_, __) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
-            _clockTimer.Start();
+            _uiTimer.Interval = TimeSpan.FromSeconds(1);
+            _uiTimer.Tick += (s, e) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+            _uiTimer.Start();
+        }
 
-            // Texte du toggle surveillance au démarrage
-            Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
+        private void OnLoaded(object? sender, RoutedEventArgs e)
+        {
+            // Init au chargement de la fenêtre (si nécessaire)
         }
     }
 }
