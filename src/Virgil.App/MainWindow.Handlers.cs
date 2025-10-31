@@ -1,70 +1,76 @@
 using System.Windows;
-using System.Windows.Controls;
 
 namespace Virgil.App
 {
-    // IMPORTANT : ne pas implémenter IComponentConnector ici
-    // Ne pas déclarer InitializeComponent, _contentLoaded, Connect, _CreateDelegate
-
+    // Un simple partial qui contient UNIQUEMENT des handlers et helpers
     public partial class MainWindow
     {
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
-            Resources["SurveillanceToggleText"] = "Surveillance activée";
-            StartMonitoring(); // si présent dans MainWindow.Monitoring.cs
-            AddChat("👁️ Surveillance activée.");
+            try { Resources["SurveillanceToggleText"] = "Arrêter la surveillance"; } catch { }
+            // TODO: démarrer la surveillance (timers, capteurs, etc.)
+            AddChat("Surveillance activée.");
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
-            Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
-            StopMonitoring(); // si présent dans MainWindow.Monitoring.cs
-            AddChat("😴 Surveillance arrêtée.");
+            try { Resources["SurveillanceToggleText"] = "Démarrer la surveillance"; } catch { }
+            // TODO: arrêter la surveillance
+            AddChat("Surveillance arrêtée.");
         }
 
         private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            AddChat("🔧 Maintenance complète lancée.");
-            // TODO: appeler le workflow réel
+            // TODO: enchaîner Nettoyage intelligent + Navigateurs + Mises à jour
+            AddChat("Maintenance complète : démarrage…");
         }
 
         private void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            AddChat("🧹 Nettoyage intelligent lancé.");
-            // TODO
+            // TODO: nettoyage intelligent seul
+            AddChat("Nettoyage intelligent lancé.");
         }
 
         private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            AddChat("🌐 Nettoyage navigateurs lancé.");
-            // TODO
+            // TODO: nettoyage des navigateurs
+            AddChat("Nettoyage navigateurs en cours.");
         }
 
         private void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            AddChat("⬆️ Mises à jour totales lancées.");
-            // TODO
+            // TODO: winget + pilotes + Windows Update + Defender
+            AddChat("Mises à jour complètes démarrées.");
         }
 
         private void Action_Defender(object sender, RoutedEventArgs e)
         {
-            AddChat("🛡️ Microsoft Defender (MAJ + Scan) lancé.");
-            // TODO
+            // TODO: MAJ Defender + scan rapide
+            AddChat("Microsoft Defender : mise à jour + scan.");
         }
 
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
-            var win = new SettingsWindow { Owner = this };
-            win.ShowDialog();
+            // TODO: ouvrir la fenêtre de configuration
+            AddChat("Ouverture de la configuration…");
+            try
+            {
+                var win = new SettingsWindow();
+                win.Owner = this;
+                win.ShowDialog();
+            }
+            catch { /* ignore si SettingsWindow pas encore prêt */ }
         }
 
-        // --- utilitaire chat ---
+        // Affichage dans la zone de chat (ItemsControl x:Name="ChatItems")
         private void AddChat(string message)
         {
-            if (ChatItems == null || ChatScroll == null) return;
-            var tb = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap };
-            ChatItems.Items.Add(tb);
-            ChatScroll.ScrollToEnd();
+            try
+            {
+                ChatItems?.Items?.Add(message);
+                ChatScroll?.ScrollToEnd();
+            }
+            catch { /* en cas d’absence de l’UI */ }
         }
     }
 }
