@@ -1,10 +1,8 @@
-using System.Windows;
-
 namespace Virgil.App
 {
-    // Laisser ce fichier VIDE (pas de handlers ni d’implémentation d’interfaces).
-    public partial class MainWindow : Window
+    public partial class MainWindow
     {
-        // Intentionnellement vide pour éviter les doublons.
+        private void Action_CleanTemp(object s, RoutedEventArgs e) { /* ... */ }
+        // autres handlers purs
     }
 }
