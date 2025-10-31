@@ -1,15 +1,11 @@
-<Window x:Class="Virgil.App.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:Virgil.App.Controls"
-        xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-        Title="Virgil" Height="720" Width="1080" Background="#111318"
-        WindowStartupLocation="CenterScreen">
-
-    <!-- Le code-behind met à jour ce texte via Resources["SurveillanceToggleText"] -->
-    <Window.Resources>
-        <sys:String x:Key="SurveillanceToggleText">Démarrer la surveillance</sys:String>
-
+<UserControl x:Class="Virgil.App.Views.MainWindowUI"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Virgil.App.Controls"
+             x:Name="Root"
+             Background="#111318">
+    <UserControl.Resources>
+        <x:String x:Key="SurveillanceToggleText">Démarrer la surveillance</x:String>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="White"/>
         </Style>
@@ -20,69 +16,64 @@
             <Setter Property="Height" Value="10"/>
             <Setter Property="Margin" Value="0,6,0,12"/>
         </Style>
-
         <SolidColorBrush x:Key="CardBrush" Color="#1D232A"/>
-    </Window.Resources>
+    </UserControl.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>   <!-- Top bar -->
-            <RowDefinition Height="*"/>      <!-- Main -->
-            <RowDefinition Height="Auto"/>   <!-- Actions -->
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ========== TOP BAR ========== -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,12" LastChildFill="False">
+        <!-- TOP BAR -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="VIRGIL — Assistant Système" FontSize="18" FontWeight="Bold"
                        VerticalAlignment="Center" DockPanel.Dock="Left"/>
-            <TextBlock x:Name="ClockText" Text="--:--:--" FontSize="16"
+            <TextBlock x:Name="ClockText" x:FieldModifier="public" Text="--:--:--" FontSize="16"
                        VerticalAlignment="Center" DockPanel.Dock="Right"/>
-            <ToggleButton x:Name="SurveillanceToggle"
+            <ToggleButton x:Name="SurveillanceToggle" x:FieldModifier="public"
                           DockPanel.Dock="Right"
                           Margin="12,0,24,0"
                           Width="220" Height="30"
                           Content="{DynamicResource SurveillanceToggleText}"
-                          IsChecked="False"
-                          Checked="SurveillanceToggle_Checked"
-                          Unchecked="SurveillanceToggle_Unchecked"/>
+                          IsChecked="False"/>
         </DockPanel>
 
-        <!-- ========== MAIN CONTENT ========== -->
+        <!-- MAIN -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*"/>
                 <ColumnDefinition Width="3*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Avatar + petit panneau -->
-            <Border Background="{StaticResource CardBrush}" CornerRadius="10" Padding="16" Margin="0,0,8,0">
+            <!-- Avatar + gauges -->
+            <Border Background="{StaticResource CardBrush}" CornerRadius="10" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Avatar -->
-                    <controls:AvatarControl x:Name="AvatarControl" Grid.Row="0"/>
+                    <controls:AvatarControl x:Name="AvatarControl" x:FieldModifier="public" Grid.Row="0"/>
 
-                    <!-- Indicateurs rapides -->
                     <StackPanel Grid.Row="1" Margin="0,16,0,0">
                         <Label Content="CPU"/>
-                        <ProgressBar x:Name="CpuBar" Minimum="0" Maximum="100"/>
+                        <ProgressBar x:Name="CpuBar" x:FieldModifier="public" Minimum="0" Maximum="100"/>
                         <Label Content="RAM"/>
-                        <ProgressBar x:Name="RamBar" Minimum="0" Maximum="100"/>
+                        <ProgressBar x:Name="RamBar" x:FieldModifier="public" Minimum="0" Maximum="100"/>
                         <Label Content="GPU"/>
-                        <ProgressBar x:Name="GpuBar" Minimum="0" Maximum="100"/>
+                        <ProgressBar x:Name="GpuBar" x:FieldModifier="public" Minimum="0" Maximum="100"/>
                         <Label Content="Disque"/>
-                        <ProgressBar x:Name="DiskBar" Minimum="0" Maximum="100"/>
+                        <ProgressBar x:Name="DiskBar" x:FieldModifier="public" Minimum="0" Maximum="100"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Chat -->
-            <Border Grid.Column="1" Background="{StaticResource CardBrush}" CornerRadius="10" Padding="12" Margin="8,0,0,0">
-                <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
-                    <ItemsControl x:Name="ChatItems">
+            <Border Grid.Column="1" Background="{StaticResource CardBrush}" CornerRadius="10" Padding="12">
+                <ScrollViewer x:Name="ChatScroll" x:FieldModifier="public" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="ChatItems" x:FieldModifier="public">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel/>
@@ -93,16 +84,17 @@
             </Border>
         </Grid>
 
-        <!-- ========== ACTIONS ========== -->
+        <!-- ACTIONS -->
         <Border Grid.Row="2" Background="{StaticResource CardBrush}" CornerRadius="10" Padding="12" Margin="0,12,0,0">
-            <UniformGrid Rows="1" Columns="6" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                <Button Content="Maintenance complète"  Margin="6" Height="36" Click="Action_MaintenanceComplete"/>
-                <Button Content="Nettoyage intelligent" Margin="6" Height="36" Click="Action_CleanTemp"/>
-                <Button Content="Nettoyer navigateurs"  Margin="6" Height="36" Click="Action_CleanBrowsers"/>
-                <Button Content="Tout mettre à jour"    Margin="6" Height="36" Click="Action_UpdateAll"/>
-                <Button Content="Defender (MAJ + Scan)" Margin="6" Height="36" Click="Action_Defender"/>
-                <Button Content="Ouvrir configuration"  Margin="6" Height="36" Click="OpenConfig_Click"/>
+            <UniformGrid Rows="1" Columns="6">
+                <!-- IMPORTANT : plus de Click dans le XAML ; on les câble côté MainWindow -->
+                <Button x:Name="BtnMaintenance"   x:FieldModifier="public" Content="Maintenance complète"  Margin="6" Height="36"/>
+                <Button x:Name="BtnCleanTemp"     x:FieldModifier="public" Content="Nettoyage intelligent" Margin="6" Height="36"/>
+                <Button x:Name="BtnCleanBrowsers" x:FieldModifier="public" Content="Nettoyer navigateurs"  Margin="6" Height="36"/>
+                <Button x:Name="BtnUpdateAll"     x:FieldModifier="public" Content="Tout mettre à jour"    Margin="6" Height="36"/>
+                <Button x:Name="BtnDefender"      x:FieldModifier="public" Content="Defender (MAJ + Scan)" Margin="6" Height="36"/>
+                <Button x:Name="BtnOpenConfig"    x:FieldModifier="public" Content="Ouvrir configuration"  Margin="6" Height="36"/>
             </UniformGrid>
         </Border>
     </Grid>
-</Window>
+</UserControl>
