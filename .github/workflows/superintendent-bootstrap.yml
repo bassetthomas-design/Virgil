@@ -1,0 +1,129 @@
+name: 🧩 Superintendent Bootstrap
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  build-superintendent:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Create Superintendent Structure
+        shell: pwsh
+        run: |
+          Write-Host "=== Virgil Superintendent Auto-Bootstrap ==="
+          $repo = (Get-Location).Path
+
+          function Ensure-Dir([string]$p) {
+            if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p | Out-Null }
+          }
+
+          function Ensure-File([string]$path, [string]$content) {
+            if (-not (Test-Path $path)) {
+              New-Item -ItemType File -Force -Path $path | Out-Null
+              Set-Content -Path $path -Value $content -Encoding UTF8
+            }
+          }
+
+          $core = "src/Virgil.Core"
+          $app  = "src/Virgil.App"
+          $agent= "src/Virgil.Agent"
+
+          $paths = @(
+            "$core/Services/Updates",
+            "$core/Services/Cleaning",
+            "$core/Services/Security",
+            "$core/Services/Monitoring",
+            "$core/Services/Network",
+            "$core/Services/Health",
+            "$core/Contracts",
+            "$app/ViewModels",
+            "$app/Config",
+            "$agent"
+          )
+          foreach ($p in $paths) { Ensure-Dir $p }
+
+          # === Mood enum (corrige les erreurs d'humeur) ===
+          $mood = @"
+namespace Virgil.Core.Contracts
+{
+    public enum Mood
+    {
+        Neutral, Vigilant, Resting, Happy, Focused, Warn, Alert, Sleepy, Proud, Tired
+    }
+}
+"@
+          Ensure-File "$core/Contracts/Mood.cs" $mood
+
+          # === Dashboard VM (Commandes principales) ===
+          $vm = @"
+using System;
+using System.Windows.Input;
+using System.Threading.Tasks;
+using Virgil.Core.Services.Cleaning;
+using Virgil.Core.Services.Updates;
+using Virgil.Core.Services.Security;
+
+namespace Virgil.App.ViewModels
+{
+    public class Relay : ICommand
+    {
+        public event EventHandler CanExecuteChanged;
+        private readonly Action _exec; private readonly Func<bool> _can;
+        public Relay(Action exec, Func<bool> can = null) { _exec = exec; _can = can; }
+        public bool CanExecute(object p) => _can?.Invoke() ?? true;
+        public void Execute(object p) => _exec();
+    }
+
+    public class DashboardViewModel
+    {
+        public ICommand CmdMaintenance { get; }
+        public ICommand CmdClean { get; }
+        public ICommand CmdBrowsers { get; }
+        public ICommand CmdUpdate { get; }
+        public ICommand CmdDefender { get; }
+        public ICommand CmdConfig { get; }
+
+        public DashboardViewModel()
+        {
+            CmdMaintenance = new Relay(() => System.Diagnostics.Debug.WriteLine("Maintenance"));
+            CmdClean       = new Relay(() => System.Diagnostics.Debug.WriteLine("Clean"));
+            CmdBrowsers    = new Relay(() => System.Diagnostics.Debug.WriteLine("Browsers"));
+            CmdUpdate      = new Relay(() => System.Diagnostics.Debug.WriteLine("Update"));
+            CmdDefender    = new Relay(() => System.Diagnostics.Debug.WriteLine("Defender"));
+            CmdConfig      = new Relay(() => System.Diagnostics.Process.Start("notepad.exe", "Config/virgil.settings.json"));
+        }
+    }
+}
+"@
+          Ensure-File "$app/ViewModels/DashboardViewModel.cs" $vm
+
+          # === Config de base ===
+          $cfg = @"
+{
+  ""SurveillanceEnabled"": true,
+  ""SensorsRefreshMs"": 1500,
+  ""PunchlinesMinSec"": 60,
+  ""PunchlinesMaxSec"": 360
+}
+"@
+          Ensure-File "$app/Config/virgil.settings.json" $cfg
+
+      - name: Commit & Push patch
+        run: |
+          git config user.name "VirgilBot"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "🧩 Add Superintendent structure (auto-bootstrap)" || echo "No changes"
+          git push origin dev
+
+      - name: Build test
+        run: dotnet build -c Release
