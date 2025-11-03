@@ -1,0 +1,104 @@
+name: 🛠️ Build + XAML De-dupe + Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Clean bin/obj everywhere
+        shell: pwsh
+        run: |
+          Write-Host "🧹 Removing all bin/ and obj/ folders..."
+          Get-ChildItem -Recurse -Directory -Filter obj | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Recurse -Directory -Filter bin | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+      - name: Detect duplicate XAML classes (x:Class)
+        shell: pwsh
+        run: |
+          Write-Host "🔎 Scanning XAML for duplicate x:Class..."
+          $xamls = Get-ChildItem -Path src -Recurse -Filter *.xaml |
+                   Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' }
+
+          $rx = 'x:Class\s*=\s*"([^"]+)"'
+          $classes = foreach ($f in $xamls) {
+            $text = Get-Content -Raw -LiteralPath $f.FullName
+            $m = [regex]::Match($text, $rx)
+            if ($m.Success) { [PSCustomObject]@{ Class=$m.Groups[1].Value; File=$f.FullName } }
+          }
+
+          if (-not $classes) {
+            Write-Host "✅ No XAML classes found (nothing to dedupe)."
+            return
+          }
+
+          $dupes = $classes | Group-Object Class | Where-Object { $_.Count -gt 1 }
+          if ($dupes) {
+            Write-Host "⛔ Found duplicated x:Class declarations:"
+            foreach ($d in $dupes) {
+              Write-Host "  Class: $($d.Name)"
+              $d.Group | ForEach-Object { Write-Host "   - $($_.File)" }
+            }
+            throw "Duplicate x:Class detected. Fix the files above (two XAML share the same x:Class)."
+          }
+          Write-Host "✅ No duplicate x:Class."
+      
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build -c Release --no-restore
+
+      - name: Publish self-contained exe (x64)
+        shell: pwsh
+        run: |
+          dotnet publish src/Virgil.App/Virgil.App.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:PublishTrimmed=false `
+            -o publish/win-x64
+
+      - name: Verify Virgil.App.exe existence
+        shell: pwsh
+        run: |
+          if (!(Test-Path "publish/win-x64/Virgil.App.exe")) {
+            throw "Virgil.App.exe not found in publish/win-x64"
+          }
+          Write-Host "✅ Virgil.App.exe generated."
+
+      # ⚠️ Les runners GitHub n'ont pas de session graphique interactive.
+      # On tente un lancement très court. S'il se ferme vite, on WARN mais on ne fail pas.
+      - name: Smoke test (non-blocking)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "🚀 Smoke test launching Virgil.App.exe..."
+          $p = Start-Process -FilePath ".\publish\win-x64\Virgil.App.exe" -ArgumentList "--ci-smoke" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) {
+            Write-Warning "⚠️ L'application s'est terminée rapidement (code=$($p.ExitCode))."
+          } else {
+            Write-Host "✅ Process still running, killing..."
+            Stop-Process -Id $p.Id -Force
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Virgil.App-win-x64
+          path: publish/win-x64
