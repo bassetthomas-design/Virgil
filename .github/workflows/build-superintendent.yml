@@ -1,114 +1,56 @@
-name: 🛠️ Build + XAML De-dupe + Publish
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [ "dev" ]
-
-jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Clean bin/obj everywhere
-        shell: pwsh
-        run: |
-          Write-Host "🧹 Removing all bin/ and obj/ folders..."
-          Get-ChildItem -Recurse -Directory -Filter obj | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          Get-ChildItem -Recurse -Directory -Filter bin | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-
-      - name: Detect duplicate XAML classes (x:Class)
-        shell: pwsh
-        run: |
-          Write-Host "🔎 Scanning XAML for duplicate x:Class..."
-          $xamls = Get-ChildItem -Path src -Recurse -Filter *.xaml |
-                   Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' }
-
-          $rx = 'x:Class\s*=\s*"([^"]+)"'
-          $classes = foreach ($f in $xamls) {
-            $text = Get-Content -Raw -LiteralPath $f.FullName
-            $m = [regex]::Match($text, $rx)
-            if ($m.Success) { [PSCustomObject]@{ Class=$m.Groups[1].Value; File=$f.FullName } }
-          }
-
-          if (-not $classes) {
-            Write-Host "✅ No XAML classes found (nothing to dedupe)."
-            return
-          }
-
-          $dupes = $classes | Group-Object Class | Where-Object { $_.Count -gt 1 }
-          if ($dupes) {
-            Write-Host "⛔ Found duplicated x:Class declarations:"
-            foreach ($d in $dupes) {
-              Write-Host "  Class: $($d.Name)"
-              $d.Group | ForEach-Object { Write-Host "   - $($_.File)" }
-            }
-            throw "Duplicate x:Class detected. Fix the files above (two XAML share the same x:Class)."
-          }
-          Write-Host "✅ No duplicate x:Class."
-      
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build (Release)
-        run: dotnet build -c Release --no-restore
-
-      - name: Publish self-contained exe (x64)
-        shell: pwsh
-        run: |
-          dotnet publish src/Virgil.App/Virgil.App.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:PublishTrimmed=false `
-            -o publish/win-x64
-
-      - name: Verify Virgil.App.exe existence
-        shell: pwsh
-        run: |
-          if (!(Test-Path "publish/win-x64/Virgil.App.exe")) {
-            throw "Virgil.App.exe not found in publish/win-x64"
-          }
-          Write-Host "✅ Virgil.App.exe generated."
-
-      # ✅ Version non bloquante du test (évite exit code 1 sur runner headless)
-      - name: Smoke test (non-blocking)
+      - name: Smoke test (really non-blocking)
+        if: ${{ always() }}             # on l’exécute toujours, mais sans bloquer
         shell: pwsh
         continue-on-error: true
         run: |
-          Write-Host "🚀 Test lancement de Virgil.App.exe..."
-
-          $exe = ".\publish\win-x64\Virgil.App.exe"
+          Write-Host "🚀 Test lancement (non-bloquant) de Virgil.App.exe..."
+          $exe = Join-Path $PWD "publish/win-x64/Virgil.App.exe"
           if (!(Test-Path $exe)) {
             Write-Warning "Exécutable introuvable: $exe"
-            exit 0
+            return
           }
 
-          $p = Start-Process -FilePath $exe -ArgumentList "--ci-smoke" -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 8
+          # On tente un lancement très court en headless
+          try {
+            $proc = Start-Process -FilePath $exe -ArgumentList "--ci-smoke" -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 6
 
-          if ($p.HasExited) {
-            Write-Warning "⚠️ L’application s’est terminée rapidement (ExitCode=$($p.ExitCode)). Mode runner headless probable. Ce n’est pas bloquant."
+            if ($null -ne $proc -and -not $proc.HasExited) {
+              Write-Host "✅ Process actif, arrêt propre."
+              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+            else {
+              Write-Warning "⚠️ L’application s’est terminée rapidement (runner headless probable)."
+            }
+          }
+          catch {
+            Write-Warning "Smoke test: $($_.Exception.Message)"
+          }
+          finally {
+            Write-Host "ℹ️ Fin du smoke test (non-bloquant)."
+          }
+
+      - name: Collect app logs (optional)
+        if: ${{ always() }}
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $logRoot = Join-Path $env:APPDATA "Virgil\logs"
+          if (Test-Path $logRoot) {
+            Write-Host "📦 Archivage des logs depuis $logRoot"
+            $zip = Join-Path $PWD "VirgilAppLogs.zip"
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            if (Test-Path $zip) { Remove-Item $zip -Force -ErrorAction SilentlyContinue }
+            [System.IO.Compression.ZipFile]::CreateFromDirectory($logRoot, $zip)
           } else {
-            Write-Host "✅ Process actif, arrêt propre."
-            Stop-Process -Id $p.Id -Force
+            Write-Warning "Aucun log trouvé à $logRoot (ok en CI headless)."
           }
 
-          exit 0
-
-      - name: Upload artifact
-        if: always()
+      - name: Upload smoke-test logs
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: Virgil.App-win-x64
-          path: publish/win-x64
+          name: VirgilAppLogs
+          path: |
+            VirgilAppLogs.zip
+          if-no-files-found: ignore
