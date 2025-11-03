@@ -1,4 +1,4 @@
-name: 🧩 Superintendent Bootstrap
+name: 🧩 Superintendent Bootstra
 on:
   workflow_dispatch:
   push:
