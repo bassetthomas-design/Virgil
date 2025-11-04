@@ -10,12 +10,19 @@ namespace Virgil.App
     {
         protected override async void OnStartup(StartupEventArgs e)
         {
+            // Gestion des crashs globaux
             AppDomain.CurrentDomain.UnhandledException += (s, ex) => WriteCrash("AppDomain", ex.ExceptionObject);
-            this.DispatcherUnhandledException += (s, ex) => { WriteCrash("Dispatcher", ex.Exception); ex.Handled = true; Environment.Exit(1); };
+            this.DispatcherUnhandledException += (s, ex) =>
+            {
+                WriteCrash("Dispatcher", ex.Exception);
+                ex.Handled = true;
+                Environment.Exit(1);
+            };
 
-            // CI mode: arg --ci ou variable d'env
-            bool ciMode = Array.Exists(e.Args, a => string.Equals(a, "--ci", StringComparison.OrdinalIgnoreCase))
-                       || string.Equals(Environment.GetEnvironmentVariable("VIRGIL_CI"), "1", StringComparison.OrdinalIgnoreCase);
+            // Mode CI (GitHub Actions)
+            bool ciMode =
+                Array.Exists(e.Args, a => string.Equals(a, "--ci", StringComparison.OrdinalIgnoreCase)) ||
+                string.Equals(Environment.GetEnvironmentVariable("VIRGIL_CI"), "1", StringComparison.OrdinalIgnoreCase);
 
             if (ciMode)
             {
@@ -24,8 +31,8 @@ namespace Virgil.App
                 return;
             }
 
+            // Démarrage normal (UI)
             base.OnStartup(e);
-            // Démarrage normal UI
             var w = new MainWindow();
             w.Show();
         }
@@ -35,12 +42,15 @@ namespace Virgil.App
             try
             {
                 var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-                var logDir  = Path.Combine(baseDir, "Virgil", "logs");
+                var logDir = Path.Combine(baseDir, "Virgil", "logs");
                 Directory.CreateDirectory(logDir);
                 File.AppendAllText(Path.Combine(logDir, "last-crash.txt"),
                     $"[{DateTime.UtcNow:O}] {source} :: {exObj}\r\n");
             }
-            catch { /* ignore */ }
+            catch
+            {
+                // Ignorer les erreurs de log
+            }
         }
     }
 }
