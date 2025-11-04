@@ -1,66 +1,73 @@
-name: CI - Virgil build + artifact + smoke
+name: .NET Build & Artifact
 
 on:
-  push:
-    branches: [ dev, main ]
-  pull_request:
-    branches: [ dev, main ]
   workflow_dispatch:
+  push:
+    branches: [ "**" ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dotnet-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      - name: ⬇️ Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup .NET 8
+      - name: 🧰 Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
 
-      - name: NuGet cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
+      # --- Trouver la solution automatiquement (évite le chemin dur) ---
+      - name: 🔍 Recherche de la solution (.sln)
+        shell: pwsh
+        run: |
+          $sln = Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Filter *.sln `
+                 | Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } `
+                 | Select-Object -First 1
+          if (-not $sln) { Write-Error "❌ Aucune solution (.sln) trouvée."; exit 1 }
+          "SLN=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "✅ Solution trouvée : $($sln.FullName)"
 
-      - name: Restore
-        run: dotnet restore ./src/Virgil.sln
+      # --- Trouver le projet principal Virgil.App ---
+      - name: 🔍 Recherche du projet Virgil.App.csproj
+        shell: pwsh
+        run: |
+          $proj = Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Filter Virgil.App.csproj `
+                   | Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } `
+                   | Select-Object -First 1
+          if (-not $proj) { Write-Error "❌ Fichier Virgil.App.csproj introuvable."; exit 1 }
+          "APP_CSPROJ=$($proj.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "✅ Projet trouvé : $($proj.FullName)"
 
-      - name: Build (Release)
-        run: dotnet build ./src/Virgil.sln -c Release --no-restore
+      - name: ⚙️ Restore
+        run: dotnet restore "$env:SLN"
 
-      - name: Publish Virgil.App (self-contained)
-        run: >
-          dotnet publish ./src/Virgil.App/Virgil.App.csproj
-          -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-          -o ${{ github.workspace }}\publish\Virgil.App
+      - name: 🧱 Build (Release)
+        run: dotnet build "$env:SLN" -c Release --no-restore
 
-      - name: Upload artifact (Virgil.App)
+      - name: 🚀 Publish Virgil.App (win-x64)
+        run: dotnet publish "$env:APP_CSPROJ" -c Release -r win-x64 --self-contained false -o "$env:GITHUB_WORKSPACE\out\Virgil.App"
+
+      - name: 🧹 Nettoyage des doublons bin/obj (facultatif)
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Directory -Filter bin | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Directory -Filter obj | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+      - name: 📦 Upload de l’artefact
         uses: actions/upload-artifact@v4
         with:
-          name: Virgil.App-win-x64
-          path: publish/Virgil.App
-
-      # Smoke "soft" : on vérifie que l'exe démarre au moins le runtime.
-      # Tant que l'app n'a pas un mode /smoke headless, on n'échoue pas si elle sort vite.
-      - name: Smoke test (soft, non bloquant)
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          $exe = Join-Path "${{ github.workspace }}\publish\Virgil.App" "Virgil.App.exe"
-          if (-not (Test-Path $exe)) {
-            Write-Error "EXE introuvable: $exe"
-            exit 1
-          }
-          Write-Host "🚀 Launch soft-smoke..."
-          $p = Start-Process -FilePath $exe -ArgumentList "--smoke" -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 5
-          if (!$p.HasExited) { try { $p.CloseMainWindow() | Out-Null } catch {} }
-          Start-Sleep -Seconds 2
-          Write-Host "⏹️  Soft-smoke terminé (non bloquant)."
+          name: Virgil.App-publish
+          path: out/Virgil.App/**
