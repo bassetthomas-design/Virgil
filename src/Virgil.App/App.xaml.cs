@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
+// Alias to force WPF MessageBox (not WinForms)
+using WpfMessageBox = System.Windows.MessageBox;
 
 namespace Virgil.App
 {
@@ -14,9 +16,9 @@ namespace Virgil.App
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            // Handlers globaux pour capter toute exception non gérée
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
                 SafeLog("[AppDomain] " + (args.ExceptionObject as Exception)?.ToString());
+
             DispatcherUnhandledException += (s, args) =>
             {
                 SafeLog("[Dispatcher] " + args.Exception.ToString());
@@ -30,28 +32,23 @@ namespace Virgil.App
                 Directory.CreateDirectory(LogDir);
                 SafeLog("=== Virgil starting ===");
 
-                // 🔒 NE PAS faire Any sur une source potentiellement nulle
                 var hasSpecialArg = (e?.Args != null) && e.Args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgnoreCase));
                 SafeLog($"Args: {(e?.Args == null ? "(null)" : string.Join(" ", e.Args))}");
                 SafeLog($"Headless: {hasSpecialArg}");
 
                 if (hasSpecialArg)
                 {
-                    // Mode service/test si tu en as besoin
                     SafeLog("Headless mode: no MainWindow.");
                     Shutdown(0);
                     return;
                 }
 
-                // ⚙️ Initialisations légères avant UI (charger config si dispo)
                 TryLoadEarlyConfig();
 
-                // 🪟 Création robuste de la fenêtre principale
-                // NOTE: adapte le namespace si ta vue est ailleurs (ex: Virgil.App.Views.MainWindow)
-                var win = new Views.MainWindow();
+                // ✅ MainWindow is in the Virgil.App namespace (not Virgil.App.Views)
+                var win = new MainWindow();
                 MainWindow = win;
-
-                // Si DataContext nécessaire manuellement, fais-le ici
+                // If you need a manual DataContext, do it here:
                 // win.DataContext = new ViewModels.DashboardViewModel();
 
                 win.Show();
@@ -75,7 +72,7 @@ namespace Virgil.App
 
                 if (File.Exists(cfgPath))
                 {
-                    var json = File.ReadAllText(cfgPath); // tu pourras le parser plus tard
+                    var json = File.ReadAllText(cfgPath);
                     SafeLog($"Loaded config: {cfgPath} ({json.Length} chars)");
                 }
                 else
@@ -96,16 +93,13 @@ namespace Virgil.App
                 Directory.CreateDirectory(LogDir);
                 File.AppendAllText(StartupLogPath, $"[{DateTime.Now:HH:mm:ss}] {line}{Environment.NewLine}");
             }
-            catch
-            {
-                // pas d’exception secondaire au démarrage
-            }
+            catch { /* ignore logging failures */ }
         }
 
         private static void ShowFatal(Exception ex)
         {
-            // Message concis pour l’utilisateur, détail en log
-            MessageBox.Show(
+            // ✅ Explicit WPF MessageBox
+            WpfMessageBox.Show(
                 "Virgil n’a pas pu afficher la fenêtre principale.\n\n" +
                 $"Détail: {ex.Message}\n\n" +
                 $"Un journal a été écrit ici :\n{StartupLogPath}",
