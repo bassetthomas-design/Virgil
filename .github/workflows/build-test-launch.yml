@@ -1,6 +1,8 @@
 name: Build & Launch Virgil
 
 on:
+  workflow_call:
+
   push:
     branches: [ main, dev ]
   pull_request:
