@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 
 namespace Virgil.App
@@ -9,64 +8,110 @@ namespace Virgil.App
     public partial class App : Application
     {
         private static string LogDir =>
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Virgil", "logs");
-        private static string LastRunLog => Path.Combine(LogDir, "last-run.txt");
-        private static string LastCrashLog => Path.Combine(LogDir, "last-crash.txt");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "logs");
 
-        protected override async void OnStartup(StartupEventArgs e)
+        private static string StartupLogPath => Path.Combine(LogDir, $"{DateTime.Now:yyyy-MM-dd}_startup.log");
+
+        protected override void OnStartup(StartupEventArgs e)
         {
-            Directory.CreateDirectory(LogDir);
-            File.WriteAllText(LastRunLog, $"[{DateTime.UtcNow:O}] App starting… args=({string.Join(" ", e.Args ?? Array.Empty<string>())}){Environment.NewLine}");
-
-            AppDomain.CurrentDomain.UnhandledException += (s, ex) =>
-                SafeAppend(LastCrashLog, $"[{DateTime.UtcNow:O}] AppDomain :: {ex.ExceptionObject}{Environment.NewLine}");
-
-            this.DispatcherUnhandledException += (s, ex) =>
+            // Handlers globaux pour capter toute exception non gérée
+            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+                SafeLog("[AppDomain] " + (args.ExceptionObject as Exception)?.ToString());
+            DispatcherUnhandledException += (s, args) =>
             {
-                SafeAppend(LastCrashLog, $"[{DateTime.UtcNow:O}] Dispatcher :: {ex.Exception}{Environment.NewLine}");
-                ex.Handled = true;
-                // Affiche un message pour le debug local plutôt que de fermer silencieusement.
-                System.Windows.MessageBox.Show(
-                    "Virgil a rencontré une erreur au démarrage.\n\n" + ex.Exception.Message,
-                    "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
-                Current.Shutdown(1);
+                SafeLog("[Dispatcher] " + args.Exception.ToString());
+                args.Handled = true;
+                ShowFatal(args.Exception);
+                Shutdown(-1);
             };
 
-            // Mode CI headless
-            bool ciMode =
-                e.Args.Any(a => string.Equals(a, "--ci", StringComparison.OrdinalIgnoreCase)) ||
-                string.Equals(Environment.GetEnvironmentVariable("VIRGIL_CI"), "1", StringComparison.OrdinalIgnoreCase);
-            if (ciMode)
-            {
-                var code = await CiSelfTest.RunAsync();
-                SafeAppend(LastRunLog, $"[{DateTime.UtcNow:O}] CI exit code={code}{Environment.NewLine}");
-                Environment.Exit(code);
-                return;
-            }
-
-            // Démarrage normal UI
-            base.OnStartup(e);
             try
             {
-                var w = new MainWindow();
-                w.Loaded += (_, __) => SafeAppend(LastRunLog, $"[{DateTime.UtcNow:O}] MainWindow Loaded{Environment.NewLine}");
-                w.ContentRendered += (_, __) => SafeAppend(LastRunLog, $"[{DateTime.UtcNow:O}] MainWindow Rendered{Environment.NewLine}");
-                w.Show();
-                SafeAppend(LastRunLog, $"[{DateTime.UtcNow:O}] MainWindow Show() called{Environment.NewLine}");
+                Directory.CreateDirectory(LogDir);
+                SafeLog("=== Virgil starting ===");
+
+                // 🔒 NE PAS faire Any sur une source potentiellement nulle
+                var hasSpecialArg = (e?.Args != null) && e.Args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgnoreCase));
+                SafeLog($"Args: {(e?.Args == null ? "(null)" : string.Join(" ", e.Args))}");
+                SafeLog($"Headless: {hasSpecialArg}");
+
+                if (hasSpecialArg)
+                {
+                    // Mode service/test si tu en as besoin
+                    SafeLog("Headless mode: no MainWindow.");
+                    Shutdown(0);
+                    return;
+                }
+
+                // ⚙️ Initialisations légères avant UI (charger config si dispo)
+                TryLoadEarlyConfig();
+
+                // 🪟 Création robuste de la fenêtre principale
+                // NOTE: adapte le namespace si ta vue est ailleurs (ex: Virgil.App.Views.MainWindow)
+                var win = new Views.MainWindow();
+                MainWindow = win;
+
+                // Si DataContext nécessaire manuellement, fais-le ici
+                // win.DataContext = new ViewModels.DashboardViewModel();
+
+                win.Show();
+                SafeLog("MainWindow shown. ✅");
             }
             catch (Exception ex)
             {
-                SafeAppend(LastCrashLog, $"[{DateTime.UtcNow:O}] Startup UI :: {ex}{Environment.NewLine}");
-                System.Windows.MessageBox.Show(
-                    "Virgil n’a pas pu afficher la fenêtre principale.\n\n" + ex.Message,
-                    "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
-                Current.Shutdown(1);
+                SafeLog("[Startup Exception] " + ex.ToString());
+                ShowFatal(ex);
+                Shutdown(-1);
             }
         }
 
-        private static void SafeAppend(string path, string text)
+        private static void TryLoadEarlyConfig()
         {
-            try { File.AppendAllText(path, text); } catch { /* ignore */ }
+            try
+            {
+                var cfgPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Virgil", "config.json");
+
+                if (File.Exists(cfgPath))
+                {
+                    var json = File.ReadAllText(cfgPath); // tu pourras le parser plus tard
+                    SafeLog($"Loaded config: {cfgPath} ({json.Length} chars)");
+                }
+                else
+                {
+                    SafeLog("No config.json yet (will use defaults).");
+                }
+            }
+            catch (Exception ex)
+            {
+                SafeLog("[TryLoadEarlyConfig] " + ex.Message);
+            }
+        }
+
+        private static void SafeLog(string line)
+        {
+            try
+            {
+                Directory.CreateDirectory(LogDir);
+                File.AppendAllText(StartupLogPath, $"[{DateTime.Now:HH:mm:ss}] {line}{Environment.NewLine}");
+            }
+            catch
+            {
+                // pas d’exception secondaire au démarrage
+            }
+        }
+
+        private static void ShowFatal(Exception ex)
+        {
+            // Message concis pour l’utilisateur, détail en log
+            MessageBox.Show(
+                "Virgil n’a pas pu afficher la fenêtre principale.\n\n" +
+                $"Détail: {ex.Message}\n\n" +
+                $"Un journal a été écrit ici :\n{StartupLogPath}",
+                "Virgil",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 }
