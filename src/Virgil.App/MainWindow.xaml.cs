@@ -1,3 +1,4 @@
+using WpfMessageBox = System.Windows.MessageBox;
 using System;
 using System.Windows;
 using System.Windows.Threading;
