@@ -1,15 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <OutputType>WinExe</OutputType>
-    <Nullable>enable</Nullable>
 
-    <!-- Publish par défaut en autonome (utile pour tes artefacts GitHub) -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Virgil.App</AssemblyName>
+    <RootNamespace>Virgil.App</RootNamespace>
+
+    <!-- Runtime / publish -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <PublishTrimmed>false>
+    <PublishSingleFile>false</PublishSingleFile>
+
+    <!-- IMPORTANT : WPF ne supporte pas bien le trimming -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Exemple si tu as un appsettings.json -->
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
