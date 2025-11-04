@@ -1,5 +1,8 @@
 <Application x:Class="Virgil.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!-- Pas de StartupUri si tu crées MainWindow en code, c’est OK -->
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnMainWindowClose">
+  <!-- Ne pas utiliser StartupUri : on gère le démarrage dans OnStartup -->
+  <Application.Resources>
+  </Application.Resources>
 </Application>
