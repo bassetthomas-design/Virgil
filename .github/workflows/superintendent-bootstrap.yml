@@ -1,6 +1,7 @@
 name: 🧩 Superintendent Bootstrap
 on:
-  workflow_dispatch:
+  workflow_call:
+
   push:
     branches: [ "dev" ]
 
