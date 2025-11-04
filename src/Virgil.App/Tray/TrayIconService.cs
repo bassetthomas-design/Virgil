@@ -3,7 +3,9 @@ using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms; // NotifyIcon
-using System.Drawing;       // SystemIcons
+using System.Drawing;                    // pour Icon / SystemIcons
+using System.Windows;                    // WPF (Window, Application, etc.)
+using WF = System.Windows.Forms;         // alias WinForms pour NotifyIcon/ContextMenuStrip
 
 namespace Virgil.App.Tray
 {
