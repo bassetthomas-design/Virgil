@@ -5,24 +5,22 @@ namespace Virgil.App
 {
     public partial class MainWindow
     {
-        private readonly DispatcherTimer _monitorTimer = new DispatcherTimer();
+        private readonly DispatcherTimer _monitorTimer = new();
 
         private void StartMonitoring()
         {
             _monitorTimer.Interval = TimeSpan.FromSeconds(2);
-            _monitorTimer.Tick += (s, e) => RefreshSensors();
+            _monitorTimer.Tick += (s, e) =>
+            {
+                // TODO : lecture CPU/GPU/RAM/Températures
+                // Actualise les jauges + émotions dans le ViewModel
+            };
             _monitorTimer.Start();
         }
 
         private void StopMonitoring()
         {
-            try { _monitorTimer.Stop(); } catch { }
-        }
-
-        private void RefreshSensors()
-        {
-            // TODO: MAJ CPU/RAM/GPU/Disk + températures via services
-            // UI.CpuBar.Value = ...
+            _monitorTimer.Stop();
         }
     }
 }
