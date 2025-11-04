@@ -1,33 +1,66 @@
-name: Build .NET and produce artifact
+name: CI - Virgil build + artifact + smoke
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ dev, main ]
   pull_request:
+    branches: [ dev, main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
+
+      - name: NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ./src/Virgil.sln
 
       - name: Build (Release)
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build ./src/Virgil.sln -c Release --no-restore
 
-      # ✅ Publier le projet WPF uniquement
-      - name: Publish Virgil.App (win-x64)
-        run: dotnet publish src/Virgil.App/Virgil.App.csproj -c Release -r win-x64 --self-contained false -o publish-output
+      - name: Publish Virgil.App (self-contained)
+        run: >
+          dotnet publish ./src/Virgil.App/Virgil.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o ${{ github.workspace }}\publish\Virgil.App
 
-      - name: Archive artifact
+      - name: Upload artifact (Virgil.App)
         uses: actions/upload-artifact@v4
         with:
-          name: virgil-app-win-x64
-          path: publish-output
+          name: Virgil.App-win-x64
+          path: publish/Virgil.App
+
+      # Smoke "soft" : on vérifie que l'exe démarre au moins le runtime.
+      # Tant que l'app n'a pas un mode /smoke headless, on n'échoue pas si elle sort vite.
+      - name: Smoke test (soft, non bloquant)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $exe = Join-Path "${{ github.workspace }}\publish\Virgil.App" "Virgil.App.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "EXE introuvable: $exe"
+            exit 1
+          }
+          Write-Host "🚀 Launch soft-smoke..."
+          $p = Start-Process -FilePath $exe -ArgumentList "--smoke" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 5
+          if (!$p.HasExited) { try { $p.CloseMainWindow() | Out-Null } catch {} }
+          Start-Sleep -Seconds 2
+          Write-Host "⏹️  Soft-smoke terminé (non bloquant)."
