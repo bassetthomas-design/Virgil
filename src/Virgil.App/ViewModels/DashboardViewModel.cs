@@ -1,97 +1,188 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media;
+using Virgil.App.Models;
+using Virgil.App.Services;
+using Virgil.Core;
 
 namespace Virgil.App.ViewModels
 {
-    public sealed class DashboardViewModel : INotifyPropertyChanged
+    public partial class DashboardViewModel : BaseViewModel
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
-        void Raise([CallerMemberName] string? n = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+        private readonly SystemMonitor _monitor;
+        private readonly ChatService _chatService;
+        private readonly MoodService _moodService;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Random _random = new();
 
-        public string Clock { get => _clock; private set { _clock = value; Raise(); } }
-        private string _clock = DateTime.Now.ToString("HH:mm:ss");
+        private string _currentMood = "Neutral";
+        private string _statusText = "Initialisation de Virgil...";
+        private string _cpuUsage = "0 %";
+        private string _gpuUsage = "0 %";
+        private string _ramUsage = "0 %";
+        private string _diskUsage = "0 %";
+        private string _temperature = "0 °C";
+        private bool _isMonitoringActive;
 
-        public bool IsSurveillanceOn { get => _surv; set { _surv = value; Raise(); Raise(nameof(SurveillanceLabel)); }}
-        private bool _surv;
+        public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
 
-        public string SurveillanceLabel => IsSurveillanceOn ? "Surveillance ON" : "Surveillance OFF";
+        public ICommand ToggleMonitoringCommand { get; }
+        public ICommand RunMaintenanceCommand { get; }
+        public ICommand CleanTempFilesCommand { get; }
+        public ICommand CleanBrowsersCommand { get; }
+        public ICommand UpdateAllCommand { get; }
+        public ICommand RunDefenderScanCommand { get; }
+        public ICommand OpenConfigCommand { get; }
 
-        // Mood & avatar
-        public string Mood { get => _mood; set { _mood = value; Raise(); Raise(nameof(MoodLabel)); } }
-        private string _mood = "happy";
-        public string MoodLabel => $"Humeur : {Mood}";
-
-        // Gauges (mock values for now)
-        public double CpuUsage { get => _cpu; set { _cpu = value; Raise(); } }  private double _cpu = 18;
-        public double GpuUsage { get => _gpu; set { _gpu = value; Raise(); } }  private double _gpu = 12;
-        public double RamUsage { get => _ram; set { _ram = value; Raise(); } }  private double _ram = 42;
-        public double DiskUsage { get => _disk; set { _disk = value; Raise(); } } private double _disk = 8;
-
-        public string CpuTempText => "CPU: 45°C";  public Brush CpuTempBrush => Brushes.LightGreen;
-        public string GpuTempText => "GPU: 40°C";  public Brush GpuTempBrush => Brushes.LightGreen;
-        public string DiskTempText => "Disque: 35°C"; public Brush DiskTempBrush => Brushes.LightGreen;
-        public string RamText => "Utilisée: 6.8 Go / 16 Go";
-
-        // Chat
-        public ObservableCollection<ChatBubble> Chat { get; } = new();
-
-        // Commands
-        public ICommand CmdMaintenance  => _cmdMaint ??= new Relay(() => Say("Maintenance complète (pré-squelette)"));
-        public ICommand CmdSmartClean   => _cmdSmart ??= new Relay(() => Say("Nettoyage intelligent (pré-squelette)"));
-        public ICommand CmdBrowserClean => _cmdBrows ??= new Relay(() => Say("Nettoyage navigateurs (pré-squelette)"));
-        public ICommand CmdUpdateAll    => _cmdUpd ??= new Relay(() => Say("Tout mettre à jour (pré-squelette)"));
-        public ICommand CmdDefender     => _cmdDef ??= new Relay(() => Say("Defender MAJ + Scan (pré-squelette)"));
-        public ICommand CmdOpenConfig   => _cmdCfg ??= new Relay(() => Say("Ouvrir configuration (pré-squelette)"));
-
-        private ICommand? _cmdMaint, _cmdSmart, _cmdBrows, _cmdUpd, _cmdDef, _cmdCfg;
-
-        public void Init()
+        public string CurrentMood
         {
-            Say("Bonjour, je suis Virgil. On peaufine l’interface — les actions arrivent juste après 😉");
+            get => _currentMood;
+            set => SetProperty(ref _currentMood, value);
         }
 
-        public void TickClock()
+        public string StatusText
         {
-            Clock = DateTime.Now.ToString("HH:mm:ss");
+            get => _statusText;
+            set => SetProperty(ref _statusText, value);
+        }
 
-            // Petite vie artificielle: varier légèrement pour montrer les bindings
-            var rnd = new Random();
-            if (IsSurveillanceOn)
+        public string CpuUsage
+        {
+            get => _cpuUsage;
+            set => SetProperty(ref _cpuUsage, value);
+        }
+
+        public string GpuUsage
+        {
+            get => _gpuUsage;
+            set => SetProperty(ref _gpuUsage, value);
+        }
+
+        public string RamUsage
+        {
+            get => _ramUsage;
+            set => SetProperty(ref _ramUsage, value);
+        }
+
+        public string DiskUsage
+        {
+            get => _diskUsage;
+            set => SetProperty(ref _diskUsage, value);
+        }
+
+        public string Temperature
+        {
+            get => _temperature;
+            set => SetProperty(ref _temperature, value);
+        }
+
+        public bool IsMonitoringActive
+        {
+            get => _isMonitoringActive;
+            set => SetProperty(ref _isMonitoringActive, value);
+        }
+
+        public DashboardViewModel()
+        {
+            _monitor = new SystemMonitor();
+            _chatService = new ChatService();
+            _moodService = new MoodService();
+
+            ToggleMonitoringCommand = new Relay(_ => ToggleMonitoring());
+            RunMaintenanceCommand = new Relay(_ => RunMaintenance());
+            CleanTempFilesCommand = new Relay(_ => CleanTempFiles());
+            CleanBrowsersCommand = new Relay(_ => CleanBrowsers());
+            UpdateAllCommand = new Relay(_ => UpdateAll());
+            RunDefenderScanCommand = new Relay(_ => RunDefenderScan());
+            OpenConfigCommand = new Relay(_ => OpenConfiguration());
+
+            _ = InitializeAsync();
+        }
+
+        private async Task InitializeAsync()
+        {
+            AddChatMessage("Virgil est prêt à vous assister.");
+            await Task.Delay(1000);
+            AddChatMessage("Surveillance désactivée pour le moment.");
+        }
+
+        private void AddChatMessage(string message)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
             {
-                CpuUsage  = Clamp01(CpuUsage + (rnd.NextDouble() - 0.5) * 5);
-                GpuUsage  = Clamp01(GpuUsage + (rnd.NextDouble() - 0.5) * 5);
-                RamUsage  = Clamp01(RamUsage + (rnd.NextDouble() - 0.5) * 2);
-                DiskUsage = Clamp01(DiskUsage + (rnd.NextDouble() - 0.5) * 4);
+                ChatMessages.Add(new ChatMessage
+                {
+                    Text = message,
+                    Timestamp = DateTime.Now
+                });
+            });
+        }
+
+        private async void ToggleMonitoring()
+        {
+            if (IsMonitoringActive)
+            {
+                IsMonitoringActive = false;
+                AddChatMessage("Surveillance désactivée.");
+                return;
+            }
+
+            IsMonitoringActive = true;
+            AddChatMessage("Surveillance activée.");
+            await MonitorLoopAsync(_cts.Token);
+        }
+
+        private async Task MonitorLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested && IsMonitoringActive)
+            {
+                CpuUsage = $"{_monitor.GetCpuUsage()} %";
+                GpuUsage = $"{_monitor.GetGpuUsage()} %";
+                RamUsage = $"{_monitor.GetRamUsage()} %";
+                DiskUsage = $"{_monitor.GetDiskUsage()} %";
+                Temperature = $"{_monitor.GetCpuTemperature()} °C";
+
+                await Task.Delay(1500);
             }
         }
 
-        private static double Clamp01(double v) => Math.Max(0, Math.Min(100, v));
-
-        private void Say(string text)
+        private void RunMaintenance()
         {
-            Chat.Add(ChatBubble.Info(text));
-            if (Chat.Count > 200) Chat.RemoveAt(0);
+            AddChatMessage("Maintenance complète lancée.");
+            _chatService.SendMessage("Nettoyage en cours...");
+            _moodService.SetMood("Focused");
         }
-    }
 
-    public sealed class ChatBubble
-    {
-        public string Text { get; set; } = "";
-        public Brush BubbleBrush { get; set; } = Brushes.DimGray;
+        private void CleanTempFiles()
+        {
+            AddChatMessage("Suppression des fichiers temporaires...");
+        }
 
-        public static ChatBubble Info(string t) => new() { Text = t, BubbleBrush = new SolidColorBrush(Color.FromRgb(40, 48, 66)) };
-    }
+        private void CleanBrowsers()
+        {
+            AddChatMessage("Nettoyage des navigateurs...");
+        }
 
-    public sealed class Relay : ICommand
-    {
-        private readonly Action _act;
-        public Relay(Action act) => _act = act;
-        public bool CanExecute(object? p) => true;
-        public void Execute(object? p) => _act();
-        public event EventHandler? CanExecuteChanged;
+        private void UpdateAll()
+        {
+            AddChatMessage("Mise à jour de tous les composants...");
+        }
+
+        private void RunDefenderScan()
+        {
+            AddChatMessage("Analyse Defender en cours...");
+        }
+
+        private void OpenConfiguration()
+        {
+            AddChatMessage("Ouverture des paramètres...");
+        }
+
+        public event EventHandler<string>? OnChatGenerated;
     }
 }
