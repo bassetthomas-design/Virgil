@@ -1,4 +1,7 @@
       - name: Smoke test (really non-blocking)
+      on:
+  workflow_call:
+
         if: ${{ always() }}             # on l’exécute toujours, mais sans bloquer
         shell: pwsh
         continue-on-error: true
