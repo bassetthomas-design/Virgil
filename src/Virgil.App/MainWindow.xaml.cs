@@ -14,14 +14,11 @@ namespace Virgil.App
         {
             InitializeComponent();
 
-            // Initialisation du ViewModel
             _viewModel = new DashboardViewModel();
             DataContext = _viewModel;
 
-            // Vérifie que le UserControl UI est bien chargé avant d'accéder à ses éléments
             if (UI != null)
             {
-                // Connexion des événements
                 UI.SurveillanceToggle.Checked   += SurveillanceToggle_Checked;
                 UI.SurveillanceToggle.Unchecked += SurveillanceToggle_Unchecked;
 
@@ -42,7 +39,6 @@ namespace Virgil.App
                 );
             }
 
-            // Horloge temps réel
             _clockTimer.Interval = TimeSpan.FromSeconds(1);
             _clockTimer.Tick += (s, e) =>
             {
@@ -52,46 +48,62 @@ namespace Virgil.App
             _clockTimer.Start();
         }
 
-        // --- Gestion des événements d'interface ---
+        // --- Gestion des événements ---
 
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
+            Resources["SurveillanceToggleText"] = "Arrêter la surveillance";
             _viewModel.ToggleSurveillance(true);
+            AddChat("Surveillance activée.");
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
+            Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
             _viewModel.ToggleSurveillance(false);
+            AddChat("Surveillance arrêtée.");
         }
 
         private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
+            AddChat("Mode maintenance activé…");
             _viewModel.RunMaintenance();
         }
 
         private void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
+            AddChat("Nettoyage intelligent en cours…");
             _viewModel.CleanTempFiles();
         }
 
         private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
+            AddChat("Nettoyage navigateurs…");
             _viewModel.CleanBrowsers();
         }
 
         private void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
+            AddChat("Mises à jour totales (apps/jeux/pilotes/Windows/Defender)…");
             _viewModel.UpdateAll();
         }
 
         private void Action_Defender(object sender, RoutedEventArgs e)
         {
+            AddChat("Microsoft Defender (MAJ + Scan rapide)…");
             _viewModel.RunDefenderScan();
         }
 
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
+            AddChat("Ouverture de la configuration…");
             _viewModel.OpenConfiguration();
+        }
+
+        private void AddChat(string text)
+        {
+            UI.ChatItems.Items.Add(text);
+            UI.ChatScroll.ScrollToEnd();
         }
     }
 }
