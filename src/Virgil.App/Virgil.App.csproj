@@ -1,26 +1,25 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
 
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Virgil.App</AssemblyName>
     <RootNamespace>Virgil.App</RootNamespace>
 
-    <!-- Runtime / publish -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>
-
-    <!-- IMPORTANT : WPF ne supporte pas bien le trimming -->
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
+    <ProjectReference Include="..\Virgil.Agent\Virgil.Agent.csproj" />
   </ItemGroup>
 
   <!-- Exemple si tu as un appsettings.json -->
