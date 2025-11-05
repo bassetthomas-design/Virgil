@@ -1,111 +1,113 @@
 using System;
+using System.Diagnostics;
 using System.Windows;
-using System.Windows.Threading;
+using System.Windows.Controls;
+using System.Windows.Input;
+
+// Alias explicite pour lever l’ambiguïté MessageBox (Forms vs WPF)
+using WpfMessageBox = System.Windows.MessageBox;
+
 using Virgil.App.ViewModels;
 
 namespace Virgil.App
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, System.Windows.Markup.IComponentConnector
     {
-        private readonly DispatcherTimer _clockTimer = new();
-        private readonly DashboardViewModel _viewModel;
+        private DashboardViewModel Vm => (DashboardViewModel)DataContext;
 
         public MainWindow()
         {
             InitializeComponent();
-
-            _viewModel = new DashboardViewModel();
-            DataContext = _viewModel;
-
-            if (UI != null)
-            {
-                UI.SurveillanceToggle.Checked   += SurveillanceToggle_Checked;
-                UI.SurveillanceToggle.Unchecked += SurveillanceToggle_Unchecked;
-
-                UI.BtnMaintenance.Click   += Action_MaintenanceComplete;
-                UI.BtnCleanTemp.Click     += Action_CleanTemp;
-                UI.BtnCleanBrowsers.Click += Action_CleanBrowsers;
-                UI.BtnUpdateAll.Click     += Action_UpdateAll;
-                UI.BtnDefender.Click      += Action_Defender;
-                UI.BtnOpenConfig.Click    += OpenConfig_Click;
-            }
-            else
-            {
-                System.Windows.MessageBox.Show(
-                    "Erreur : Interface principale non initialisée (UI null).",
-                    "Virgil",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error
-                );
-            }
-
-            _clockTimer.Interval = TimeSpan.FromSeconds(1);
-            _clockTimer.Tick += (s, e) =>
-            {
-                if (UI?.ClockText != null)
-                    UI.ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
-            };
-            _clockTimer.Start();
+            DataContext = new DashboardViewModel();
         }
 
-        // --- Gestion des événements ---
+        // =========================
+        // Handlers des boutons/toggles
+        // =========================
 
         private void SurveillanceToggle_Checked(object sender, RoutedEventArgs e)
         {
-            Resources["SurveillanceToggleText"] = "Arrêter la surveillance";
-            _viewModel.ToggleSurveillance(true);
-            AddChat("Surveillance activée.");
+            try
+            {
+                Vm.ToggleSurveillance();
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Surveillance", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void SurveillanceToggle_Unchecked(object sender, RoutedEventArgs e)
         {
-            Resources["SurveillanceToggleText"] = "Démarrer la surveillance";
-            _viewModel.ToggleSurveillance(false);
-            AddChat("Surveillance arrêtée.");
+            try
+            {
+                Vm.ToggleSurveillance();
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Surveillance", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
+        private async void Action_MaintenanceComplete(object sender, RoutedEventArgs e)
         {
-            AddChat("Mode maintenance activé…");
-            _viewModel.RunMaintenance();
+            try { await Vm.RunMaintenance(); }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Maintenance complète", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void Action_CleanTemp(object sender, RoutedEventArgs e)
+        private async void Action_CleanTemp(object sender, RoutedEventArgs e)
         {
-            AddChat("Nettoyage intelligent en cours…");
-            _viewModel.CleanTempFiles();
+            try { await Vm.CleanTempFiles(); }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Nettoyage temporaire", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void Action_CleanBrowsers(object sender, RoutedEventArgs e)
+        private async void Action_CleanBrowsers(object sender, RoutedEventArgs e)
         {
-            AddChat("Nettoyage navigateurs…");
-            _viewModel.CleanBrowsers();
+            try { await Vm.CleanBrowsers(); }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Navigateurs", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void Action_UpdateAll(object sender, RoutedEventArgs e)
+        private async void Action_UpdateAll(object sender, RoutedEventArgs e)
         {
-            AddChat("Mises à jour totales (apps/jeux/pilotes/Windows/Defender)…");
-            _viewModel.UpdateAll();
+            try { await Vm.UpdateAll(); }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Mises à jour", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void Action_Defender(object sender, RoutedEventArgs e)
+        private async void Action_Defender(object sender, RoutedEventArgs e)
         {
-            AddChat("Microsoft Defender (MAJ + Scan rapide)…");
-            _viewModel.RunDefenderScan();
+            try { await Vm.RunDefenderScan(); }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Microsoft Defender", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void OpenConfig_Click(object sender, RoutedEventArgs e)
         {
-            AddChat("Ouverture de la configuration…");
-            _viewModel.OpenConfiguration();
-        }
-
-        private void AddChat(string text)
-        {
-            if (UI?.ChatItems != null)
+            try { Vm.OpenConfiguration(); }
+            catch (Exception ex)
             {
-                UI.ChatItems.Items.Add(text);
-                UI.ChatScroll?.ScrollToEnd();
+                Trace.WriteLine(ex);
+                WpfMessageBox.Show(this, ex.Message, "Configuration", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
