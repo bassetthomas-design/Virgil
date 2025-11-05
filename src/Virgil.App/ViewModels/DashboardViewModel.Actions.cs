@@ -1,87 +1,49 @@
-using System.Threading.Tasks;
-
 namespace Virgil.App.ViewModels
 {
-    // Même accessibilité que l'autre partial (internal), sinon CS0262.
-    internal partial class DashboardViewModel
+    public partial class DashboardViewModel
     {
         public void ToggleSurveillance()
         {
             IsSurveillanceEnabled = !IsSurveillanceEnabled;
-
-            var msg = IsSurveillanceEnabled
-                ? "🔍 Surveillance ACTIVÉE. Je garde un œil sur tout."
-                : "😴 Surveillance arrêtée. Petite pause…";
-
-            AppendChat(msg);
-            Status = msg;
+            AppendChat(IsSurveillanceEnabled
+                ? "Surveillance activée."
+                : "Surveillance arrêtée.");
         }
 
-        public async Task RunMaintenanceAsync()
+        public void RunMaintenance()
         {
-            AppendChat("🛠️ Maintenance complète : démarrage…");
-            Status = "Maintenance en cours…";
-
-            // TODO: enchaîner nettoyage intelligent → navigateurs → MAJ globales
-            await Task.Delay(300); // placeholder
-
-            AppendChat("✅ Maintenance terminée.");
-            Status = "Maintenance terminée.";
+            // TODO: brancher le pipeline Maintenance complète (intelligent + navigateurs + updates + SFC/DISM)
+            AppendChat("Maintenance complète : démarrage (TODO: implémentation service).");
         }
 
-        public async Task CleanTempFilesAsync()
+        public void CleanTempFiles()
         {
-            AppendChat("🧹 Nettoyage des temporaires…");
-            Status = "Nettoyage temporaires…";
-
-            // TODO: logique de nettoyage TEMP
-            await Task.Delay(200); // placeholder
-
-            AppendChat("✅ Temporaires nettoyés.");
-            Status = "Temporaires nettoyés.";
+            // TODO: appel agent/nettoyage temp
+            AppendChat("Nettoyage des fichiers temporaires (TODO).");
         }
 
-        public async Task CleanBrowsersAsync()
+        public void CleanBrowsers()
         {
-            AppendChat("🧼 Nettoyage des navigateurs (caches)…");
-            Status = "Nettoyage navigateurs…";
-
-            // TODO: logique de nettoyage navigateurs
-            await Task.Delay(200); // placeholder
-
-            AppendChat("✅ Navigateurs nettoyés.");
-            Status = "Navigateurs nettoyés.";
+            // TODO: nettoyages navigateurs multiples
+            AppendChat("Nettoyage des navigateurs (TODO).");
         }
 
-        public async Task UpdateAllAsync()
+        public void UpdateAll()
         {
-            AppendChat("⬆️ Mises à jour globales (apps/jeux/Windows/drivers/Defender)…");
-            Status = "Mises à jour…";
-
-            // TODO: winget + WU + drivers + Defender
-            await Task.Delay(300); // placeholder
-
-            AppendChat("✅ Tout est à jour.");
-            Status = "Tout est à jour.";
+            // TODO: winget + Store + Windows Update + drivers
+            AppendChat("Mises à jour globales (TODO).");
         }
 
-        public async Task RunDefenderScanAsync()
+        public void RunDefenderScan()
         {
-            AppendChat("🛡️ Microsoft Defender : MAJ signatures + scan rapide…");
-            Status = "Defender en cours…";
-
-            // TODO: MAJ signatures + scan
-            await Task.Delay(200); // placeholder
-
-            AppendChat("✅ Defender OK.");
-            Status = "Defender OK.";
+            // TODO: MAJ signatures + scan rapide
+            AppendChat("Microsoft Defender : mise à jour + scan rapide (TODO).");
         }
 
         public void OpenConfiguration()
         {
-            AppendChat("⚙️ Ouverture de la configuration…");
-            Status = "Configuration ouverte.";
-            // TODO: ouvrir la fenêtre/onglet de config
+            // TODO: ouverture de la fenêtre/onglet de configuration
+            AppendChat("Ouverture de la configuration (TODO).");
         }
     }
 }
