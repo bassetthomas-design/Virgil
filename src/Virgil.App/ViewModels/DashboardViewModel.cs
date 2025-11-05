@@ -1,122 +1,105 @@
+// File: src/Virgil.App/ViewModels/DashboardViewModel.cs
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using System.Windows.Input;
 
 namespace Virgil.App.ViewModels
 {
-    // Fichier "autorité" : NE pas redéclarer ces mêmes membres dans d'autres fragments partiels.
-    public partial class DashboardViewModel : INotifyPropertyChanged
+    /// <summary>
+    /// Vue-modèle tableau de bord.
+    /// NOTE: Version unifiée pour supprimer tous les doublons (_isSurveillanceEnabled,
+    /// IsSurveillanceEnabled, ToggleSurveillance, RunMaintenance, etc.).
+    /// Si tu avais d'autres "partial" pour DashboardViewModel, laisse-les,
+    /// mais assure-toi qu'ils ne redéfinissent PAS ces mêmes membres.
+    /// </summary>
+    public class DashboardViewModel : INotifyPropertyChanged
     {
-        // --- Etat de la surveillance (garder ICI uniquement) ---
+        // === State ===
         private bool _isSurveillanceEnabled;
         public bool IsSurveillanceEnabled
         {
             get => _isSurveillanceEnabled;
             set
             {
-                if (_isSurveillanceEnabled == value) return;
+                if (value == _isSurveillanceEnabled) return;
                 _isSurveillanceEnabled = value;
-                OnPropertyChanged(nameof(IsSurveillanceEnabled));
+                OnPropertyChanged();
             }
         }
 
-        // --- Commandes exposées à la MainWindow (garder ICI uniquement) ---
-        public ICommand ToggleSurveillanceCommand { get; }
-        public ICommand RunMaintenanceCommand { get; }
-        public ICommand CleanTempFilesCommand { get; }
-        public ICommand CleanBrowsersCommand { get; }
-        public ICommand UpdateAllCommand { get; }
-        public ICommand RunDefenderScanCommand { get; }
-        public ICommand OpenConfigurationCommand { get; }
+        // === INotifyPropertyChanged ===
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-        // --- Ctor (garder ICI uniquement) ---
-        public DashboardViewModel()
+        // === Helpers de log minimalistes pour la CI (pas de dépendances externes) ===
+        private static void CiLog(string message)
         {
-            ToggleSurveillanceCommand = new Relay(_ => ToggleSurveillance());
-            RunMaintenanceCommand    = new Relay(async _ => await RunMaintenance());
-            CleanTempFilesCommand    = new Relay(async _ => await CleanTempFiles());
-            CleanBrowsersCommand     = new Relay(async _ => await CleanBrowsers());
-            UpdateAllCommand         = new Relay(async _ => await UpdateAll());
-            RunDefenderScanCommand   = new Relay(async _ => await RunDefenderScan());
-            OpenConfigurationCommand = new Relay(_ => OpenConfiguration());
+            try
+            {
+                var baseDir = AppContext.BaseDirectory;
+                var logDir = Path.Combine(baseDir, "logs");
+                Directory.CreateDirectory(logDir);
+                var logPath = Path.Combine(logDir, "ci-vm.log");
+                File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
+            }
+            catch
+            {
+                // Au pire, on trace dans Debug
+                Debug.WriteLine(message);
+            }
         }
 
-        // --- Méthodes appelées par l'UI (garder ICI uniquement) ---
+        // === Méthodes appelées par MainWindow ===
+        // Important: gardées avec ces signatures pour éviter les CS1061
         public void ToggleSurveillance()
         {
             IsSurveillanceEnabled = !IsSurveillanceEnabled;
-            Trace.WriteLine($"[VM] Surveillance → {(IsSurveillanceEnabled ? "ON" : "OFF")}");
+            CiLog($"ToggleSurveillance => {IsSurveillanceEnabled}");
         }
 
         public async Task RunMaintenance()
         {
-            Trace.WriteLine("[VM] Maintenance complète demandée.");
-            // TODO: Nettoyage intelligent → Navigateurs → Mises à jour (winget/Windows/Drivers/Defender)
+            CiLog("RunMaintenance invoked.");
+            // TODO: brancher Virgil.Agent / pipeline réel
             await Task.CompletedTask;
         }
 
         public async Task CleanTempFiles()
         {
-            Trace.WriteLine("[VM] Nettoyage des fichiers temporaires.");
-            // TODO: %TEMP%, Windows\Temp, Prefetch, logs, etc.
+            CiLog("CleanTempFiles invoked.");
+            // TODO: implémentation réelle de nettoyage
             await Task.CompletedTask;
         }
 
         public async Task CleanBrowsers()
         {
-            Trace.WriteLine("[VM] Nettoyage des navigateurs.");
-            // TODO: Chrome/Edge/Firefox caches (et options cookies)
+            CiLog("CleanBrowsers invoked.");
+            // TODO: nettoyage navigateurs
             await Task.CompletedTask;
         }
 
         public async Task UpdateAll()
         {
-            Trace.WriteLine("[VM] Mises à jour globales.");
-            // TODO: winget upgrade --all ; Windows Update ; drivers ; Defender signatures
+            CiLog("UpdateAll invoked.");
+            // TODO: winget upgrade + Windows Update + drivers
             await Task.CompletedTask;
         }
 
         public async Task RunDefenderScan()
         {
-            Trace.WriteLine("[VM] Scan Microsoft Defender.");
-            // TODO: MpCmdRun.exe -SignatureUpdate ; -Scan -ScanType 1
+            CiLog("RunDefenderScan invoked.");
+            // TODO: Update signatures + scan rapide
             await Task.CompletedTask;
         }
 
         public void OpenConfiguration()
         {
-            Trace.WriteLine("[VM] Ouverture configuration.");
-            // TODO: ouvrir fenêtre/onglet config, ou fichier JSON de config
-        }
-
-        // --- INotifyPropertyChanged (garder ICI uniquement) ---
-        public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged(string propertyName)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-
-        // --- Relay ICommand (garder ICI uniquement) ---
-        public sealed class Relay : ICommand
-        {
-            private readonly Action<object?> _exec;
-            private readonly Func<object?, bool>? _can;
-
-            public Relay(Action<object?> exec, Func<object?, bool>? can = null)
-            {
-                _exec = exec ?? throw new ArgumentNullException(nameof(exec));
-                _can  = can;
-            }
-
-            public bool CanExecute(object? parameter) => _can?.Invoke(parameter) ?? true;
-
-            public event EventHandler? CanExecuteChanged
-            {
-                add { CommandManager.RequerySuggested += value; }
-                remove { CommandManager.RequerySuggested -= value; }
-            }
-
-            public void Execute(object? parameter) => _exec(parameter);
+            CiLog("OpenConfiguration invoked.");
+            // TODO: ouverture de la fenêtre de config / fichier JSON
         }
     }
 }
