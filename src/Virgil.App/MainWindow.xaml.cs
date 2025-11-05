@@ -1,3 +1,4 @@
+using MessageBox = System.Windows.MessageBox; // évite l’ambiguïté Forms/WPF
 using System;
 using System.Diagnostics;
 using System.Windows;
