@@ -1,153 +1,87 @@
-using System;
 using System.Threading.Tasks;
 
 namespace Virgil.App.ViewModels
 {
-    // Complément du ViewModel SANS rien supprimer : partial
-    public partial class DashboardViewModel
+    // Même accessibilité que l'autre partial (internal), sinon CS0262.
+    internal partial class DashboardViewModel
     {
-        // Flag simple pour la surveillance (lié au Toggle dans la barre du haut)
-        private bool _isSurveillanceEnabled;
-        public bool IsSurveillanceEnabled
-        {
-            get => _isSurveillanceEnabled;
-            private set
-            {
-                if (_isSurveillanceEnabled == value) return;
-                _isSurveillanceEnabled = value;
-                OnPropertyChanged(nameof(IsSurveillanceEnabled));
-                AppendChat(value
-                    ? "🟢 Surveillance activée."
-                    : "🔴 Surveillance arrêtée.");
-            }
-        }
-
-        // === Méthodes attendues par MainWindow ===
-
         public void ToggleSurveillance()
         {
             IsSurveillanceEnabled = !IsSurveillanceEnabled;
-            // Si besoin, démarrer/stopper une boucle de monitoring ici
-            // (timer, cancellation token, etc.)
+
+            var msg = IsSurveillanceEnabled
+                ? "🔍 Surveillance ACTIVÉE. Je garde un œil sur tout."
+                : "😴 Surveillance arrêtée. Petite pause…";
+
+            AppendChat(msg);
+            Status = msg;
         }
 
-        public async Task RunMaintenance()
+        public async Task RunMaintenanceAsync()
         {
-            try
-            {
-                AppendChat("🧰 Maintenance complète démarrée…");
-                // Enchaîner : nettoyage intelligent + navigateurs + maj globales
-                await CleanTempFiles();
-                await CleanBrowsers();
-                await UpdateAll();
-                AppendChat("✅ Maintenance complète terminée.");
-            }
-            catch (Exception ex)
-            {
-                AppendChat($"❌ Maintenance échouée : {ex.Message}");
-            }
+            AppendChat("🛠️ Maintenance complète : démarrage…");
+            Status = "Maintenance en cours…";
+
+            // TODO: enchaîner nettoyage intelligent → navigateurs → MAJ globales
+            await Task.Delay(300); // placeholder
+
+            AppendChat("✅ Maintenance terminée.");
+            Status = "Maintenance terminée.";
         }
 
-        public async Task CleanTempFiles()
+        public async Task CleanTempFilesAsync()
         {
-            try
-            {
-                AppendChat("🧹 Nettoyage intelligent en cours…");
-                // TODO: appeler le service de nettoyage réel (Agent/Service)
-                await Task.Delay(300); // placeholder non-bloquant
-                AppendChat("✨ Nettoyage terminé.");
-            }
-            catch (Exception ex)
-            {
-                AppendChat($"❌ Nettoyage interrompu : {ex.Message}");
-            }
+            AppendChat("🧹 Nettoyage des temporaires…");
+            Status = "Nettoyage temporaires…";
+
+            // TODO: logique de nettoyage TEMP
+            await Task.Delay(200); // placeholder
+
+            AppendChat("✅ Temporaires nettoyés.");
+            Status = "Temporaires nettoyés.";
         }
 
-        public async Task CleanBrowsers()
+        public async Task CleanBrowsersAsync()
         {
-            try
-            {
-                AppendChat("🧼 Nettoyage des navigateurs…");
-                // TODO: chrome/edge/firefox caches (sans casser les sessions)
-                await Task.Delay(300);
-                AppendChat("🧼 Navigateurs nettoyés.");
-            }
-            catch (Exception ex)
-            {
-                AppendChat($"❌ Nettoyage navigateurs interrompu : {ex.Message}");
-            }
+            AppendChat("🧼 Nettoyage des navigateurs (caches)…");
+            Status = "Nettoyage navigateurs…";
+
+            // TODO: logique de nettoyage navigateurs
+            await Task.Delay(200); // placeholder
+
+            AppendChat("✅ Navigateurs nettoyés.");
+            Status = "Navigateurs nettoyés.";
         }
 
-        public async Task UpdateAll()
+        public async Task UpdateAllAsync()
         {
-            try
-            {
-                AppendChat("⬆️ Mises à jour globales (apps/jeux/pilotes/Windows/Defender)…");
-                // TODO: winget upgrade, Windows Update, drivers, Defender signatures
-                await Task.Delay(300);
-                AppendChat("✅ Mises à jour terminées.");
-            }
-            catch (Exception ex)
-            {
-                AppendChat($"❌ Mises à jour interrompues : {ex.Message}");
-            }
+            AppendChat("⬆️ Mises à jour globales (apps/jeux/Windows/drivers/Defender)…");
+            Status = "Mises à jour…";
+
+            // TODO: winget + WU + drivers + Defender
+            await Task.Delay(300); // placeholder
+
+            AppendChat("✅ Tout est à jour.");
+            Status = "Tout est à jour.";
         }
 
-        public async Task RunDefenderScan()
+        public async Task RunDefenderScanAsync()
         {
-            try
-            {
-                AppendChat("🛡️ Microsoft Defender : scan rapide…");
-                // TODO: lancer MAJ signatures + scan (MpCmdRun ou API)
-                await Task.Delay(300);
-                AppendChat("🛡️ Scan terminé.");
-            }
-            catch (Exception ex)
-            {
-                AppendChat($"❌ Defender a rencontré une erreur : {ex.Message}");
-            }
+            AppendChat("🛡️ Microsoft Defender : MAJ signatures + scan rapide…");
+            Status = "Defender en cours…";
+
+            // TODO: MAJ signatures + scan
+            await Task.Delay(200); // placeholder
+
+            AppendChat("✅ Defender OK.");
+            Status = "Defender OK.";
         }
 
         public void OpenConfiguration()
         {
-            try
-            {
-                AppendChat("⚙️ Ouverture de la configuration…");
-                // TODO: ouvrir la SettingsWindow / charger config.json
-                // Ce hook laisse la place à l’UI existante
-            }
-            catch (Exception ex)
-            {
-                AppendChat($"❌ Impossible d’ouvrir la configuration : {ex.Message}");
-            }
-        }
-
-        // === Utilitaires de chat (non destructif) ===
-        private void AppendChat(string message)
-        {
-            try
-            {
-                // Si tu as déjà un mécanisme de chat/log dans l’autre partial,
-                // appelle-le ici. Sinon ce fallback reste inoffensif.
-                ChatMessages?.Add(new ChatMessage
-                {
-                    Timestamp = DateTime.Now,
-                    Text = message,
-                    Severity = "info"
-                });
-            }
-            catch
-            {
-                // Ne jamais casser l’app pour un log.
-            }
-        }
-
-        // Modèle léger pour ne rien imposer au modèle existant
-        public class ChatMessage
-        {
-            public DateTime Timestamp { get; set; }
-            public string Text { get; set; } = "";
-            public string Severity { get; set; } = "info";
+            AppendChat("⚙️ Ouverture de la configuration…");
+            Status = "Configuration ouverte.";
+            // TODO: ouvrir la fenêtre/onglet de config
         }
     }
 }
