@@ -1,14 +1,15 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
 namespace Virgil.App.ViewModels
 {
-    // IMPORTANT : partial pour cohabiter si tu as d’autres fragments (ex: DashboardViewModel.Commands.cs)
-    public partial class DashboardViewModel
+    // Fichier "autorité" : NE pas redéclarer ces mêmes membres dans d'autres fragments partiels.
+    public partial class DashboardViewModel : INotifyPropertyChanged
     {
-        // --- Etat de la surveillance ---
+        // --- Etat de la surveillance (garder ICI uniquement) ---
         private bool _isSurveillanceEnabled;
         public bool IsSurveillanceEnabled
         {
@@ -18,11 +19,10 @@ namespace Virgil.App.ViewModels
                 if (_isSurveillanceEnabled == value) return;
                 _isSurveillanceEnabled = value;
                 OnPropertyChanged(nameof(IsSurveillanceEnabled));
-                // Optionnel : lever un événement pour l’UI/Avatar
             }
         }
 
-        // --- Commandes exposées à la MainWindow (liées aux boutons/handlers) ---
+        // --- Commandes exposées à la MainWindow (garder ICI uniquement) ---
         public ICommand ToggleSurveillanceCommand { get; }
         public ICommand RunMaintenanceCommand { get; }
         public ICommand CleanTempFilesCommand { get; }
@@ -31,7 +31,7 @@ namespace Virgil.App.ViewModels
         public ICommand RunDefenderScanCommand { get; }
         public ICommand OpenConfigurationCommand { get; }
 
-        // --- Ctor ---
+        // --- Ctor (garder ICI uniquement) ---
         public DashboardViewModel()
         {
             ToggleSurveillanceCommand = new Relay(_ => ToggleSurveillance());
@@ -43,18 +43,17 @@ namespace Virgil.App.ViewModels
             OpenConfigurationCommand = new Relay(_ => OpenConfiguration());
         }
 
-        // --- Handlers appelés par MainWindow.xaml.cs ---
+        // --- Méthodes appelées par l'UI (garder ICI uniquement) ---
         public void ToggleSurveillance()
         {
             IsSurveillanceEnabled = !IsSurveillanceEnabled;
-            // TODO: démarrer/arrêter la boucle de monitoring, punchlines, etc.
-            Trace.WriteLine($"[VM] Surveillance toggled → {(IsSurveillanceEnabled ? "ON" : "OFF")}");
+            Trace.WriteLine($"[VM] Surveillance → {(IsSurveillanceEnabled ? "ON" : "OFF")}");
         }
 
         public async Task RunMaintenance()
         {
             Trace.WriteLine("[VM] Maintenance complète demandée.");
-            // TODO: enchaîner Nettoyage intelligent → Navigateurs → Mises à jour (winget/Windows/Drivers/Defender)
+            // TODO: Nettoyage intelligent → Navigateurs → Mises à jour (winget/Windows/Drivers/Defender)
             await Task.CompletedTask;
         }
 
@@ -68,7 +67,7 @@ namespace Virgil.App.ViewModels
         public async Task CleanBrowsers()
         {
             Trace.WriteLine("[VM] Nettoyage des navigateurs.");
-            // TODO: Chrome/Edge/Firefox caches (et options cookies si activées)
+            // TODO: Chrome/Edge/Firefox caches (et options cookies)
             await Task.CompletedTask;
         }
 
@@ -89,15 +88,15 @@ namespace Virgil.App.ViewModels
         public void OpenConfiguration()
         {
             Trace.WriteLine("[VM] Ouverture configuration.");
-            // TODO: ouvrir la fenêtre/onglet de configuration, ou ouvrir le fichier JSON de config
+            // TODO: ouvrir fenêtre/onglet config, ou fichier JSON de config
         }
 
-        // --- Infrastructure INotifyPropertyChanged minimale ---
-        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        // --- INotifyPropertyChanged (garder ICI uniquement) ---
+        public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged(string propertyName)
-            => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-        // --- Relay simple pour les ICommand ---
+        // --- Relay ICommand (garder ICI uniquement) ---
         public sealed class Relay : ICommand
         {
             private readonly Action<object?> _exec;
@@ -111,7 +110,6 @@ namespace Virgil.App.ViewModels
 
             public bool CanExecute(object? parameter) => _can?.Invoke(parameter) ?? true;
 
-            // L’avertissement CS0067 que tu voyais auparavant venait d’un event non utilisé :
             public event EventHandler? CanExecuteChanged
             {
                 add { CommandManager.RequerySuggested += value; }
