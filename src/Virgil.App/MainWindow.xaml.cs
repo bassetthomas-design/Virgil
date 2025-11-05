@@ -1,5 +1,3 @@
-using MessageBox = System.Windows.MessageBox;
-using WpfMessageBox = System.Windows.MessageBox;
 using System;
 using System.Windows;
 using System.Windows.Threading;
@@ -33,7 +31,7 @@ namespace Virgil.App
             }
             else
             {
-                MessageBox.Show(
+                System.Windows.MessageBox.Show(
                     "Erreur : Interface principale non initialisée (UI null).",
                     "Virgil",
                     MessageBoxButton.OK,
@@ -104,8 +102,11 @@ namespace Virgil.App
 
         private void AddChat(string text)
         {
-            UI.ChatItems.Items.Add(text);
-            UI.ChatScroll.ScrollToEnd();
+            if (UI?.ChatItems != null)
+            {
+                UI.ChatItems.Items.Add(text);
+                UI.ChatScroll?.ScrollToEnd();
+            }
         }
     }
 }
