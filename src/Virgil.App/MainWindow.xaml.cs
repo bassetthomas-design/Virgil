@@ -1,3 +1,4 @@
+using MessageBox = System.Windows.MessageBox;
 using WpfMessageBox = System.Windows.MessageBox;
 using System;
 using System.Windows;
