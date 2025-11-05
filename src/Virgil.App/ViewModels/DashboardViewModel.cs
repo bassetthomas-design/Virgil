@@ -6,12 +6,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
-// MoodService existe déjà côté Core d’après l’historique d’erreurs
-using Virgil.Core;
+using Virgil.Core; // MoodService côté Core
 
 namespace Virgil.App.ViewModels
 {
-    // ====== Base minimaliste pour INotifyPropertyChanged (remplace BaseViewModel absent) ======
+    // ===== Base INotifyPropertyChanged (remplace BaseViewModel manquant) =====
     public abstract class BaseViewModel : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -25,7 +24,7 @@ namespace Virgil.App.ViewModels
         }
     }
 
-    // ====== Stubs légers (si tu as déjà ces classes ailleurs, on supprimera ces stubs) ======
+    // ===== Stubs internes : SystemMonitor & ChatService =====
     internal sealed class SystemMonitor
     {
         private readonly Random _r = new();
@@ -38,7 +37,7 @@ namespace Virgil.App.ViewModels
 
     internal sealed class ChatService
     {
-        public void SendMessage(string _msg) { /* hook futur vers le chat */ }
+        public void SendMessage(string msg) { /* hook futur vers le chat */ }
     }
 
     public sealed class ChatMessage
@@ -47,32 +46,28 @@ namespace Virgil.App.ViewModels
         public DateTime Timestamp { get; set; }
     }
 
-    // ====== Relay (garde l’event CanExecuteChanged, même si non utilisé) ======
+    // ===== Relay standard (garde CanExecuteChanged) =====
     public sealed class Relay : ICommand
     {
         private readonly Action<object?> _exec;
         private readonly Func<object?, bool>? _can;
-
         public Relay(Action<object?> exec, Func<object?, bool>? can = null)
         {
             _exec = exec;
             _can = can;
         }
-
         public bool CanExecute(object? parameter) => _can?.Invoke(parameter) ?? true;
         public void Execute(object? parameter) => _exec(parameter);
-
         public event EventHandler? CanExecuteChanged;
     }
 
-    // ====== La ViewModel principale ======
-    public partial class DashboardViewModel : BaseViewModel
+    // ===== ViewModel principale =====
+    public class DashboardViewModel : BaseViewModel
     {
         private readonly SystemMonitor _monitor;
         private readonly ChatService _chatService;
         private readonly MoodService _moodService;
         private readonly CancellationTokenSource _cts = new();
-        private readonly Random _random = new();
 
         private string _currentMood = "Neutral";
         private string _statusText = "Initialisation de Virgil...";
@@ -85,7 +80,7 @@ namespace Virgil.App.ViewModels
 
         public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
 
-        // Commandes (si bindées dans XAML)
+        // Commandes optionnelles (si tu les bindes dans XAML)
         public ICommand ToggleMonitoringCommand { get; }
         public ICommand RunMaintenanceCommand { get; }
         public ICommand CleanTempFilesCommand { get; }
@@ -142,6 +137,8 @@ namespace Virgil.App.ViewModels
             set => SetProperty(ref _isMonitoringActive, value);
         }
 
+        public event EventHandler<string>? OnChatGenerated;
+
         public DashboardViewModel()
         {
             _monitor = new SystemMonitor();
@@ -162,7 +159,7 @@ namespace Virgil.App.ViewModels
         private async Task InitializeAsync()
         {
             AddChatMessage("Virgil est prêt à vous assister.");
-            await Task.Delay(500);
+            await Task.Delay(300);
             AddChatMessage("Surveillance désactivée pour le moment.");
         }
 
@@ -177,11 +174,12 @@ namespace Virgil.App.ViewModels
                         Text = message,
                         Timestamp = DateTime.Now
                     });
+                    OnChatGenerated?.Invoke(this, message);
                 });
             }
         }
 
-        // ---- Pour compatibilité avec MainWindow : ToggleSurveillance(bool) ----
+        // ==== Compat avec MainWindow : ToggleSurveillance(bool) ====
         public async void ToggleSurveillance(bool enabled)
         {
             if (enabled)
@@ -189,9 +187,10 @@ namespace Virgil.App.ViewModels
                 if (!IsMonitoringActive)
                 {
                     IsMonitoringActive = true;
+                    StatusText = "Surveillance activée.";
                     AddChatMessage("Surveillance activée.");
                     _moodService.SetMood("Focused");
-                    await MonitorLoopAsync(_cts.Token);
+                    _ = MonitorLoopAsync(_cts.Token);
                 }
             }
             else
@@ -199,18 +198,17 @@ namespace Virgil.App.ViewModels
                 if (IsMonitoringActive)
                 {
                     IsMonitoringActive = false;
+                    StatusText = "Surveillance désactivée.";
                     AddChatMessage("Surveillance désactivée.");
                     _moodService.SetMood("Neutral");
                 }
             }
         }
 
-        // ---- Version “commande” déjà présente (sans paramètre) ----
-        private async void ToggleMonitoring()
+        // Version “commande” sans paramètre (si utilisée en XAML)
+        private void ToggleMonitoring()
         {
             ToggleSurveillance(!IsMonitoringActive);
-            if (IsMonitoringActive)
-                await MonitorLoopAsync(_cts.Token);
         }
 
         private async Task MonitorLoopAsync(CancellationToken token)
@@ -226,26 +224,25 @@ namespace Virgil.App.ViewModels
             }
         }
 
-        // ==== Actions réclamées par MainWindow (noms inchangés) ====
-
+        // ==== Actions appelées par MainWindow (noms requis) ====
         public void RunMaintenance()
         {
             AddChatMessage("Maintenance complète lancée.");
             _chatService.SendMessage("Nettoyage en cours...");
             _moodService.SetMood("Focused");
-            // TODO: enchaîner nettoyage → navigateurs → mises à jour → rapport
+            // TODO: Nettoyage intelligent -> Navigateurs -> Mises à jour -> Rapport
         }
 
         public void CleanTempFiles()
         {
             AddChatMessage("Suppression des fichiers temporaires…");
-            // TODO: implémentation réelle (TEMP, Prefetch, logs, etc.)
+            // TODO: TEMP, Prefetch, logs, etc.
         }
 
         public void CleanBrowsers()
         {
             AddChatMessage("Nettoyage des navigateurs…");
-            // TODO: implémentation navigateurs
+            // TODO: Chrome/Edge/Firefox caches
         }
 
         public void UpdateAll()
@@ -263,9 +260,7 @@ namespace Virgil.App.ViewModels
         public void OpenConfiguration()
         {
             AddChatMessage("Ouverture des paramètres…");
-            // TODO: ouvrir la fenêtre/config JSON
+            // TODO: ouvrir SettingsWindow / JSON config
         }
-
-        public event EventHandler<string>? OnChatGenerated;
     }
 }
