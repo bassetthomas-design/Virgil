@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace Virgil.App.ViewModels
 {
-    // Doit être public pour correspondre à un DashboardViewModel public
+    // Public pour être accessible par tous les ViewModels
     public abstract class BaseViewModel : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -14,12 +14,13 @@ namespace Virgil.App.ViewModels
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
-        protected bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string? propertyName = null)
+        // ✅ renommée en Set pour correspondre à DashboardViewModel
+        protected bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
-            if (EqualityComparer<T>.Default.Equals(storage, value))
+            if (EqualityComparer<T>.Default.Equals(field, value))
                 return false;
 
-            storage = value;
+            field = value;
             OnPropertyChanged(propertyName);
             return true;
         }
