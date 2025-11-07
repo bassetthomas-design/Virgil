@@ -1,4 +1,4 @@
-name: .NET Build & Artifact
+name: .NET Build & Artifact (Windows WPF)
 
 on:
   push:
@@ -17,11 +17,14 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Ensure Windows Desktop workload
+        run: dotnet workload install windowsdesktop
+
       - name: Restore
         run: dotnet restore
 
       - name: Build (Release)
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Publish Virgil.App
         run: dotnet publish src/Virgil.App/Virgil.App.csproj -c Release -o out/Virgil.App
