@@ -1,31 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
-
-    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>Virgil.App</AssemblyName>
-    <RootNamespace>Virgil.App</RootNamespace>
-
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>true</SelfContained>
-    <PublishSingleFile>false</PublishSingleFile>
-    <PublishTrimmed>false</PublishTrimmed>
-    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Copier les assets (avatars) vers le dossier de sortie -->
   <ItemGroup>
-    <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
-    <ProjectReference Include="..\Virgil.Agent\Virgil.Agent.csproj" />
-  </ItemGroup>
-
-  <!-- Exemple si tu as un appsettings.json -->
-  <ItemGroup>
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <None Include="assets/**/*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
