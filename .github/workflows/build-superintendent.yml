@@ -1,59 +1,33 @@
-      - name: Smoke test (really non-blocking)
-      on:
-  workflow_call:
+name: Build Superintendent (Windows WPF)
 
-        if: ${{ always() }}             # on l’exécute toujours, mais sans bloquer
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          Write-Host "🚀 Test lancement (non-bloquant) de Virgil.App.exe..."
-          $exe = Join-Path $PWD "publish/win-x64/Virgil.App.exe"
-          if (!(Test-Path $exe)) {
-            Write-Warning "Exécutable introuvable: $exe"
-            return
-          }
+on:
+  push:
+  pull_request:
 
-          # On tente un lancement très court en headless
-          try {
-            $proc = Start-Process -FilePath $exe -ArgumentList "--ci-smoke" -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 6
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-            if ($null -ne $proc -and -not $proc.HasExited) {
-              Write-Host "✅ Process actif, arrêt propre."
-              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-            }
-            else {
-              Write-Warning "⚠️ L’application s’est terminée rapidement (runner headless probable)."
-            }
-          }
-          catch {
-            Write-Warning "Smoke test: $($_.Exception.Message)"
-          }
-          finally {
-            Write-Host "ℹ️ Fin du smoke test (non-bloquant)."
-          }
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-      - name: Collect app logs (optional)
-        if: ${{ always() }}
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          $logRoot = Join-Path $env:APPDATA "Virgil\logs"
-          if (Test-Path $logRoot) {
-            Write-Host "📦 Archivage des logs depuis $logRoot"
-            $zip = Join-Path $PWD "VirgilAppLogs.zip"
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            if (Test-Path $zip) { Remove-Item $zip -Force -ErrorAction SilentlyContinue }
-            [System.IO.Compression.ZipFile]::CreateFromDirectory($logRoot, $zip)
-          } else {
-            Write-Warning "Aucun log trouvé à $logRoot (ok en CI headless)."
-          }
+      - name: Ensure Windows Desktop workload
+        run: dotnet workload install windowsdesktop
 
-      - name: Upload smoke-test logs
-        if: ${{ always() }}
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build Release
+        run: dotnet build --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Publish Virgil.App
+        run: dotnet publish src/Virgil.App/Virgil.App.csproj -c Release -o out/Virgil.App
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VirgilAppLogs
-          path: |
-            VirgilAppLogs.zip
-          if-no-files-found: ignore
+          name: Virgil.App
+          path: out/Virgil.App
