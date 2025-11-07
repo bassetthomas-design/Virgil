@@ -28,15 +28,17 @@
                 <ColumnDefinition Width="260"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Panneau gauche (placeholder jauges) -->
+            <!-- Panneau gauche (avatar + jauges) -->
             <Border Background="#111" CornerRadius="6" Padding="12" Margin="0,0,8,0">
                 <StackPanel>
-                    <TextBlock Text="Avatar/Humeur" FontWeight="SemiBold"/>
+                    <Image Source="{Binding AvatarPath}" Width="192" Height="192" Stretch="Uniform" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding CurrentMood}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                     <Separator/>
                     <TextBlock Text="CPU:{Binding CpuUsage}%"/>
                     <TextBlock Text="RAM:{Binding RamUsage}%"/>
                     <TextBlock Text="GPU:{Binding GpuUsage}%"/>
                     <TextBlock Text="Temp:{Binding CpuTemp}°C"/>
+                    <Button Content="Changer d’humeur" Command="{Binding MoodCycleCommand}" Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
 
