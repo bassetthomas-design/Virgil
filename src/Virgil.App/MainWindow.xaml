@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:Virgil.App.Controls"
         mc:Ignorable="d"
         Title="Virgil" Height="600" Width="960" MinHeight="480" MinWidth="720">
     <Grid>
@@ -31,8 +32,8 @@
             <!-- Panneau gauche (avatar + jauges) -->
             <Border Background="#111" CornerRadius="6" Padding="12" Margin="0,0,8,0">
                 <StackPanel>
-                    <Image Source="{Binding AvatarPath}" Width="192" Height="192" Stretch="Uniform" HorizontalAlignment="Center"/>
-                    <TextBlock Text="{Binding CurrentMood}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                    <controls:AvatarView Source="{Binding AvatarPath}" Width="192" Height="192" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="{Binding CurrentMood}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
                     <Separator/>
                     <TextBlock Text="CPU:{Binding CpuUsage}%"/>
                     <TextBlock Text="RAM:{Binding RamUsage}%"/>
