@@ -1,73 +1,33 @@
 name: .NET Build & Artifact
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ "**" ]
   pull_request:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: dotnet-build-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: ⬇️ Checkout
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: 🧰 Setup .NET
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
+          dotnet-version: '8.0.x'
 
-      # --- Trouver la solution automatiquement (évite le chemin dur) ---
-      - name: 🔍 Recherche de la solution (.sln)
-        shell: pwsh
-        run: |
-          $sln = Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Filter *.sln `
-                 | Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } `
-                 | Select-Object -First 1
-          if (-not $sln) { Write-Error "❌ Aucune solution (.sln) trouvée."; exit 1 }
-          "SLN=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "✅ Solution trouvée : $($sln.FullName)"
+      - name: Restore
+        run: dotnet restore
 
-      # --- Trouver le projet principal Virgil.App ---
-      - name: 🔍 Recherche du projet Virgil.App.csproj
-        shell: pwsh
-        run: |
-          $proj = Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Filter Virgil.App.csproj `
-                   | Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } `
-                   | Select-Object -First 1
-          if (-not $proj) { Write-Error "❌ Fichier Virgil.App.csproj introuvable."; exit 1 }
-          "APP_CSPROJ=$($proj.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "✅ Projet trouvé : $($proj.FullName)"
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
 
-      - name: ⚙️ Restore
-        run: dotnet restore "$env:SLN"
+      - name: Publish Virgil.App
+        run: dotnet publish src/Virgil.App/Virgil.App.csproj -c Release -o out/Virgil.App
 
-      - name: 🧱 Build (Release)
-        run: dotnet build "$env:SLN" -c Release --no-restore
-
-      - name: 🚀 Publish Virgil.App (win-x64)
-        run: dotnet publish "$env:APP_CSPROJ" -c Release -r win-x64 --self-contained false -o "$env:GITHUB_WORKSPACE\out\Virgil.App"
-
-      - name: 🧹 Nettoyage des doublons bin/obj (facultatif)
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Directory -Filter bin | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -Directory -Filter obj | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-
-      - name: 📦 Upload de l’artefact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Virgil.App-publish
-          path: out/Virgil.App/**
+          name: Virgil.App
+          path: out/Virgil.App
