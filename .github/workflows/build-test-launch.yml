@@ -1,4 +1,4 @@
-name: Build & Launch Virgil
+name: Build & Launch Virgil (Windows)
 
 on:
   pull_request:
@@ -12,9 +12,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Ensure Windows Desktop workload
+        run: dotnet workload install windowsdesktop
       - name: Restore
         run: dotnet restore
       - name: Build Release
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
       - name: Smoke test
         run: echo Build OK, UI launch skipped in CI
