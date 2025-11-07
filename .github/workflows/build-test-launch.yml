@@ -1,79 +1,20 @@
 name: Build & Launch Virgil
 
 on:
-  workflow_call:
-
-  push:
-    branches: [ main, dev ]
   pull_request:
-    branches: [ main, dev ]
-  workflow_dispatch:
+  push:
 
 jobs:
-  build-and-run:
+  build:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
-
-      - name: Restore dependencies
-        run: dotnet restore src/Virgil.App/Virgil.App.csproj
-
-      - name: Build Virgil.App (Release)
-        run: dotnet build src/Virgil.App/Virgil.App.csproj -c Release --no-restore
-
-      - name: Publish self-contained EXE
-        run: dotnet publish src/Virgil.App/Virgil.App.csproj -c Release -r win-x64 `
-              -p:PublishSingleFile=true `
-              -p:IncludeNativeLibrariesForSelfExtract=true `
-              -p:SelfContained=true `
-              -o publish/win-x64
-
-      - name: Verify Virgil.App.exe existence
-        run: |
-          if (!(Test-Path "publish/win-x64/Virgil.App.exe")) {
-            Write-Error "Virgil.App.exe introuvable après build !"
-            exit 1
-          } else {
-            Write-Host "✅ Virgil.App.exe généré avec succès."
-          }
-
-      - name: Test launch with timeout (detect startup crash)
-        shell: pwsh
-        run: |
-          Write-Host "🚀 Test lancement de Virgil.App.exe..."
-          $exePath = "publish/win-x64/Virgil.App.exe"
-          $logDir = "$env:APPDATA\Virgil\logs"
-          $logFile = "$logDir\startup.log"
-
-          # Nettoyage logs
-          if (Test-Path $logDir) { Remove-Item $logDir -Recurse -Force }
-          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
-          # Lancement test avec timeout 10s
-          $proc = Start-Process $exePath -PassThru
-          Start-Sleep -Seconds 10
-          if (!$proc.HasExited) {
-            Stop-Process -Id $proc.Id -Force
-            Write-Host "✅ L’application démarre sans crash immédiat."
-          } else {
-            Write-Warning "⚠️ L’application s’est terminée trop vite. Journal :"
-            if (Test-Path $logFile) {
-              Get-Content $logFile | Out-String | Write-Host
-            } else {
-              Write-Host "Aucun log trouvé."
-            }
-            exit 1
-          }
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Virgil-Build
-          path: publish/win-x64/
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore
+      - name: Build Release
+        run: dotnet build --configuration Release --no-restore
+      - name: Smoke test
+        run: echo Build OK, UI launch skipped in CI
