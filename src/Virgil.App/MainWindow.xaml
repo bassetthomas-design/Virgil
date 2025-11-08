@@ -31,11 +31,6 @@
                     <TextBlock Text="{Binding CpuUsage,StringFormat=Cpu {0:F0}%}" Foreground="#E6E6E6"/>
                     <TextBlock Text="{Binding RamUsage,StringFormat=Ram {0:F0}%}" Foreground="#E6E6E6"/>
                     <TextBlock Text="{Binding CpuTemp,StringFormat=Temp {0:F0}°C}" Foreground="#E6E6E6"/>
-                    <Separator/>
-                    <TextBlock Text="{Binding DiskReadMBs,StringFormat=Disk R {0:F2} MB/s}" Foreground="#E6E6E6"/>
-                    <TextBlock Text="{Binding DiskWriteMBs,StringFormat=Disk W {0:F2} MB/s}" Foreground="#E6E6E6"/>
-                    <TextBlock Text="{Binding NetDownMbps,StringFormat=Net ↓ {0:F2} Mb/s}" Foreground="#E6E6E6"/>
-                    <TextBlock Text="{Binding NetUpMbps,StringFormat=Net ↑ {0:F2} Mb/s}" Foreground="#E6E6E6"/>
                 </StackPanel>
             </Border>
 
@@ -57,12 +52,10 @@
                 <StackPanel>
                     <TextBlock Text="Actions" FontWeight="SemiBold" Foreground="#E6E6E6"/>
                     <Separator/>
-                    <Button Content="Surveillance ON/OFF" Margin="0,6"/>
-                    <Button Content="Maintenance complète" Margin="0,6"/>
-                    <Button Content="Nettoyage intelligent" Margin="0,6"/>
-                    <Button Content="Tout mettre à jour" Margin="0,6"/>
-                    <Button Content="Defender (MAJ + Scan)" Margin="0,6"/>
-                    <Button Content="Ouvrir configuration" Margin="0,6"/>
+                    <Button Content="Maintenance complète" Margin="0,6" Command="{Binding CmdMaintenanceAll}"/>
+                    <Button Content="Tout mettre à jour (winget)" Margin="0,6" Command="{Binding CmdWingetUpgrade}"/>
+                    <Button Content="Windows Update" Margin="0,6" Command="{Binding CmdWindowsUpdate}"/>
+                    <Button Content="Defender (MAJ + Scan)" Margin="0,6" Command="{Binding CmdDefenderUpdate}"/>
                 </StackPanel>
             </Border>
         </Grid>
