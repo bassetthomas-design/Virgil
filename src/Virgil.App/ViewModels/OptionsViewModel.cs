@@ -13,6 +13,7 @@ public class OptionsViewModel : INotifyPropertyChanged
     private bool _explorerCache = true;
     private bool _mruRecent = true;
     private bool _browserCookies = false;
+    private bool _rambo = false;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -20,14 +21,10 @@ public class OptionsViewModel : INotifyPropertyChanged
     public bool ExplorerCache { get => _explorerCache; set { _explorerCache = value; OnChanged(); } }
     public bool MruRecent { get => _mruRecent; set { _mruRecent = value; OnChanged(); } }
     public bool BrowserCookies { get => _browserCookies; set { _browserCookies = value; OnChanged(); } }
+    public bool RestartExplorerAfterRebuild { get => _rambo; set { _rambo = value; OnChanged(); } }
 
-    public async Task LoadAsync()
-    {
-        var o = await _settings.LoadAsync();
-        Thumbnails = o.Thumbnails; ExplorerCache = o.ExplorerCache; MruRecent = o.MruRecent; BrowserCookies = o.BrowserCookies;
-    }
+    public async Task LoadAsync(){ var o = await _settings.LoadAsync(); Thumbnails=o.Thumbnails; ExplorerCache=o.ExplorerCache; MruRecent=o.MruRecent; BrowserCookies=o.BrowserCookies; RestartExplorerAfterRebuild=o.RestartExplorerAfterRebuild; }
+    public Task SaveAsync()=> _settings.SaveAsync(new CleanOptions{ Thumbnails=Thumbnails, ExplorerCache=ExplorerCache, MruRecent=MruRecent, BrowserCookies=BrowserCookies, RestartExplorerAfterRebuild=RestartExplorerAfterRebuild });
 
-    public Task SaveAsync() => _settings.SaveAsync(new CleanOptions{ Thumbnails = Thumbnails, ExplorerCache = ExplorerCache, MruRecent = MruRecent, BrowserCookies = BrowserCookies });
-
-    private void OnChanged([CallerMemberName] string? n=null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+    private void OnChanged([CallerMemberName] string? n=null) => PropertyChanged?.Invoke(this,new PropertyChangedEventArgs(n));
 }
