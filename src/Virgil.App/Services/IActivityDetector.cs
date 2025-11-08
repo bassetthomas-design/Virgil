@@ -2,7 +2,8 @@ using System;
 
 namespace Virgil.App.Services;
 
-// Historical interface kept for compatibility; uses the shared ActivityKind enum.
+// NOTE: This interface mirrors IActivityService to keep backward compatibility
+// and avoids redefining the ActivityKind enum (which already exists).
 public interface IActivityDetector
 {
     ActivityKind Current { get; }
