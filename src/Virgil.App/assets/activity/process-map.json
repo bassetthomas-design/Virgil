@@ -1,0 +1,9 @@
+{
+  "games": ["steam.exe"],
+  "browsers": ["chrome.exe", "msedge.exe", "firefox.exe"],
+  "ide_work": ["devenv.exe", "code.exe"],
+  "office": ["winword.exe", "excel.exe", "powerpnt.exe"],
+  "media": ["vlc.exe", "spotify.exe"],
+  "terminal": ["wt.exe", "cmd.exe", "powershell.exe"],
+  "idleSeconds": 120
+}
