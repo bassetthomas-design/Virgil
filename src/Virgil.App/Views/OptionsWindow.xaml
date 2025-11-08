@@ -1,0 +1,21 @@
+<Window x:Class="Virgil.App.Views.OptionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Options Virgil" Height="260" Width="420" Background="#141418" Foreground="#E6E6E6" WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <CheckBox Content="Miniatures (thumbcache)" IsChecked="{Binding Thumbnails}" Margin="0,6"/>
+            <CheckBox Content="Cache Explorer (iconcache)" IsChecked="{Binding ExplorerCache}" Margin="0,6"/>
+            <CheckBox Content="Récents/MRU" IsChecked="{Binding MruRecent}" Margin="0,6"/>
+            <CheckBox Content="Cookies navigateurs" IsChecked="{Binding BrowserCookies}" Margin="0,6"/>
+        </StackPanel>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Annuler" Width="100" Margin="0,0,8,0" IsCancel="True"/>
+            <Button Content="Enregistrer" Width="120" IsDefault="True" Click="OnSave"/>
+        </StackPanel>
+    </Grid>
+</Window>
