@@ -2,13 +2,13 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
-
   <ItemGroup>
-    <None Include="assets/**/*.*" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="assets\avatar\*.png" />
   </ItemGroup>
 </Project>
