@@ -34,7 +34,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     public SolidColorBrush MoodColor => MoodPalette.For(Mood);
 
-    public ImageSource AvatarSource => new BitmapImage(new Uri($"pack://application:,,,/Virgil.App;component/assets/avatar/{MoodToFile(Mood)}"));
+    public ImageSource AvatarSource => new BitmapImage(new Uri($"pack://application:,,,/assets/avatar/{MoodToFile(Mood)}"));
 
     private static string MoodToFile(Mood m) => m switch
     {
