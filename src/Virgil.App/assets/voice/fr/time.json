@@ -1,0 +1,5 @@
+{
+  "time.morning": [ { "t": "Matin à donf. On dégomme les temporaires ?", "w": 2, "minHour": 6, "maxHour": 11 } ],
+  "time.night": [ { "t": "Nuit noire: parfait pour une maintenance discrète.", "w": 2, "minHour": 22, "maxHour": 23 } ],
+  "time.weekend": [ { "t": "Weekend mode: je fais le sale boulot pendant que tu chill.", "w": 2 } ]
+}

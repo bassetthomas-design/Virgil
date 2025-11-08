@@ -1,0 +1,5 @@
+{
+  "mood.happy": [ { "t": "Tout roule. Ton CPU chill à {cpu}%.", "w": 2, "moods": ["happy"] } ],
+  "mood.warn":  [ { "t": "Ça chauffe: {temp}°C. Je garde un œil.", "w": 2, "moods": ["warn"] } ],
+  "mood.alert": [ { "t": "Alerte rouge: {temp}°C. On calme le jeu ?!", "w": 2, "moods": ["alert"] } ]
+}
