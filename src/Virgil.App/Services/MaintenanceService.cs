@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace Virgil.App.Services;
@@ -9,38 +7,20 @@ public class MaintenanceService : IMaintenanceService
     private readonly IProcessRunner _runner;
     public MaintenanceService(IProcessRunner runner) => _runner = runner;
 
-    public Task<int> RunWingetUpgradeAsync()
-        => _runner.RunAsync("winget", "upgrade --all --include-unknown --accept-package-agreements --accept-source-agreements",
-            onOutput: s => Log("winget", s), onError: s => Log("winget!", s), elevate: true);
-
+    public Task<int> RunWingetUpgradeAsync() => _runner.RunAsync("winget", "upgrade --all --include-unknown --accept-package-agreements --accept-source-agreements", elevate:true);
     public async Task<int> RunWindowsUpdateAsync()
     {
-        // Try UsoClient chain (scan->download->install)
-        var scan    = await _runner.RunAsync("UsoClient.exe", "StartScan",    s=>Log("wu", s), s=>Log("wu!", s), elevate:true);
-        var dl      = await _runner.RunAsync("UsoClient.exe", "StartDownload", s=>Log("wu", s), s=>Log("wu!", s), elevate:true);
-        var install = await _runner.RunAsync("UsoClient.exe", "StartInstall",  s=>Log("wu", s), s=>Log("wu!", s), elevate:true);
-        return scan|dl|install;
+        var a = await _runner.RunAsync("UsoClient.exe", "StartScan", elevate:true);
+        var b = await _runner.RunAsync("UsoClient.exe", "StartDownload", elevate:true);
+        var c = await _runner.RunAsync("UsoClient.exe", "StartInstall", elevate:true);
+        return a | b | c;
     }
-
     public async Task<int> RunDefenderUpdateAndQuickScanAsync()
     {
-        var mp = ResolveMpCmdRun();
-        if (mp == null) return -1;
-        var upd = await _runner.RunAsync(mp, "-SignatureUpdate", s=>Log("def", s), s=>Log("def!", s), elevate:true);
-        var scan= await _runner.RunAsync(mp, "-Scan -ScanType 1",  s=>Log("def", s), s=>Log("def!", s), elevate:true);
-        return upd|scan;
+        var a = await _runner.RunAsync("MpCmdRun.exe", "-SignatureUpdate", elevate:true);
+        var b = await _runner.RunAsync("MpCmdRun.exe", "-Scan -ScanType 1", elevate:true);
+        return a | b;
     }
-
-    private static string? ResolveMpCmdRun()
-    {
-        var paths = new[]{
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Defender", "MpCmdRun.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Defender", "Platform", "MpCmdRun.exe"),
-            "MpCmdRun.exe"
-        };
-        foreach (var p in paths) if (File.Exists(p)) return p;
-        return null;
-    }
-
-    private static void Log(string tag, string line) => System.Diagnostics.Debug.WriteLine($"[{tag}] {line}");
+    public Task<int> RunDismComponentCleanupAsync()
+        => _runner.RunAsync("Dism.exe", "/Online /Cleanup-Image /StartComponentCleanup /Quiet", elevate:true);
 }

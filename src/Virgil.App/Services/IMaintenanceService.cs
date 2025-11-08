@@ -7,4 +7,5 @@ public interface IMaintenanceService
     Task<int> RunWingetUpgradeAsync();
     Task<int> RunWindowsUpdateAsync();
     Task<int> RunDefenderUpdateAndQuickScanAsync();
+    Task<int> RunDismComponentCleanupAsync();
 }
