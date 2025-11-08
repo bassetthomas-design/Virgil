@@ -13,12 +13,13 @@ public class DriverService : IDriverService
     public Task<int> BackupDriversAsync(string outDir)
     {
         Directory.CreateDirectory(outDir);
-        return _runner.RunAsync("pnputil.exe", $"/export-driver * ""{outDir}""", elevate:true);
+        // Properly quote the output path
+        var args = $"/export-driver * ""{outDir}""";
+        return _runner.RunAsync("pnputil.exe", args, elevate:true);
     }
 
     public async Task<int> ScanAndUpdateDriversAsync()
     {
-        // Best effort: tenter Windows Update drivers via UsoClient, puis pnputil scan
         var wuScan = await _runner.RunAsync("UsoClient.exe", "StartScan", elevate:true);
         var wuInstall = await _runner.RunAsync("UsoClient.exe", "StartInstall", elevate:true);
         var scan = await _runner.RunAsync("pnputil.exe", "/scan-devices", elevate:true);
