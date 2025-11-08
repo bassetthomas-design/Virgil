@@ -16,21 +16,20 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly IMonitoringService _mon = new MonitoringService();
-    private readonly IGpuService _gpuSvc = new GpuService();
-    private readonly IActivityDetector _act = new ActivityDetector();
     private readonly IMaintenanceService _ops = new MaintenanceService(new ProcessRunner());
     private readonly ICleaningService _clean = new CleaningService();
     private readonly IStoreService _store = new StoreService(new ProcessRunner());
     private readonly IDriverService _drivers = new DriverService(new ProcessRunner());
+    private readonly INetworkInsightService _net = new NetworkInsightService();
+    private readonly IReportService _report = new HtmlReportService();
     private readonly IFileLogger _log = new FileLogger();
+    private readonly IJsonLogger _jlog = new JsonFileLogger();
 
     private string _headerStatus = "Prêt";
     private string _footerStatus = string.Empty;
     private double _cpu = 0, _ram = 0;
-    private double _gpu = 0, _gpuTemp = 0;
     private double _cpuTemp = 0;
     private Mood _mood = Mood.Sleepy;
-    private ActivityKind _activity = ActivityKind.Idle;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -42,10 +41,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     public double CpuUsage { get => _cpu; set { _cpu = value; OnPropertyChanged(); UpdateMood(); } }
     public double RamUsage { get => _ram; set { _ram = value; OnPropertyChanged(); UpdateMood(); } }
-    public double GpuUsage { get => _gpu; set { _gpu = value; OnPropertyChanged(); UpdateMood(); } }
-    public double GpuTemp  { get => _gpuTemp; set { _gpuTemp = value; OnPropertyChanged(); UpdateMood(); } }
-    public double CpuTemp  { get => _cpuTemp; set { _cpuTemp = value; OnPropertyChanged(); UpdateMood(); } }
-    public ActivityKind Activity { get => _activity; set { _activity = value; OnPropertyChanged(); UpdateMood(); } }
+    public double CpuTemp { get => _cpuTemp; set { _cpuTemp = value; OnPropertyChanged(); UpdateMood(); } }
 
     public Mood Mood { get => _mood; set { _mood = value; OnPropertyChanged(); OnPropertyChanged(nameof(MoodColor)); OnPropertyChanged(nameof(AvatarSource)); } }
 
@@ -53,13 +49,15 @@ public class MainViewModel : INotifyPropertyChanged
     public System.Windows.Media.ImageSource AvatarSource => new BitmapImage(new Uri($"pack://application:,,,/assets/avatar/{MoodToFile(Mood)}"));
 
     public ICommand CmdMaintenanceAll   => new SimpleCommand(async () => await DoMaintenanceAll());
-    public ICommand CmdCleanSmart       => new SimpleCommand(async () => await DoCleanSmart(dryRun:false));
-    public ICommand CmdCleanDryRun      => new SimpleCommand(async () => await DoCleanSmart(dryRun:true));
+    public ICommand CmdCleanSmart       => new SimpleCommand(async () => await DoCleanSmart());
     public ICommand CmdWingetUpgrade    => new SimpleCommand(async () => await DoWinget());
     public ICommand CmdStoreUpdate      => new SimpleCommand(async () => await DoStore());
     public ICommand CmdWindowsUpdate    => new SimpleCommand(async () => await DoWU());
     public ICommand CmdDefenderUpdate   => new SimpleCommand(async () => await DoDef());
     public ICommand CmdDriversUpdate    => new SimpleCommand(async () => await DoDrivers());
+    public ICommand CmdDismCleanup      => new SimpleCommand(async () => await DoDism());
+    public ICommand CmdTopTalkers       => new SimpleCommand(() => ShowTopTalkers());
+    public ICommand CmdExportReport     => new SimpleCommand(() => ExportReport());
 
     private static string MoodToFile(Mood m) => m switch
     {
@@ -78,7 +76,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     public MainViewModel()
     {
-        Messages.Add("Virgil prêt. GPU + activité + dry-run.");
+        Messages.Add("Virgil prêt. DISM + talkers + rapport.");
         _timer.Tick += (_, _) => { OnTick(); OnPropertyChanged(nameof(Now)); };
         _timer.Start();
     }
@@ -89,36 +87,48 @@ public class MainViewModel : INotifyPropertyChanged
         CpuUsage = m.Cpu;
         RamUsage = m.Ram;
         CpuTemp = m.CpuTemp;
-
-        var g = _gpuSvc.Read();
-        GpuUsage = g.usage;
-        GpuTemp = g.temp;
-
-        Activity = _act.Detect();
     }
 
     private void UpdateMood()
     {
-        if (CpuTemp > 80 || GpuTemp > 85 || CpuUsage > 90 || RamUsage > 90 || GpuUsage > 95) Mood = Mood.Alert;
-        else if (CpuUsage > 70 || RamUsage > 80 || GpuUsage > 80) Mood = Mood.Warn;
-        else if (Activity == ActivityKind.Game || Activity == ActivityKind.Work) Mood = Mood.Focused;
+        if (CpuTemp > 80 || CpuUsage > 90 || RamUsage > 90) Mood = Mood.Alert;
+        else if (CpuUsage > 70 || RamUsage > 80) Mood = Mood.Warn;
+        else if (CpuUsage > 35) Mood = Mood.Focused;
         else Mood = Mood.Happy;
     }
 
-    private async Task DoMaintenanceAll(){ await DoCleanSmart(); await DoWinget(); await DoStore(); await DoWU(); await DoDef(); await DoDrivers(); }
-
-    private async Task DoCleanSmart(bool dryRun=false)
+    private async Task DoMaintenanceAll()
     {
-        Messages.Add(dryRun ? "Dry-run du nettoyage…" : "Nettoyage intelligent en cours...");
-        var n = await _clean.CleanIntelligentAsync(dryRun);
-        Messages.Add(dryRun ? ($"Dry-run: fichiers ciblés ~{n}.") : ($"Fichiers supprimés: {n}."));
+        _jlog.Write(new { kind="start", op="maintenance" });
+        await DoCleanSmart();
+        await DoWinget();
+        await DoStore();
+        await DoWU();
+        await DoDef();
+        await DoDrivers();
+        await DoDism();
+        _jlog.Write(new { kind="end", op="maintenance" });
+        Messages.Add("Maintenance terminée.");
     }
 
-    private async Task DoStore(){ var code = await _store.UpdateStoreAppsAsync(); Messages.Add(code==0?"Store OK.":$"Store code {code}."); }
-    private async Task DoDrivers(){ var b=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Virgil","drivers-backup"); await _drivers.BackupDriversAsync(b); var code=await _drivers.ScanAndUpdateDriversAsync(); Messages.Add(code==0?"Pilotes: OK.":$"Pilotes code {code}."); }
-    private async Task DoWinget(){ var code = await _ops.RunWingetUpgradeAsync(); Messages.Add(code==0?"Mises à jour apps/jeux OK.":$"Winget code {code}."); }
-    private async Task DoWU(){ var code = await _ops.RunWindowsUpdateAsync(); Messages.Add(code==0?"Windows Update OK.":$"Windows Update code {code}."); }
-    private async Task DoDef(){ var code = await _ops.RunDefenderUpdateAndQuickScanAsync(); Messages.Add(code==0?"Defender OK.":$"Defender code {code}."); }
+    private async Task DoCleanSmart(){ var n = await _clean.CleanIntelligentAsync(); Messages.Add($"Fichiers supprimés: {n}."); _jlog.Write(new { op="clean", files=n }); }
+    private async Task DoStore(){ var code = await _store.UpdateStoreAppsAsync(); Messages.Add(code==0?"Store OK.":$"Store code {code}."); _jlog.Write(new { op="store", code=code }); }
+    private async Task DoDrivers(){ var b=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Virgil","drivers-backup"); await _drivers.BackupDriversAsync(b); var code=await _drivers.ScanAndUpdateDriversAsync(); Messages.Add(code==0?"Pilotes: OK.":$"Pilotes code {code}."); _jlog.Write(new { op="drivers", code=code }); }
+    private async Task DoWinget(){ var code = await _ops.RunWingetUpgradeAsync(); Messages.Add(code==0?"Mises à jour apps/jeux OK.":$"Winget code {code}."); _jlog.Write(new { op="winget", code=code }); }
+    private async Task DoWU(){ var code = await _ops.RunWindowsUpdateAsync(); Messages.Add(code==0?"Windows Update OK.":$"Windows Update code {code}."); _jlog.Write(new { op="wu", code=code }); }
+    private async Task DoDef(){ var code = await _ops.RunDefenderUpdateAndQuickScanAsync(); Messages.Add(code==0?"Defender OK.":$"Defender code {code}."); _jlog.Write(new { op="defender", code=code }); }
+    private async Task DoDism(){ var code = await _ops.RunDismComponentCleanupAsync(); Messages.Add(code==0?"DISM StartComponentCleanup OK.":$"DISM code {code}."); _jlog.Write(new { op="dism", code=code }); }
+
+    private void ShowTopTalkers()
+    {
+        foreach (var t in _net.GetTopTalkers()) Messages.Add($"Net: {t.ProcessName} (PID {t.Pid}) - {t.Connections} connexions");
+    }
+
+    private void ExportReport()
+    {
+        var path = _report.WriteTodayHtml();
+        Messages.Add("Rapport: " + path);
+    }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
