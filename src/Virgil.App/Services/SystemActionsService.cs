@@ -14,6 +14,7 @@ public class SystemActionsService : ISystemActionsService
 
     private readonly IProcessRunner _runner = new ProcessRunner();
 
+    // Déjà sur main
     public Task<int> WsResetAsync() => _runner.RunAsync("wsreset.exe", string.Empty, elevate:true);
 
     public Task<int> RebuildExplorerCachesAsync()
@@ -35,6 +36,16 @@ public class SystemActionsService : ISystemActionsService
         });
     }
 
+    public Task<int> EmptyRecycleBinAsync()
+    {
+        return Task.Run(() =>
+        {
+            try { return SHEmptyRecycleBin(IntPtr.Zero, null!, RecycleFlags.SHERB_NOCONFIRMATION | RecycleFlags.SHERB_NOPROGRESSUI | RecycleFlags.SHERB_NOSOUND); }
+            catch { return 1; }
+        });
+    }
+
+    // Ajouts Rambo
     public Task<int> RestartExplorerAsync()
     {
         return Task.Run(() =>
@@ -45,7 +56,6 @@ public class SystemActionsService : ISystemActionsService
                 {
                     try { p.Kill(true); p.WaitForExit(5000); } catch {}
                 }
-                // relance du shell
                 var psi = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
                 Process.Start(psi);
                 return 0;
@@ -59,14 +69,5 @@ public class SystemActionsService : ISystemActionsService
         var a = await RebuildExplorerCachesAsync();
         var b = await RestartExplorerAsync();
         return (a==0 && b==0) ? 0 : 1;
-    }
-
-    public Task<int> EmptyRecycleBinAsync()
-    {
-        return Task.Run(() =>
-        {
-            try { return SHEmptyRecycleBin(IntPtr.Zero, null!, RecycleFlags.SHERB_NOCONFIRMATION | RecycleFlags.SHERB_NOPROGRESSUI | RecycleFlags.SHERB_NOSOUND); }
-            catch { return 1; }
-        });
     }
 }
