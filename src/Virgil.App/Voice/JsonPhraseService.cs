@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Virgil.App.Voice;
 
@@ -14,7 +13,6 @@ public class JsonPhraseService : IPhraseService
     private readonly ConcurrentDictionary<string, DateTime> _lastUse = new();
     private readonly Queue<string> _recent = new();
     private const int RecentMax = 50;
-    private static readonly Regex Placeholder = new("\{(a|c|e|[a-zA-Z]+)\}");
 
     public JsonPhraseService(string lang = "fr")
     {
@@ -24,7 +22,7 @@ public class JsonPhraseService : IPhraseService
         foreach (var file in Directory.EnumerateFiles(dir, "*.json", SearchOption.AllDirectories))
         {
             var json = File.ReadAllText(file);
-            var dict = JsonSerializer.Deserialize<Dictionary<string, List<Entry>>>(json);
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<Entry>>>(json);
             if (dict == null) continue;
             foreach (var (k, list) in dict)
             {
@@ -41,7 +39,7 @@ public class JsonPhraseService : IPhraseService
         var filtered = list.Where(e => Allowed(e, ctx, now)).ToList();
         if (filtered.Count == 0) filtered = list;
         var pick = WeightedPick(filtered);
-        Touch(key);
+        Touch(pick.t);
         return Interpolate(pick.t, ctx);
     }
 
