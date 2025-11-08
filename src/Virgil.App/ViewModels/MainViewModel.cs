@@ -5,12 +5,15 @@ using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Virgil.App.Services;
 
 namespace Virgil.App.ViewModels;
 
 public class MainViewModel : INotifyPropertyChanged
 {
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly IMonitoringService _mon = new MonitoringService();
+
     private string _headerStatus = "Prêt";
     private string _footerStatus = string.Empty;
     private double _cpu = 0, _ram = 0, _gpu = 0;
@@ -53,10 +56,18 @@ public class MainViewModel : INotifyPropertyChanged
 
     public MainViewModel()
     {
-        Messages.Add("Virgil prêt. Avatar dynamique activé.");
+        Messages.Add("Virgil prêt. Monitoring activé.");
         FooterStatus = "UI redesign";
-        _timer.Tick += (_, _) => OnPropertyChanged(nameof(Now));
+        _timer.Tick += (_, _) => { OnTick(); OnPropertyChanged(nameof(Now)); };
         _timer.Start();
+    }
+
+    private void OnTick()
+    {
+        var m = _mon.Read();
+        CpuUsage = m.Cpu;
+        RamUsage = m.Ram;
+        CpuTemp = m.CpuTemp;
     }
 
     private void UpdateMood()
