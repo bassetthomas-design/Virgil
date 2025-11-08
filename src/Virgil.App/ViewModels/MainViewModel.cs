@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace Virgil.App.ViewModels;
@@ -29,10 +30,23 @@ public class MainViewModel : INotifyPropertyChanged
     public double GpuUsage { get => _gpu; set { _gpu = value; OnPropertyChanged(); UpdateMood(); } }
     public double CpuTemp { get => _cpuTemp; set { _cpuTemp = value; OnPropertyChanged(); UpdateMood(); } }
 
-    public Mood Mood { get => _mood; set { _mood = value; OnPropertyChanged(); OnPropertyChanged(nameof(MoodColor)); OnPropertyChanged(nameof(EyeColor)); } }
+    public Mood Mood { get => _mood; set { _mood = value; OnPropertyChanged(); OnPropertyChanged(nameof(MoodColor)); OnPropertyChanged(nameof(AvatarSource)); } }
 
     public SolidColorBrush MoodColor => MoodPalette.For(Mood);
-    public SolidColorBrush EyeColor => new(Colors.LightSteelBlue);
+
+    public ImageSource AvatarSource => new BitmapImage(new Uri($"pack://application:,,,/Virgil.App;component/assets/avatar/{MoodToFile(Mood)}"));
+
+    private static string MoodToFile(Mood m) => m switch
+    {
+        Mood.Happy => "happy.png",
+        Mood.Focused => "focused.png",
+        Mood.Warn => "warn.png",
+        Mood.Alert => "alert.png",
+        Mood.Proud => "proud.png",
+        Mood.Tired => "tired.png",
+        Mood.Sleepy => "sleepy.png",
+        _ => "neutral.png"
+    };
 
     public MainViewModel()
     {
