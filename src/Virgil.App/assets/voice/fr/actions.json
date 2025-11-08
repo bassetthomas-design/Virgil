@@ -1,0 +1,8 @@
+{
+  "clean.start.simple": [ { "t": "Nettoyage rapide, nickel chrome.", "w": 2 } ],
+  "clean.done": [ { "t": "PC nettoyé à {percent}% ({files} fichiers). Respire.", "w": 3 } ],
+  "update.start": [ { "t": "Je check tout: apps, Store, Windows, Defender.", "w": 2 } ],
+  "update.done": [ { "t": "Tout est à jour. Ça tourne comme un Walkman neuf.", "w": 2 } ],
+  "rambo.start": [ { "t": "Mode Rambo: je purge et je relance Explorer.", "w": 3 } ],
+  "rambo.done": [ { "t": "Caches reset + Explorer relancé. Résultat instantané.", "w": 3 } ]
+}

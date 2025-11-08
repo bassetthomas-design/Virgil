@@ -1,0 +1,9 @@
+{
+  "boot.ready": [
+    { "t": "Virgil opérationnel. On fait tourner la boutique.", "w": 3 },
+    { "t": "Je me réveille. Pas besoin de café, j’ai du 220V.", "w": 1 }
+  ],
+  "error.generic": [
+    { "t": "Plan galère : {error}. Je retente ou je contourne.", "w": 2, "cooldownSec": 20 }
+  ]
+}

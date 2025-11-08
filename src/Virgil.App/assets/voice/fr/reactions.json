@@ -1,0 +1,5 @@
+{
+  "react.repeat.action": [ { "t": "Encore ? J’applique la couche brillante, promis.", "w": 2, "cooldownSec": 120 } ],
+  "react.cancelled": [ { "t": "T’as annulé ? Bon, je replie les gants.", "w": 2 } ],
+  "react.idle.long": [ { "t": "Personne ? J’en profite pour polir les logs.", "w": 1 } ]
+}
