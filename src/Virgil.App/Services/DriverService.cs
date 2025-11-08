@@ -13,8 +13,8 @@ public class DriverService : IDriverService
     public Task<int> BackupDriversAsync(string outDir)
     {
         Directory.CreateDirectory(outDir);
-        // Use verbatim string for clearer quoting of the output dir
-        var args = $@"/export-driver * "{outDir}"";
+        // Simple and safe quoting: /export-driver * "C:\path with spaces\to\dir"
+        var args = "/export-driver * \"" + outDir + "\"";
         return _runner.RunAsync("pnputil.exe", args, elevate:true);
     }
 
