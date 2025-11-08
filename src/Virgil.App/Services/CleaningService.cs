@@ -10,16 +10,21 @@ public class CleaningService : ICleaningService
     public async Task<int> CleanIntelligentAsync(bool dryRun = false)
     {
         int deleted = 0;
+
+        // System/temp locations
         deleted += await PurgeDir(Path.GetTempPath(), dryRun);
-        deleted += await PurgeDir(Environment.GetFolderPath(Environment.SpecialFolder.Windows) + "\Temp", dryRun);
-        deleted += await PurgeDir(Environment.GetFolderPath(Environment.SpecialFolder.Windows) + "\Prefetch", dryRun, pattern:"*.pf");
-        var sd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "SoftwareDistribution\Download");
-        deleted += await PurgeDir(sd, dryRun);
+        var winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        deleted += await PurgeDir(Path.Combine(winDir, "Temp"), dryRun);
+        deleted += await PurgeDir(Path.Combine(winDir, "Prefetch"), dryRun, pattern: "*.pf");
+        deleted += await PurgeDir(Path.Combine(winDir, "SoftwareDistribution", "Download"), dryRun);
+
         // Browsers caches (best effort)
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        deleted += await PurgeDir(Path.Combine(local, "Google\Chrome\User Data\Default\Cache"), dryRun);
-        deleted += await PurgeDir(Path.Combine(local, "Microsoft\Edge\User Data\Default\Cache"), dryRun);
-        deleted += await PurgeDir(Path.Combine(local, "Mozilla\Firefox\Profiles"), dryRun, pattern:"*cache*");
+        deleted += await PurgeDir(Path.Combine(local, "Google", "Chrome", "User Data", "Default", "Cache"), dryRun);
+        deleted += await PurgeDir(Path.Combine(local, "Microsoft", "Edge", "User Data", "Default", "Cache"), dryRun);
+        var ffProfiles = Path.Combine(local, "Mozilla", "Firefox", "Profiles");
+        deleted += await PurgeDir(ffProfiles, dryRun, pattern: "*cache*");
+
         return deleted;
     }
 
@@ -35,6 +40,7 @@ public class CleaningService : ICleaningService
                 {
                     try { if (!dryRun) File.Delete(file); count++; } catch { }
                 }
+                // Try remove empty subdirs (depth-first)
                 foreach (var dir in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
                 {
                     try { if (!dryRun) Directory.Delete(dir, false); } catch { }
