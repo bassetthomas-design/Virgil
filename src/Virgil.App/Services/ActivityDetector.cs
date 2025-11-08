@@ -1,31 +1,39 @@
 using System;
-using System.Diagnostics;
-using System.Linq;
-using System.Runtime.InteropServices;
+using System.Timers;
 
 namespace Virgil.App.Services;
 
 public class ActivityDetector : IActivityDetector
 {
-    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll", SetLastError=true)] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    private readonly IActivityService _service;
+    private readonly Timer _idleTimer;
 
-    private static readonly string[] Browsers = new[]{ "chrome", "msedge", "firefox", "opera", "brave" };
-    private static readonly string[] GamesHints = new[]{ "steam", "epicgameslauncher", "battle.net", "riotclient", "ubisoftconnect" };
-
-    public ActivityKind Detect()
+    public ActivityDetector(IActivityService service)
     {
-        try
-        {
-            var hwnd = GetForegroundWindow();
-            if (hwnd == IntPtr.Zero) return ActivityKind.Idle;
-            GetWindowThreadProcessId(hwnd, out var pid);
-            var p = Process.GetProcessById((int)pid);
-            var name = (p.ProcessName ?? string.Empty).ToLowerInvariant();
-            if (Browsers.Any(b => name.Contains(b))) return ActivityKind.Web;
-            if (GamesHints.Any(g => name.Contains(g))) return ActivityKind.Game;
-            return ActivityKind.Work;
-        }
-        catch { return ActivityKind.Idle; }
+        _service = service;
+        _service.ActivityChanged += (s, kind) => ActivityChanged?.Invoke(this, kind);
+        _idleTimer = new Timer(15000); // 15s idle tick to promote state if needed
+        _idleTimer.Elapsed += (_, _) => ActivityChanged?.Invoke(this, _service.Current);
+    }
+
+    public ActivityKind Current => _service.Current;
+
+    public event EventHandler<ActivityKind>? ActivityChanged;
+
+    public void Start()
+    {
+        _idleTimer.Start();
+        _service.Start();
+    }
+
+    public void Stop()
+    {
+        _idleTimer.Stop();
+        _service.Stop();
+    }
+
+    public void NotifyInput()
+    {
+        _service.NotifyInput();
     }
 }
