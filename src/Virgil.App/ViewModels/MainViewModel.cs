@@ -20,8 +20,6 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly ICleaningService _clean = new CleaningService();
     private readonly IStoreService _store = new StoreService(new ProcessRunner());
     private readonly IDriverService _drivers = new DriverService(new ProcessRunner());
-    private readonly INetworkInsightService _net = new NetworkInsightService();
-    private readonly IReportService _report = new HtmlReportService();
     private readonly IFileLogger _log = new FileLogger();
     private readonly IJsonLogger _jlog = new JsonFileLogger();
 
@@ -50,14 +48,12 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ICommand CmdMaintenanceAll   => new SimpleCommand(async () => await DoMaintenanceAll());
     public ICommand CmdCleanSmart       => new SimpleCommand(async () => await DoCleanSmart());
+    public ICommand CmdCleanAdvanced    => new SimpleCommand(async () => await DoCleanAdvanced());
     public ICommand CmdWingetUpgrade    => new SimpleCommand(async () => await DoWinget());
     public ICommand CmdStoreUpdate      => new SimpleCommand(async () => await DoStore());
     public ICommand CmdWindowsUpdate    => new SimpleCommand(async () => await DoWU());
     public ICommand CmdDefenderUpdate   => new SimpleCommand(async () => await DoDef());
     public ICommand CmdDriversUpdate    => new SimpleCommand(async () => await DoDrivers());
-    public ICommand CmdDismCleanup      => new SimpleCommand(async () => await DoDism());
-    public ICommand CmdTopTalkers       => new SimpleCommand(() => ShowTopTalkers());
-    public ICommand CmdExportReport     => new SimpleCommand(() => ExportReport());
 
     private static string MoodToFile(Mood m) => m switch
     {
@@ -76,7 +72,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     public MainViewModel()
     {
-        Messages.Add("Virgil prêt. DISM + talkers + rapport.");
+        Messages.Add("Virgil prêt. Nettoyage avancé dispo.");
         _timer.Tick += (_, _) => { OnTick(); OnPropertyChanged(nameof(Now)); };
         _timer.Start();
     }
@@ -97,38 +93,14 @@ public class MainViewModel : INotifyPropertyChanged
         else Mood = Mood.Happy;
     }
 
-    private async Task DoMaintenanceAll()
-    {
-        _jlog.Write(new { kind="start", op="maintenance" });
-        await DoCleanSmart();
-        await DoWinget();
-        await DoStore();
-        await DoWU();
-        await DoDef();
-        await DoDrivers();
-        await DoDism();
-        _jlog.Write(new { kind="end", op="maintenance" });
-        Messages.Add("Maintenance terminée.");
-    }
-
+    private async Task DoMaintenanceAll(){ await DoCleanSmart(); await DoWinget(); await DoStore(); await DoWU(); await DoDef(); await DoDrivers(); }
     private async Task DoCleanSmart(){ var n = await _clean.CleanIntelligentAsync(); Messages.Add($"Fichiers supprimés: {n}."); _jlog.Write(new { op="clean", files=n }); }
-    private async Task DoStore(){ var code = await _store.UpdateStoreAppsAsync(); Messages.Add(code==0?"Store OK.":$"Store code {code}."); _jlog.Write(new { op="store", code=code }); }
-    private async Task DoDrivers(){ var b=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Virgil","drivers-backup"); await _drivers.BackupDriversAsync(b); var code=await _drivers.ScanAndUpdateDriversAsync(); Messages.Add(code==0?"Pilotes: OK.":$"Pilotes code {code}."); _jlog.Write(new { op="drivers", code=code }); }
-    private async Task DoWinget(){ var code = await _ops.RunWingetUpgradeAsync(); Messages.Add(code==0?"Mises à jour apps/jeux OK.":$"Winget code {code}."); _jlog.Write(new { op="winget", code=code }); }
-    private async Task DoWU(){ var code = await _ops.RunWindowsUpdateAsync(); Messages.Add(code==0?"Windows Update OK.":$"Windows Update code {code}."); _jlog.Write(new { op="wu", code=code }); }
-    private async Task DoDef(){ var code = await _ops.RunDefenderUpdateAndQuickScanAsync(); Messages.Add(code==0?"Defender OK.":$"Defender code {code}."); _jlog.Write(new { op="defender", code=code }); }
-    private async Task DoDism(){ var code = await _ops.RunDismComponentCleanupAsync(); Messages.Add(code==0?"DISM StartComponentCleanup OK.":$"DISM code {code}."); _jlog.Write(new { op="dism", code=code }); }
-
-    private void ShowTopTalkers()
-    {
-        foreach (var t in _net.GetTopTalkers()) Messages.Add($"Net: {t.ProcessName} (PID {t.Pid}) - {t.Connections} connexions");
-    }
-
-    private void ExportReport()
-    {
-        var path = _report.WriteTodayHtml();
-        Messages.Add("Rapport: " + path);
-    }
+    private async Task DoCleanAdvanced(){ var s = await _clean.CleanAdvancedAsync(new CleanOptions()); Messages.Add($"Avancé: fichiers {s.Files}, dossiers {s.Dirs}, ~{s.Bytes/1024/1024} Mo."); _jlog.Write(new { op="clean-advanced", files=s.Files, dirs=s.Dirs, bytes=s.Bytes }); }
+    private async Task DoStore(){ var code = await _store.UpdateStoreAppsAsync(); Messages.Add(code==0?"Store OK.":$"Store code {code}."); }
+    private async Task DoDrivers(){ var b=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Virgil","drivers-backup"); await _drivers.BackupDriversAsync(b); var code=await _drivers.ScanAndUpdateDriversAsync(); Messages.Add(code==0?"Pilotes: OK.":$"Pilotes code {code}."); }
+    private async Task DoWinget(){ var code = await _ops.RunWingetUpgradeAsync(); Messages.Add(code==0?"Mises à jour apps/jeux OK.":$"Winget code {code}."); }
+    private async Task DoWU(){ var code = await _ops.RunWindowsUpdateAsync(); Messages.Add(code==0?"Windows Update OK.":$"Windows Update code {code}."); }
+    private async Task DoDef(){ var code = await _ops.RunDefenderUpdateAndQuickScanAsync(); Messages.Add(code==0?"Defender OK.":$"Defender code {code}."); }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
