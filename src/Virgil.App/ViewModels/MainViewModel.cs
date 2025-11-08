@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace Virgil.App.ViewModels;
@@ -13,6 +14,7 @@ public class MainViewModel : INotifyPropertyChanged
     private string _footerStatus = string.Empty;
     private double _cpu = 0, _ram = 0, _gpu = 0;
     private double _cpuTemp = 0;
+    private Mood _mood = Mood.Sleepy;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -20,20 +22,32 @@ public class MainViewModel : INotifyPropertyChanged
 
     public string HeaderStatus { get => _headerStatus; set { _headerStatus = value; OnPropertyChanged(); } }
     public string FooterStatus { get => _footerStatus; set { _footerStatus = value; OnPropertyChanged(); } }
-
     public string Now => DateTime.Now.ToString("HH:mm:ss");
 
-    public double CpuUsage { get => _cpu; set { _cpu = value; OnPropertyChanged(); } }
-    public double RamUsage { get => _ram; set { _ram = value; OnPropertyChanged(); } }
-    public double GpuUsage { get => _gpu; set { _gpu = value; OnPropertyChanged(); } }
-    public double CpuTemp { get => _cpuTemp; set { _cpuTemp = value; OnPropertyChanged(); } }
+    public double CpuUsage { get => _cpu; set { _cpu = value; OnPropertyChanged(); UpdateMood(); } }
+    public double RamUsage { get => _ram; set { _ram = value; OnPropertyChanged(); UpdateMood(); } }
+    public double GpuUsage { get => _gpu; set { _gpu = value; OnPropertyChanged(); UpdateMood(); } }
+    public double CpuTemp { get => _cpuTemp; set { _cpuTemp = value; OnPropertyChanged(); UpdateMood(); } }
+
+    public Mood Mood { get => _mood; set { _mood = value; OnPropertyChanged(); OnPropertyChanged(nameof(MoodColor)); OnPropertyChanged(nameof(EyeColor)); } }
+
+    public SolidColorBrush MoodColor => MoodPalette.For(Mood);
+    public SolidColorBrush EyeColor => new(Colors.LightSteelBlue);
 
     public MainViewModel()
     {
-        Messages.Add("Virgil prêt. Interface redesign chargée.");
+        Messages.Add("Virgil prêt. Avatar dynamique activé.");
         FooterStatus = "UI redesign";
         _timer.Tick += (_, _) => OnPropertyChanged(nameof(Now));
         _timer.Start();
+    }
+
+    private void UpdateMood()
+    {
+        if (CpuTemp > 80 || CpuUsage > 90 || RamUsage > 90) Mood = Mood.Alert;
+        else if (CpuUsage > 70 || RamUsage > 80) Mood = Mood.Warn;
+        else if (CpuUsage > 35) Mood = Mood.Focused;
+        else Mood = Mood.Happy;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null)
