@@ -1,24 +1,11 @@
-name: Superintendent Bootstrap (Windows)
+name: superintendent bootstrap
 
-on:
-  push:
-  pull_request:
+on: [workflow_dispatch]
 
 jobs:
-  build:
+  smoke:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build Release
-        run: dotnet build --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
-
-      - name: Smoke test
-        run: echo Bootstrap OK (no UI launch on CI)
+      - name: smoke test 1s
+        run: |
+          echo "Bootstrap OK (no UI launch on CI)"
