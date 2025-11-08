@@ -13,8 +13,8 @@ public class DriverService : IDriverService
     public Task<int> BackupDriversAsync(string outDir)
     {
         Directory.CreateDirectory(outDir);
-        // Properly quote the output path
-        var args = $"/export-driver * ""{outDir}""";
+        // Use verbatim string for clearer quoting of the output dir
+        var args = $@"/export-driver * "{outDir}"";
         return _runner.RunAsync("pnputil.exe", args, elevate:true);
     }
 
