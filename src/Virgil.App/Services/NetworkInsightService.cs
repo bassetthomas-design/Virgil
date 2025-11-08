@@ -13,7 +13,6 @@ public class NetworkInsightService : INetworkInsightService
         var list = new List<Talker>();
         try
         {
-            // Use netstat -ano to get PID per TCP connection (Established)
             var psi = new ProcessStartInfo("cmd.exe", "/c netstat -ano")
             {
                 RedirectStandardOutput = true,
@@ -26,12 +25,12 @@ public class NetworkInsightService : INetworkInsightService
             p.WaitForExit();
 
             var counts = new Dictionary<int, int>();
-            foreach (var line in output.Split(new[] { '', '
-' }, StringSplitOptions.RemoveEmptyEntries))
+            var lines = output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var raw in lines)
             {
-                // Typical line: "  TCP    192.168.1.5:58049   13.107.42.14:443   ESTABLISHED   13320"
-                if (!line.TrimStart().StartsWith("TCP", StringComparison.OrdinalIgnoreCase)) continue;
-                var parts = Regex.Split(line.Trim(), "\s+");
+                var line = raw.Trim();
+                if (!line.StartsWith("TCP", StringComparison.OrdinalIgnoreCase)) continue;
+                var parts = Regex.Split(line, @"\s+");
                 if (parts.Length < 5) continue;
                 var state = parts[3];
                 if (!state.Equals("ESTABLISHED", StringComparison.OrdinalIgnoreCase)) continue;
@@ -48,7 +47,10 @@ public class NetworkInsightService : INetworkInsightService
                 list.Add(new Talker(name, kv.Key, kv.Value));
             }
         }
-        catch { /* ignore */ }
+        catch
+        {
+            // ignore exceptions, we only log top talkers
+        }
         return list;
     }
 }
