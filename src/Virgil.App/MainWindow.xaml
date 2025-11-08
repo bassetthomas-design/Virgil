@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Virgil.App.Controls"
-        Title="Virgil" Height="760" Width="1140" MinHeight="560" MinWidth="900" Background="#0E0E10">
+        Title="Virgil" Height="780" Width="1140" MinHeight="560" MinWidth="900" Background="#0E0E10">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="48"/>
@@ -59,6 +59,7 @@
                     <TextBlock Text="Système" FontWeight="SemiBold" Foreground="#E6E6E6"/>
                     <Button Content="Réinitialiser Microsoft Store (wsreset)" Margin="0,6" Command="{Binding CmdWsReset}"/>
                     <Button Content="Reconstruire miniatures/icônes" Margin="0,6" Command="{Binding CmdRebuildCaches}"/>
+                    <Button Content="Rebuild + Redémarrer Explorer (mode Rambo)" Margin="0,6" Command="{Binding CmdRamboRebuild}"/>
                     <Button Content="Vider la Corbeille" Margin="0,6" Command="{Binding CmdEmptyRecycleBin}"/>
                     <Separator/>
                     <TextBlock Text="Configuration" FontWeight="SemiBold" Foreground="#E6E6E6"/>

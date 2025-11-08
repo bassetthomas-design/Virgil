@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -7,7 +8,7 @@ namespace Virgil.App.Services;
 
 public class SystemActionsService : ISystemActionsService
 {
-    [Flags] private enum RecycleFlags : int { SHERB_NOCONFIRMATION = 0x00000001, SHERB_NOPROGRESSUI = 0x00000002, SHERB_NOSOUND = 0x00000004 }
+    [Flags] private enum RecycleFlags : int { SHERB_NOCONFIRMATION=1, SHERB_NOPROGRESSUI=2, SHERB_NOSOUND=4 }
     [DllImport("Shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHEmptyRecycleBin(IntPtr hwnd, string pszRootPath, RecycleFlags dwFlags);
 
@@ -41,5 +42,30 @@ public class SystemActionsService : ISystemActionsService
             try { return SHEmptyRecycleBin(IntPtr.Zero, null!, RecycleFlags.SHERB_NOCONFIRMATION | RecycleFlags.SHERB_NOPROGRESSUI | RecycleFlags.SHERB_NOSOUND); }
             catch { return 1; }
         });
+    }
+
+    public Task<int> RestartExplorerAsync()
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                foreach (var p in Process.GetProcessesByName("explorer"))
+                {
+                    try { p.Kill(true); p.WaitForExit(5000); } catch {}
+                }
+                var psi = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
+                Process.Start(psi);
+                return 0;
+            }
+            catch { return 1; }
+        });
+    }
+
+    public async Task<int> RebuildExplorerCachesAndRestartAsync()
+    {
+        var a = await RebuildExplorerCachesAsync();
+        var b = await RestartExplorerAsync();
+        return (a==0 && b==0) ? 0 : 1;
     }
 }
