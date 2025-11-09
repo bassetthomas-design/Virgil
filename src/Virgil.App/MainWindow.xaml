@@ -25,32 +25,25 @@
 
             <!-- Left: Avatar + Gauges -->
             <StackPanel Grid.Column="0" Margin="12">
-                <StackPanel.Resources>
-                    <!-- Simple spacing replacement for children -->
-                    <Style TargetType="FrameworkElement">
-                        <Setter Property="Margin" Value="0,0,0,8"/>
-                    </Style>
-                </StackPanel.Resources>
-
                 <!-- Avatar placeholder (kept existing control if present) -->
-                <Border Height="220" Background="#111" CornerRadius="8"/>
+                <Border Height="220" Background="#111" CornerRadius="8" Margin="0,0,0,8"/>
 
                 <!-- Gauges -->
                 <StackPanel>
                     <TextBlock Text="CPU"/>
-                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.CpuUsage}"/>
-                    <TextBlock Text="{Binding Monitoring.CpuTemp, StringFormat=Temp: {0}°C}"/>
+                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.CpuUsage}" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding Monitoring.CpuTemp, StringFormat=Temp: {0}°C}" Margin="0,2,0,8"/>
 
-                    <TextBlock Text="GPU" Margin="0,8,0,0"/>
-                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.GpuUsage}"/>
-                    <TextBlock Text="{Binding Monitoring.GpuTemp, StringFormat=Temp: {0}°C}"/>
+                    <TextBlock Text="GPU"/>
+                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.GpuUsage}" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding Monitoring.GpuTemp, StringFormat=Temp: {0}°C}" Margin="0,2,0,8"/>
 
-                    <TextBlock Text="RAM" Margin="0,8,0,0"/>
-                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.RamUsage}"/>
+                    <TextBlock Text="RAM"/>
+                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.RamUsage}" Margin="0,2,0,8"/>
 
-                    <TextBlock Text="DISQUE" Margin="0,8,0,0"/>
-                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.DiskUsage}"/>
-                    <TextBlock Text="{Binding Monitoring.DiskTemp, StringFormat=Temp: {0}°C}"/>
+                    <TextBlock Text="DISQUE"/>
+                    <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.DiskUsage}" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding Monitoring.DiskTemp, StringFormat=Temp: {0}°C}" Margin="0,2,0,0"/>
                 </StackPanel>
             </StackPanel>
 
