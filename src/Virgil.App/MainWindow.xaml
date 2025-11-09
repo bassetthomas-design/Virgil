@@ -24,7 +24,14 @@
             </Grid.ColumnDefinitions>
 
             <!-- Left: Avatar + Gauges -->
-            <StackPanel Grid.Column="0" Margin="12" Spacing="8">
+            <StackPanel Grid.Column="0" Margin="12">
+                <StackPanel.Resources>
+                    <!-- Simple spacing replacement for children -->
+                    <Style TargetType="FrameworkElement">
+                        <Setter Property="Margin" Value="0,0,0,8"/>
+                    </Style>
+                </StackPanel.Resources>
+
                 <!-- Avatar placeholder (kept existing control if present) -->
                 <Border Height="220" Background="#111" CornerRadius="8"/>
 
