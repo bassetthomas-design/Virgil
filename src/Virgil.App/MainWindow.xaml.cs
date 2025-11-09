@@ -1,21 +1,25 @@
+using System;
 using System.Windows;
-using Virgil.App.ViewModels;
-using Virgil.App.Services;
+using System.Windows.Threading;
 
 namespace Virgil.App;
 
 public partial class MainWindow : Window
 {
-    public MainViewModel VM { get; }
+    private readonly DispatcherTimer _clock = new(){ Interval = TimeSpan.FromSeconds(1)};
+    private bool _surveillanceOn;
 
     public MainWindow()
     {
         InitializeComponent();
-        var monitoring = new MonitoringViewModel(new MonitoringService());
-        VM = new MainViewModel(monitoring);
-        DataContext = VM;
-        // Pas de bouton ToggleSurveillance dans le XAML courant. On ne démarre pas automatiquement.
+        _clock.Tick += (_,_) => TopClock.Text = DateTime.Now.ToString("HH:mm:ss");
+        _clock.Start();
     }
 
-    // Si on veut un toggle plus tard, on liera une commande dans le VM.
+    private void BtnToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _surveillanceOn = !_surveillanceOn;
+        if (BtnToggle != null) BtnToggle.Content = _surveillanceOn ? "Surveillance: ON" : "Surveillance: OFF";
+        // Le hook vers MonitoringService sera ajouté dans une PR séparée.
+    }
 }
