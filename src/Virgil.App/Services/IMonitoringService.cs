@@ -1,8 +1,18 @@
-namespace Virgil.App.Services;
+using System;
 
-public record Metrics(double Cpu, double Ram, double CpuTemp, double DiskReadMBs, double DiskWriteMBs, double NetUpMbps, double NetDownMbps);
+namespace Virgil.App.Services;
 
 public interface IMonitoringService
 {
-    Metrics Read();
+    event EventHandler<Snapshot>? Updated;
+    bool IsRunning { get; }
+    void Start();
+    void Stop();
+
+    public record Snapshot(
+        double CpuUsage, double CpuTemp,
+        double GpuUsage, double GpuTemp,
+        double RamUsage,
+        double DiskUsage, double DiskTemp
+    );
 }
