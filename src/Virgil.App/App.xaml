@@ -1,8 +1,23 @@
 <Application x:Class="Virgil.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             ShutdownMode="OnMainWindowClose">
-  <!-- Ne pas utiliser StartupUri : on gère le démarrage dans OnStartup -->
+             StartupUri="MainWindow.xaml">
   <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+      </ResourceDictionary.MergedDictionaries>
+      <SolidColorBrush x:Key="App.BackgroundBrush" Color="#0E0E10"/>
+      <SolidColorBrush x:Key="App.PanelBrush"      Color="#151517"/>
+      <SolidColorBrush x:Key="App.ForegroundBrush" Color="#EDEDED"/>
+      <SolidColorBrush x:Key="App.SubtleBrush"     Color="#9AA0A6"/>
+      <SolidColorBrush x:Key="App.AccentBrush"     Color="#4F7CFF"/>
+      <Style TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource App.ForegroundBrush}"/>
+      </Style>
+      <Style TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource App.ForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource App.PanelBrush}"/>
+      </Style>
+    </ResourceDictionary>
   </Application.Resources>
 </Application>
