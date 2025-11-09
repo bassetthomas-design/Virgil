@@ -1,56 +1,89 @@
-<Window x:Class="Virgil.App.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d"
-        Title="Virgil" Height="720" Width="1200">
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Virgil.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="clr-namespace:Virgil.App.Controls"
+    mc:Ignorable="d"
+    Title="Virgil" Height="720" Width="1280"
+    Background="{DynamicResource App.BackgroundBrush}"
+    Foreground="{DynamicResource App.ForegroundBrush}">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>
+            <RowDefinition Height="44"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="28"/>
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="360"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="340"/>
+        </Grid.ColumnDefinitions>
 
         <!-- Top bar -->
-        <DockPanel Grid.Row="0" Margin="12,6">
-            <Button x:Name="ToggleSurveillance" Width="160" Height="32" Content="Surveillance: OFF" Click="ToggleSurveillance_Click"/>
-            <TextBlock Text="" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+        <DockPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="12,6">
+            <Button x:Name="BtnToggle" Width="160" Height="28" Content="Surveillance: OFF" Click="BtnToggle_Click"/>
+            <TextBlock x:Name="TopClock" DockPanel.Dock="Right" VerticalAlignment="Center"/>
         </DockPanel>
 
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="340"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Left: Avatar + Gauges -->
-            <StackPanel Grid.Column="0" Margin="12" Spacing="8">
-                <!-- Avatar placeholder (kept existing control if present) -->
-                <Border Height="220" Background="#111" CornerRadius="8"/>
-
-                <!-- Gauges -->
+        <!-- Left: Avatar + Gauges -->
+        <StackPanel Grid.Row="1" Grid.Column="0" Margin="12">
+            <controls:AvatarControl Height="220"/>
+            <GroupBox Header="Système" Margin="0,12,0,0" Background="{DynamicResource App.PanelBrush}">
                 <StackPanel>
-                    <TextBlock Text="CPU"/>
+                    <TextBlock Text="CPU" Foreground="{DynamicResource App.SubtleBrush}"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.CpuUsage}"/>
                     <TextBlock Text="{Binding Monitoring.CpuTemp, StringFormat=Temp: {0}°C}"/>
 
-                    <TextBlock Text="GPU" Margin="0,8,0,0"/>
+                    <TextBlock Text="GPU" Foreground="{DynamicResource App.SubtleBrush}" Margin="0,8,0,0"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.GpuUsage}"/>
                     <TextBlock Text="{Binding Monitoring.GpuTemp, StringFormat=Temp: {0}°C}"/>
 
-                    <TextBlock Text="RAM" Margin="0,8,0,0"/>
+                    <TextBlock Text="RAM" Foreground="{DynamicResource App.SubtleBrush}" Margin="0,8,0,0"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.RamUsage}"/>
 
-                    <TextBlock Text="DISQUE" Margin="0,8,0,0"/>
+                    <TextBlock Text="DISQUE" Foreground="{DynamicResource App.SubtleBrush}" Margin="0,8,0,0"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="12" Value="{Binding Monitoring.DiskUsage}"/>
                     <TextBlock Text="{Binding Monitoring.DiskTemp, StringFormat=Temp: {0}°C}"/>
                 </StackPanel>
-            </StackPanel>
+            </GroupBox>
+        </StackPanel>
 
-            <!-- Right: Chat stays as-is (placeholder) -->
-            <Grid Grid.Column="1">
-                <!-- existing chat layout -->
-            </Grid>
+        <!-- Center: Chat -->
+        <Grid Grid.Row="1" Grid.Column="1" Margin="8,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Border BorderBrush="#333" BorderThickness="1" CornerRadius="8" Padding="12" Background="{DynamicResource App.PanelBrush}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="ChatItems"/>
+                </ScrollViewer>
+            </Border>
+            <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,8,0,0">
+                <TextBox x:Name="UserInput" Width="Auto" MinWidth="400"/>
+                <Button Content="Envoyer" Margin="8,0,0,0"/>
+            </StackPanel>
         </Grid>
+
+        <!-- Right: Actions -->
+        <StackPanel Grid.Row="1" Grid.Column="2" Margin="12">
+            <TextBlock Text="Actions" FontWeight="Bold" Margin="0,0,0,8"/>
+            <Button Content="Surveillance ON/OFF" Margin="0,0,0,8" Click="BtnToggle_Click"/>
+            <Button Content="Maintenance complète" Margin="0,0,0,8"/>
+            <Button Content="Nettoyage intelligent" Margin="0,0,0,8"/>
+            <Button Content="Nettoyer navigateurs" Margin="0,0,0,8"/>
+            <Button Content="Tout mettre à jour" Margin="0,0,0,8"/>
+            <Button Content="Defender (MAJ + Scan)" Margin="0,0,0,8"/>
+            <Button Content="Ouvrir configuration"/>
+        </StackPanel>
+
+        <!-- Footer -->
+        <DockPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="12,0">
+            <TextBlock Text="Statut: prêt"/>
+            <TextBlock DockPanel.Dock="Right" Text=""/>
+        </DockPanel>
     </Grid>
 </Window>
