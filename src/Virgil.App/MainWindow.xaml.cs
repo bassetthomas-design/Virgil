@@ -14,8 +14,11 @@ public partial class MainWindow : Window
         var monitoring = new MonitoringViewModel(new MonitoringService());
         VM = new MainViewModel(monitoring);
         DataContext = VM;
-        // Pas de bouton ToggleSurveillance dans le XAML courant. On ne démarre pas automatiquement.
     }
 
-    // Si on veut un toggle plus tard, on liera une commande dans le VM.
+    private void ToggleSurveillance_Click(object sender, RoutedEventArgs e)
+    {
+        if (VM.Monitoring.IsRunning){ VM.Monitoring.Stop(); ToggleSurveillance.Content = "Surveillance: OFF"; }
+        else { VM.Monitoring.Start(); ToggleSurveillance.Content = "Surveillance: ON"; }
+    }
 }
