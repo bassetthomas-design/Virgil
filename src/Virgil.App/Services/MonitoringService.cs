@@ -54,10 +54,10 @@ public sealed class MonitoringService : IMonitoringService, IDisposable
 
     private static double Clamp(double v) => double.IsNaN(v) ? 0 : Math.Max(0, Math.Min(100, v));
 
-    private double SensorValue(HardwareType type, SensorType st, string? name = null)
+    private static double SensorValue(HardwareType type, SensorType st, string? name = null)
     {
         double best = double.NaN;
-        foreach (var h in EnumerateHardware(type))
+        foreach (var h in _hardware(type))
         {
             foreach (var s in h.Sensors)
             {
@@ -67,14 +67,14 @@ public sealed class MonitoringService : IMonitoringService, IDisposable
             }
         }
         return best;
-    }
 
-    private System.Collections.Generic.IEnumerable<IHardware> EnumerateHardware(HardwareType t)
-    {
-        foreach (var h in _pc.Hardware)
+        System.Collections.Generic.IEnumerable<IHardware> _hardware(HardwareType t)
         {
-            if (h.HardwareType == t) yield return h;
-            foreach (var sub in h.SubHardware) if (sub.HardwareType == t) yield return sub;
+            foreach (var h in _pc.Hardware)
+            {
+                if (h.HardwareType == t) yield return h;
+                foreach (var sub in h.SubHardware) if (sub.HardwareType == t) yield return sub;
+            }
         }
     }
 
