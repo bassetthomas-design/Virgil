@@ -15,19 +15,18 @@ namespace Virgil.App.Services
             SurveillanceOn = false; return onStop();
         }
 
-        public Task MaintenanceCompleteAsync() => RunPsAsync("maintenance_complete.ps1");
-        public Task SmartCleanupAsync() => RunPsAsync("smart_cleanup.ps1");
-        public Task CleanBrowsersAsync() => RunPsAsync("clean_browsers.ps1");
-        public Task UpdateAllAsync() => RunPsAsync("update_all.ps1");
-        public Task DefenderUpdateAndScanAsync() => RunPsAsync("defender_update_scan.ps1");
-        public Task OpenConfigAsync() => RunPsAsync("open_config.ps1");
+        public Task<ProcessResult?> MaintenanceCompleteAsync() => RunPsAsync("maintenance_complete.ps1");
+        public Task<ProcessResult?> SmartCleanupAsync() => RunPsAsync("smart_cleanup.ps1");
+        public Task<ProcessResult?> CleanBrowsersAsync() => RunPsAsync("clean_browsers.ps1");
+        public Task<ProcessResult?> UpdateAllAsync() => RunPsAsync("update_all.ps1");
+        public Task<ProcessResult?> DefenderUpdateAndScanAsync() => RunPsAsync("defender_update_scan.ps1");
+        public Task<ProcessResult?> OpenConfigAsync() => RunPsAsync("open_config.ps1");
 
-        private static Task RunPsAsync(string script)
+        private static Task<ProcessResult?> RunPsAsync(string script)
         {
             Directory.CreateDirectory(ScriptsDir);
             var path = Path.Combine(ScriptsDir, script);
-            if (!File.Exists(path)) return Task.CompletedTask;
-            // Use single quotes for PowerShell -File to avoid escaping hell
+            if (!File.Exists(path)) return Task.FromResult<ProcessResult?>(null);
             var args = $"-ExecutionPolicy Bypass -File '{path}'";
             return ProcessRunner.RunAsync("powershell.exe", args);
         }
