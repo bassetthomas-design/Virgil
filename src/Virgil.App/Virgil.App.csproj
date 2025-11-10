@@ -1,1 +1,11 @@
-PFRyb2plY3QgU2RrPVwiTWljcm9zb2Z0Lk5FVC5TZGtcIj4KICA8UHJvcGVydHlHcm91cD4KICAgIDxPdXRwdXRUeXBlPldpbkV4ZTwvT3V0cHV0VHlwZT4KICAgIDxUYXJnZXRGcmFtZXdvcms+bmV0OC4wLXdpbmRvd3M8L1RhcmdldEZyYW1ld29yaz4KICAgIDxVc2VXUEY+dHJ1ZTwvVXNlV1BGPgogICAgPEltcGxpY2l0VXNpbmdzPmVuYWJsZTwvSW1wbGljaXRVc2luZ3M+CiAgICA8TnVsbGFibGU+ZW5hYmxlPC9OdWxsYWJsZT4KICAgIDxMYW5nVmVyc2lvbj5sYXRlc3Q8L0xhbmdWZXJzaW9uPgogIDwvUHJvcGVydHlHcm91cD4KPC9Qcm9qZWN0Pg==
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Virgil.App</AssemblyName>
+    <RootNamespace>Virgil.App</RootNamespace>
+  </PropertyGroup>
+</Project>
