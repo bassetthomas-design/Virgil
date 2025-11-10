@@ -1,13 +1,18 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using System.Timers;
+using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Virgil.App.Chat;
 
 namespace Virgil.App.ViewModels
 {
-    public class ChatViewModel : INotifyPropertyChanged
+    public partial class ChatViewModel : ObservableObject
     {
         public ObservableCollection<MessageItem> Messages { get; } = new();
         private readonly ChatService _chat;
@@ -27,7 +32,7 @@ namespace Virgil.App.ViewModels
                 Type = type,
                 Pinned = pinned,
                 Created = DateTime.Now,
-                TtlMs = ttlMs ?? 60000
+                TtlMs = ttlMs ?? DefaultTtlMs
             };
 
             _dispatcher.Invoke(() => Messages.Add(item));
@@ -37,12 +42,10 @@ namespace Virgil.App.ViewModels
                 var t = new Timer(item.TtlMs) { AutoReset = false };
                 t.Elapsed += (_, __) =>
                 {
-                    // Marque expiré pour animer, puis supprime après 650ms
                     _dispatcher.Invoke(() =>
                     {
                         item.IsExpired = true;
-                        OnPropertyChanged(nameof(Messages));
-                        var remover = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
+                        var remover = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
                         remover.Tick += (_, __) =>
                         {
                             remover.Stop();
@@ -54,9 +57,5 @@ namespace Virgil.App.ViewModels
                 t.Start();
             }
         }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
