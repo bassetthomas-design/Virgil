@@ -1,25 +1,35 @@
-name: .NET Build & Artifact (Windows WPF)
+name: .NET Build and Artifact
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, fix/*, feature/* ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+          include-prerelease: true
+
       - name: Restore
-        run: dotnet restore --configfile NuGet.config
-      - name: Build
-        run: dotnet build --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
-      - name: Publish artifacts
-        if: success()
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Publish (self-contained off)
+        run: dotnet publish --configuration Release --no-restore --output out
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Virgil-artifacts
-          path: |
-            src\Virgil.App\bin\Release\**
-            tests\Virgil.Tests\bin\Release\**
+          name: virgil-build
+          path: out/**

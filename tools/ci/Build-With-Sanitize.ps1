@@ -1,21 +1,13 @@
-Set-StrictMode -Version Latest
+# Clean CI build without unnecessary workloads.
 $ErrorActionPreference = 'Stop'
 
-Write-Host 'Git clean / reset'
-git clean -xfd
-git reset --hard
+Write-Host 'Restoring...'
+dotnet restore
 
-Write-Host '.NET info'
-dotnet --info
+Write-Host 'Building Release...'
+dotnet build -c Release --no-restore
 
-Write-Host 'Install windowsdesktop workload'
-dotnet workload install windowsdesktop
+Write-Host 'Publishing...'
+dotnet publish -c Release --no-restore -o out
 
-Write-Host 'Sanitize csproj/props'
-& powershell -ExecutionPolicy Bypass -File tools/ci/Sanitize-Csproj.ps1
-
-Write-Host 'Restore'
-dotnet restore Virgil.sln --configfile NuGet.config -v minimal
-
-Write-Host 'Build'
-dotnet build --configuration Release
+Write-Host 'Done.'
