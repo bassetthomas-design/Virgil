@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Virgil.App.Core;
 using Virgil.App.Models;
 using Virgil.App.Services;
 
@@ -16,6 +17,9 @@ namespace Virgil.App.ViewModels
             _mon.Updated += OnUpdated;
             _mon.Start();
         }
+
+        public void HookMood(MoodMapper mapper)
+            => mapper.MoodChanged += m => Mood = m;
 
         private double _cpuUsage;
         public double CpuUsage { get => _cpuUsage; set { if (Set(ref _cpuUsage, value)) OnPropertyChanged(); } }
@@ -37,6 +41,9 @@ namespace Virgil.App.ViewModels
 
         private double _diskTemp;
         public double DiskTemp { get => _diskTemp; set { if (Set(ref _diskTemp, value)) OnPropertyChanged(); } }
+
+        private MoodState _mood = MoodState.Focused;
+        public MoodState Mood { get => _mood; set { if (Set(ref _mood, value)) OnPropertyChanged(); } }
 
         private void OnUpdated(object? sender, MetricsEventArgs e)
         {

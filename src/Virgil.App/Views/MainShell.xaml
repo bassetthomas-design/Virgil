@@ -5,8 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:views="clr-namespace:Virgil.App.Views"
         mc:Ignorable="d"
-        Title="Virgil — Chat Demo" Height="600" Width="420">
-    <Grid Background="#0f0f12">
-        <views:ChatView/>
-    </Grid>
+        Title="Virgil — Chat + Monitoring" Height="640" Width="460">
+    <DockPanel Background="#0f0f12">
+        <views:MetricsBar x:Name="Metrics" DockPanel.Dock="Bottom"/>
+        <views:ChatView x:Name="Chat"/>
+    </DockPanel>
 </Window>
