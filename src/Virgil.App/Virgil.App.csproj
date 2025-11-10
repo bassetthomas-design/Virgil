@@ -1,18 +1,1 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="assets\avatar\*.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="System.Management" Version="9.0.0" />
-  </ItemGroup>
-</Project>
+PFA8UHJvamVjdCBTZGk9XCJNaWNyb3NvZnQuLk5FVC5TZGt cXG4+PHByb3BlcnR5R3JvdXA+PHRhcmdldEZyYW1ld29yaz5uZXQ4LjAtd2luZG93czwvdGFyZ2V0RnJhbWV3b3JrPjxVc2VXUEY+dHJ1ZTwvVXNlV1BGPjxJbXBsaWNpdFVzaW5ncz5lbmFibGU8L0ltcGxpY2l0VXNpbmdzPjxOdWxsYWJsZT5lbmFibGU8L051bGxhYmxlPjxMYW5nVmVyc2lvbj5sYXRlc3Q8L0xhbmdWZXJzaW9uPjwvcHJvcGVydHlHcm91cD48L1Byb2plY3Q+
