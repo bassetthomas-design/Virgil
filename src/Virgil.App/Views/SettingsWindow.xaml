@@ -1,0 +1,42 @@
+<Window x:Class="Virgil.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Réglages Virgil" Height="360" Width="420">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Réglages rapides" FontSize="16" Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="1" Margin="0,8,0,8">
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Width="180" VerticalAlignment="Center" Text="Intervalle monitoring (ms)"/>
+                <TextBox Width="100" Text="{Binding MonitoringIntervalMs}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Width="180" VerticalAlignment="Center" Text="TTL messages (ms)"/>
+                <TextBox Width="100" Text="{Binding DefaultMessageTtlMs}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Width="180" VerticalAlignment="Center" Text="Seuil Warn Temp (°C)"/>
+                <TextBox Width="100" Text="{Binding WarnTemp}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Width="180" VerticalAlignment="Center" Text="Seuil Alert Temp (°C)"/>
+                <TextBox Width="100" Text="{Binding AlertTemp}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Width="180" VerticalAlignment="Center" Text="Seuil Warn CPU (%)"/>
+                <TextBox Width="100" Text="{Binding WarnCpu}"/>
+            </StackPanel>
+            <CheckBox Margin="0,8,0,0" Content="Compagnon bavard" IsChecked="{Binding CompanionTalkative}"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Enregistrer" Margin="0,0,8,0" Width="100" IsDefault="True" Click="OnSave"/>
+            <Button Content="Fermer" Width="100" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

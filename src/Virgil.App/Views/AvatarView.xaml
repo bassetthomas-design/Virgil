@@ -4,19 +4,35 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:conv="clr-namespace:Virgil.App.Converters"
-             mc:Ignorable="d" Height="160" Width="160">
+             mc:Ignorable="d" Height="180" Width="180">
     <UserControl.Resources>
-        <conv:MoodToBrushConverter x:Key="MoodBrush"/>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Virgil.App;component/Themes/AvatarTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <conv:MoodToBrushConverter x:Key="MoodBrush"/>
+        </ResourceDictionary>
     </UserControl.Resources>
+
     <Grid>
         <Grid.RenderTransform>
-            <ScaleTransform x:Name="Pulse" CenterX="80" CenterY="80" ScaleX="1" ScaleY="1"/>
+            <ScaleTransform x:Name="Pulse" CenterX="90" CenterY="90"/>
         </Grid.RenderTransform>
-        <Ellipse Width="150" Height="150" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}" Opacity="0.2"/>
-        <Ellipse Width="130" Height="130" StrokeThickness="3" Stroke="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
+
+        <!-- Core fill (subtle) -->
+        <Ellipse Width="160" Height="160" Fill="{StaticResource VirgilCoreFill}"/>
+
+        <!-- Rings -->
+        <Ellipse Width="168" Height="168" Style="{StaticResource OuterRingStyle}"/>
+        <Ellipse Width="150" Height="150" Style="{StaticResource InnerRingStyle}"/>
+
+        <!-- Eyes -->
         <Grid>
-            <Ellipse Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}" Margin="-30,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            <Ellipse Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}" Margin="30,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Ellipse Style="{StaticResource EyeStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-34,0,0,0"/>
+            <Ellipse Style="{StaticResource EyeStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="34,0,0,0"/>
         </Grid>
+
+        <!-- Mood tint overlay -->
+        <Ellipse Width="168" Height="168" StrokeThickness="0" Opacity="0.25" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
     </Grid>
 </UserControl>
