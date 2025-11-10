@@ -8,34 +8,23 @@
         Title="Virgil — Chat + Monitoring" Height="720" Width="820">
     <DockPanel Background="#0f0f12">
         <ToolBar DockPanel.Dock="Top" Background="#101216" Padding="6">
-            <StackPanel Orientation="Horizontal" >
+            <StackPanel Orientation="Horizontal">
                 <Button x:Name="BtnSettings" Content="Réglages" Width="100" Click="OnOpenSettings"/>
                 <ToggleButton x:Name="BtnHud" Content="Mini HUD" Width="100" Margin="8,0,0,0" IsChecked="True" Checked="OnHudToggled" Unchecked="OnHudToggled"/>
             </StackPanel>
         </ToolBar>
+
         <views:ActionsPanel x:Name="Actions" DockPanel.Dock="Right" Width="220"/>
-        <Grid Margin="12">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
 
-            <!-- Left column: avatar + mini HUD -->
-            <StackPanel Grid.RowSpan="2" Grid.Column="0">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="12">
                 <views:AvatarView DataContext="{Binding ElementName=Metrics, Path=DataContext}" HorizontalAlignment="Center"/>
-                <views:MiniHud x:Name="Hud" DataContext="{Binding ElementName=Metrics, Path=DataContext}" Margin="0,8,0,0"/>
+                <!-- Mini HUD just under avatar, toggleable -->
+                <views:MiniHud x:Name="Hud" DataContext="{Binding ElementName=Metrics, Path=DataContext}" Margin="0,8,0,6"/>
+                <!-- Text metrics under avatar, left aligned for readability -->
+                <views:MetricsBar x:Name="Metrics" Margin="4,0,0,12" HorizontalAlignment="Left"/>
+                <views:ChatView x:Name="Chat"/>
             </StackPanel>
-
-            <!-- MetricsBar under avatar if you still want text values quick -->
-            <views:MetricsBar x:Name="Metrics" Grid.Row="1" Grid.Column="1" Margin="8,0,0,12" HorizontalAlignment="Left"/>
-
-            <!-- Chat area on the right -->
-            <views:ChatView x:Name="Chat" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"/>
-        </Grid>
+        </ScrollViewer>
     </DockPanel>
 </Window>
