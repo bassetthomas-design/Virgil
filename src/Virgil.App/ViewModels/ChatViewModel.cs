@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Threading;
-using Timer = System.Timers.Timer;
 using Virgil.App.Chat;
 
 namespace Virgil.App.ViewModels

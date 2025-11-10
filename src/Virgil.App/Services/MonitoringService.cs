@@ -1,5 +1,4 @@
 using System;
-using Timer = System.Timers.Timer;
 
 namespace Virgil.App.Services
 {
