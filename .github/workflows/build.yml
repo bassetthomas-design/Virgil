@@ -1,34 +1,18 @@
-name: Build (Windows WPF)
+name: Build (compat)
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main, fix/** ]
-  pull_request: {}
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
-        continue-on-error: false
-
-      - name: Install windowsdesktop workload
-        run: dotnet workload install windowsdesktop
-
-      - name: Sanitize csproj/props (UTF8 no BOM) + hexdump
-        shell: powershell
-        run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force
-          tools/ci/Sanitize-Csproj.ps1
-
-      - name: Dotnet restore (solution)
-        run: dotnet restore Virgil.sln --configfile NuGet.config -v minimal
-
-      - name: Build Release
-        run: dotnet build --configuration Release
+          dotnet-version: '8.0.x'
+          include-prerelease: true
+      - run: dotnet restore
+      - run: dotnet build -c Release --no-restore
