@@ -10,11 +10,17 @@
         <ToolBar DockPanel.Dock="Top" Background="#101216" Padding="6">
             <Button x:Name="BtnSettings" Content="Réglages" Width="100" Click="OnOpenSettings"/>
         </ToolBar>
-        <views:MetricsBar x:Name="Metrics" DockPanel.Dock="Bottom"/>
+
         <views:ActionsPanel x:Name="Actions" DockPanel.Dock="Right" Width="220"/>
-        <StackPanel>
-            <views:AvatarView DataContext="{Binding ElementName=Metrics, Path=DataContext}" Margin="0,12,0,8" HorizontalAlignment="Center"/>
-            <views:ChatView x:Name="Chat"/>
-        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="12">
+                <views:AvatarView DataContext="{Binding ElementName=Metrics, Path=DataContext}"
+                                   HorizontalAlignment="Center"/>
+                <!-- Metrics under avatar, left aligned for readability -->
+                <views:MetricsBar x:Name="Metrics" Margin="4,8,0,12" HorizontalAlignment="Left"/>
+                <views:ChatView x:Name="Chat"/>
+            </StackPanel>
+        </ScrollViewer>
     </DockPanel>
 </Window>
