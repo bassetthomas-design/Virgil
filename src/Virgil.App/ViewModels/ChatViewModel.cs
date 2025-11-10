@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows.Threading;
 using Timer = System.Timers.Timer;
 using Virgil.App.Chat;
 
@@ -11,6 +12,7 @@ namespace Virgil.App.ViewModels
     {
         public ObservableCollection<MessageItem> Messages { get; } = new();
         private readonly ChatService _chat;
+        private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
 
         public ChatViewModel(ChatService chat)
         {
@@ -29,16 +31,26 @@ namespace Virgil.App.ViewModels
                 TtlMs = ttlMs ?? 60000
             };
 
-            Messages.Add(item);
+            _dispatcher.Invoke(() => Messages.Add(item));
 
             if (!item.Pinned)
             {
                 var t = new Timer(item.TtlMs) { AutoReset = false };
                 t.Elapsed += (_, __) =>
                 {
-                    // Marque comme expiré (l'UI appliquera l'effet Thanos et retirera l'élément)
-                    item.IsExpired = true;
-                    OnPropertyChanged(nameof(Messages));
+                    // Marque expiré pour animer, puis supprime après 650ms
+                    _dispatcher.Invoke(() =>
+                    {
+                        item.IsExpired = true;
+                        OnPropertyChanged(nameof(Messages));
+                        var remover = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
+                        remover.Tick += (_, __) =>
+                        {
+                            remover.Stop();
+                            Messages.Remove(item);
+                        };
+                        remover.Start();
+                    });
                 };
                 t.Start();
             }

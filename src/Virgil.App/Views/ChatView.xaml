@@ -3,14 +3,35 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:conv="clr-namespace:Virgil.App.Converters"
              mc:Ignorable="d">
+    <UserControl.Resources>
+        <conv:BoolToOpacityConverter x:Key="BoolToOpacity" TrueOpacity="0" FalseOpacity="1"/>
+        <Style x:Key="ThanosItemStyle" TargetType="ContentPresenter">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsExpired}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.6"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
     <Grid>
-        <ItemsControl ItemsSource="{Binding Messages}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Text}"/>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Messages}" ItemContainerStyle="{StaticResource ThanosItemStyle}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="4" Padding="8" Background="#111" CornerRadius="6" Opacity="{Binding IsExpired, Converter={StaticResource BoolToOpacity}}">
+                            <TextBlock Text="{Binding Text}" Foreground="White"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </Grid>
 </UserControl>
