@@ -1,3 +1,1 @@
-global using Timer = System.Timers.Timer;
-global using System.Management;
-global using System.Windows.Forms;
+// Project-wide global usings (Timer alias consolidated elsewhere)
