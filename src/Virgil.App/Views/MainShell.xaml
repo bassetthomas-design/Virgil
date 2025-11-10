@@ -5,8 +5,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:views="clr-namespace:Virgil.App.Views"
         mc:Ignorable="d"
-        Title="Virgil — Chat + Monitoring" Height="700" Width="480">
+        Title="Virgil — Chat + Monitoring" Height="720" Width="520">
     <DockPanel Background="#0f0f12">
+        <ToolBar DockPanel.Dock="Top" Background="#101216" Padding="6">
+            <Button x:Name="BtnSettings" Content="Réglages" Width="100" Click="OnOpenSettings"/>
+        </ToolBar>
         <views:MetricsBar x:Name="Metrics" DockPanel.Dock="Bottom"/>
         <StackPanel>
             <views:AvatarView DataContext="{Binding ElementName=Metrics, Path=DataContext}" Margin="0,12,0,8" HorizontalAlignment="Center"/>
