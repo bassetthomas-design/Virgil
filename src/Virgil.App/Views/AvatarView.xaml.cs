@@ -1,31 +1,32 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Media.Animation;
 
 namespace Virgil.App.Views
 {
     public partial class AvatarView : UserControl
     {
-        public AvatarView()
-        {
-            InitializeComponent();
-            Loaded += (_, __) => StartPulse();
-        }
+        public AvatarView() { InitializeComponent(); }
 
-        private void StartPulse()
+        public void Pulse(double intensity)
         {
-            var sb = new Storyboard();
-            var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
-            var up = new DoubleAnimation { To = 1.06, Duration = TimeSpan.FromMilliseconds(950), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = ease };
-            var upY = new DoubleAnimation { To = 1.06, Duration = TimeSpan.FromMilliseconds(950), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = ease };
-            Storyboard.SetTarget(up, Pulse);
-            Storyboard.SetTargetProperty(up, new PropertyPath(ScaleTransform.ScaleXProperty));
-            Storyboard.SetTarget(upY, Pulse);
-            Storyboard.SetTargetProperty(upY, new PropertyPath(ScaleTransform.ScaleYProperty));
-            sb.Children.Add(up); sb.Children.Add(upY);
-            sb.Begin();
+            try
+            {
+                var sb = new Storyboard();
+                var animUp = new DoubleAnimation
+                {
+                    From = 1.0, To = 1.0 + 0.05 + 0.15 * intensity, Duration = TimeSpan.FromMilliseconds(140), AutoReverse = true, EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                Storyboard.SetTarget(animUp, ScaleTransform);
+                Storyboard.SetTargetProperty(animUp, new PropertyPath("ScaleX"));
+                var animUpY = animUp.Clone();
+                Storyboard.SetTarget(animUpY, ScaleTransform);
+                Storyboard.SetTargetProperty(animUpY, new PropertyPath("ScaleY"));
+                sb.Children.Add(animUp); sb.Children.Add(animUpY);
+                sb.Begin();
+            }
+            catch { }
         }
     }
 }
