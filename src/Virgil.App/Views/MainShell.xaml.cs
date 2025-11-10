@@ -19,8 +19,14 @@ namespace Virgil.App.Views
         public MainShell()
         {
             InitializeComponent();
-            _chatVm = new ChatViewModel(_chat);
+            _chatVm = new ChatViewModel(_chat) { DefaultTtlMs = _settings.Settings.DefaultMessageTtlMs };
             _monVm = new MonitoringViewModel(_mon);
+
+            _mood.WarnTemp = _settings.Settings.Mood.WarnTemp;
+            _mood.AlertTemp = _settings.Settings.Mood.AlertTemp;
+            _mood.WarnCpu = _settings.Settings.Mood.WarnCpu;
+
+            _mon.SetInterval(_settings.Settings.MonitoringIntervalMs);
             _mon.Updated += _mood.OnMetrics;
             _monVm.HookMood(_mood);
 
@@ -34,7 +40,7 @@ namespace Virgil.App.Views
             {
                 _chat.Post("Virgil est en ligne.");
                 _chat.Post("Surveillance activée.", MessageType.Success, pinned: true);
-                _chat.Post("Petit message éphémère…", MessageType.Info, pinned: false, ttlMs: 3000);
+                _chat.Post("Petit message éphémère…", MessageType.Info, pinned: false, ttlMs: _settings.Settings.DefaultMessageTtlMs / 20);
             };
         }
 
@@ -43,7 +49,12 @@ namespace Virgil.App.Views
             var dlg = new SettingsWindow(_settings);
             if (dlg.ShowDialog() == true)
             {
-                // TODO: appliquer dynamiquement intervalle/thresholds/TTL si besoin
+                _mon.SetInterval(_settings.Settings.MonitoringIntervalMs);
+                _chatVm.DefaultTtlMs = _settings.Settings.DefaultMessageTtlMs;
+                _mood.WarnTemp = _settings.Settings.Mood.WarnTemp;
+                _mood.AlertTemp = _settings.Settings.Mood.AlertTemp;
+                _mood.WarnCpu = _settings.Settings.Mood.WarnCpu;
+                _chat.Post("Réglages appliqués", MessageType.Success, ttlMs: 3000);
             }
         }
     }
