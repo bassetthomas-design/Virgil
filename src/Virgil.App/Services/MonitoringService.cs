@@ -10,20 +10,21 @@ namespace Virgil.App.Services
         public event Action<double,double,double,double>? Metrics;
 
         private readonly Computer _pc;
-        private readonly Timer _timer = new(2000) { AutoReset = true };
+        private Timer _timer = new(2000) { AutoReset = true };
 
         public MonitoringService()
         {
-            _pc = new Computer
-            {
-                IsCpuEnabled = true,
-                IsGpuEnabled = true,
-                IsMemoryEnabled = true,
-                IsStorageEnabled = true,
-                IsMotherboardEnabled = true
-            };
+            _pc = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMemoryEnabled = true, IsStorageEnabled = true, IsMotherboardEnabled = true };
             _pc.Open();
             _timer.Elapsed += (_, __) => Sample();
+        }
+
+        public void SetInterval(int ms)
+        {
+            _timer.Stop();
+            _timer = new Timer(ms) { AutoReset = true };
+            _timer.Elapsed += (_, __) => Sample();
+            _timer.Start();
         }
 
         public void Start() => _timer.Start();
@@ -33,7 +34,6 @@ namespace Virgil.App.Services
         {
             double cpuUsage = 0, gpuUsage = 0, ramUsage = 0;
             double cpuTemp = 0, gpuTemp = 0, diskUsage = 0, diskTemp = 0;
-
             try
             {
                 foreach (var hw in _pc.Hardware)
@@ -44,10 +44,8 @@ namespace Virgil.App.Services
                         case HardwareType.Cpu:
                             foreach (var s in hw.Sensors)
                             {
-                                if (s.SensorType == SensorType.Temperature && s.Name.Contains("CPU Package", StringComparison.OrdinalIgnoreCase))
-                                    cpuTemp = s.Value ?? cpuTemp;
-                                if (s.SensorType == SensorType.Load && s.Name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase))
-                                    cpuUsage = s.Value ?? cpuUsage;
+                                if (s.SensorType == SensorType.Temperature && s.Name.Contains("CPU Package", StringComparison.OrdinalIgnoreCase)) cpuTemp = s.Value ?? cpuTemp;
+                                if (s.SensorType == SensorType.Load && s.Name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase)) cpuUsage = s.Value ?? cpuUsage;
                             }
                             break;
                         case HardwareType.GpuAmd:
@@ -56,8 +54,7 @@ namespace Virgil.App.Services
                             foreach (var s in hw.Sensors)
                             {
                                 if (s.SensorType == SensorType.Temperature) gpuTemp = s.Value ?? gpuTemp;
-                                if (s.SensorType == SensorType.Load && (s.Name.Contains("Core") || s.Name.Equals("GPU Core", StringComparison.OrdinalIgnoreCase)))
-                                    gpuUsage = s.Value ?? gpuUsage;
+                                if (s.SensorType == SensorType.Load && (s.Name.Contains("Core") || s.Name.Equals("GPU Core", StringComparison.OrdinalIgnoreCase))) gpuUsage = s.Value ?? gpuUsage;
                             }
                             break;
                         case HardwareType.Memory:
@@ -69,16 +66,14 @@ namespace Virgil.App.Services
                         case HardwareType.Storage:
                             foreach (var s in hw.Sensors)
                             {
-                                if (s.SensorType == SensorType.Load && s.Name.Contains("Usage", StringComparison.OrdinalIgnoreCase))
-                                    diskUsage = s.Value ?? diskUsage;
-                                if (s.SensorType == SensorType.Temperature)
-                                    diskTemp = Math.Max(diskTemp, s.Value ?? diskTemp);
+                                if (s.SensorType == SensorType.Load && s.Name.Contains("Usage", StringComparison.OrdinalIgnoreCase)) diskUsage = s.Value ?? diskUsage;
+                                if (s.SensorType == SensorType.Temperature) diskTemp = Math.Max(diskTemp, s.Value ?? diskTemp);
                             }
                             break;
                     }
                 }
             }
-            catch { /* keep defaults on failure */ }
+            catch { }
 
             Metrics?.Invoke(cpuUsage, gpuUsage, ramUsage, cpuTemp);
             Updated?.Invoke(this, new MetricsEventArgs(cpuUsage, gpuUsage, ramUsage, cpuTemp, diskUsage, gpuTemp, diskTemp));
