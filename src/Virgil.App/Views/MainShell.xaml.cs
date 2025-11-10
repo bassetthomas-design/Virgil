@@ -12,6 +12,7 @@ namespace Virgil.App.Views
         private readonly MonitoringViewModel _monVm;
         private readonly ChatViewModel _chatVm;
         private readonly MoodMapper _mood = new();
+        private readonly SettingsService _settings = new();
 
         public MainShell()
         {
@@ -28,8 +29,17 @@ namespace Virgil.App.Views
             {
                 _chat.Post("Virgil est en ligne.");
                 _chat.Post("Surveillance activée.", MessageType.Success, pinned: true);
-                _chat.Post("Petit message éphémère…", MessageType.Info, pinned: false, ttlMs: 3000);
+                _chat.Post("Petit message éphémère…", MessageType.Info, pinned: false, ttlMs: _settings.Settings.DefaultMessageTtlMs / 20);
             };
+        }
+
+        private void OnOpenSettings(object sender, RoutedEventArgs e)
+        {
+            var dlg = new SettingsWindow(_settings);
+            if (dlg.ShowDialog() == true)
+            {
+                // TODO: appliquer dynamiquement intervalle/thresholds si besoin
+            }
         }
     }
 }
