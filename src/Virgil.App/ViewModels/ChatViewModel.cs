@@ -1,18 +1,14 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Collections.ObjectModel;
 using System.Timers;
-using System.Windows;
-using System.Windows.Input;
 using System.Windows.Threading;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Virgil.App.Chat;
 
 namespace Virgil.App.ViewModels
 {
-    public partial class ChatViewModel : ObservableObject
+    public partial class ChatViewModel : INotifyPropertyChanged
     {
         public ObservableCollection<MessageItem> Messages { get; } = new();
         private readonly ChatService _chat;
@@ -45,6 +41,7 @@ namespace Virgil.App.ViewModels
                     _dispatcher.Invoke(() =>
                     {
                         item.IsExpired = true;
+                        OnPropertyChanged(nameof(Messages));
                         var remover = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
                         remover.Tick += (_, __) =>
                         {
@@ -57,5 +54,9 @@ namespace Virgil.App.ViewModels
                 t.Start();
             }
         }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
