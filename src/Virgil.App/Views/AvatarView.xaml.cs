@@ -17,8 +17,9 @@ namespace Virgil.App.Views
         private void StartPulse()
         {
             var sb = new Storyboard();
-            var up = new DoubleAnimation { To = 1.04, Duration = TimeSpan.FromMilliseconds(800), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
-            var upY = new DoubleAnimation { To = 1.04, Duration = TimeSpan.FromMilliseconds(800), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
+            var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
+            var up = new DoubleAnimation { To = 1.06, Duration = TimeSpan.FromMilliseconds(950), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = ease };
+            var upY = new DoubleAnimation { To = 1.06, Duration = TimeSpan.FromMilliseconds(950), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = ease };
             Storyboard.SetTarget(up, Pulse);
             Storyboard.SetTargetProperty(up, new PropertyPath(ScaleTransform.ScaleXProperty));
             Storyboard.SetTarget(upY, Pulse);

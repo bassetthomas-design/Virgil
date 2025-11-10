@@ -1,0 +1,34 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Colors -->
+  <Color x:Key="VirgilNeonColor">#00FFB0</Color>
+  <Color x:Key="VirgilNeonDim">#149E7A</Color>
+  <SolidColorBrush x:Key="VirgilNeon" Color="{StaticResource VirgilNeonColor}"/>
+  <SolidColorBrush x:Key="VirgilNeonDimBrush" Color="{StaticResource VirgilNeonDim}" Opacity="0.6"/>
+  <RadialGradientBrush x:Key="VirgilCoreFill" RadiusX="0.85" RadiusY="0.85" GradientOrigin="0.45,0.45" Center="0.5,0.5">
+    <GradientStop Color="#003030" Offset="0"/>
+    <GradientStop Color="#001010" Offset="1"/>
+  </RadialGradientBrush>
+
+  <!-- Glows -->
+  <DropShadowEffect x:Key="OuterGlow" Color="{StaticResource VirgilNeonColor}" BlurRadius="30" ShadowDepth="0" Opacity="0.7"/>
+  <DropShadowEffect x:Key="InnerGlow" Color="{StaticResource VirgilNeonColor}" BlurRadius="15" ShadowDepth="0" Opacity="0.8"/>
+
+  <!-- Strokes -->
+  <Style x:Key="OuterRingStyle" TargetType="Ellipse">
+    <Setter Property="Stroke" Value="{StaticResource VirgilNeon}"/>
+    <Setter Property="StrokeThickness" Value="6"/>
+    <Setter Property="Effect" Value="{StaticResource OuterGlow}"/>
+  </Style>
+  <Style x:Key="InnerRingStyle" TargetType="Ellipse">
+    <Setter Property="Stroke" Value="{StaticResource VirgilNeonDimBrush}"/>
+    <Setter Property="StrokeThickness" Value="2"/>
+    <Setter Property="Effect" Value="{StaticResource InnerGlow}"/>
+  </Style>
+  <Style x:Key="EyeStyle" TargetType="Ellipse">
+    <Setter Property="Fill" Value="{StaticResource VirgilNeon}"/>
+    <Setter Property="Width" Value="26"/>
+    <Setter Property="Height" Value="26"/>
+    <Setter Property="Effect" Value="{StaticResource InnerGlow}"/>
+  </Style>
+</ResourceDictionary>
