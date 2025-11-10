@@ -57,5 +57,10 @@ namespace Virgil.App.Views
                 _chat.Post("Réglages appliqués", MessageType.Success, ttlMs: 3000);
             }
         }
+
+        private void OnHudToggled(object sender, RoutedEventArgs e)
+        {
+            Hud.Visibility = BtnHud.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 }
