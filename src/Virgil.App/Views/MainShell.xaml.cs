@@ -15,6 +15,7 @@ namespace Virgil.App.Views
         private readonly SettingsService _settings = new();
         private readonly ActionsService _actionsSvc = new();
         private readonly ActionsViewModel _actionsVm;
+        private readonly PulseController _pulse;
 
         public MainShell()
         {
@@ -30,6 +31,9 @@ namespace Virgil.App.Views
             _mon.Updated += _mood.OnMetrics;
             _monVm.HookMood(_mood);
 
+            _pulse = new PulseController(_mon, _chat);
+            _pulse.Pulse += v => Dispatcher.Invoke(() => Avatar?.Pulse(v));
+
             _actionsVm = new ActionsViewModel(_actionsSvc, _chat, _mon, _settings);
 
             Chat.DataContext = _chatVm;
@@ -38,6 +42,8 @@ namespace Virgil.App.Views
 
             Loaded += (s,e) =>
             {
+                Hud.Visibility = _settings.Settings.ShowMiniHud ? Visibility.Visible : Visibility.Collapsed;
+                BtnHud.IsChecked = _settings.Settings.ShowMiniHud;
                 _chat.Post("Virgil est en ligne.");
                 _chat.Post("Surveillance activée.", MessageType.Success, pinned: true);
                 _chat.Post("Petit message éphémère…", MessageType.Info, pinned: false, ttlMs: _settings.Settings.DefaultMessageTtlMs / 20);
@@ -60,7 +66,10 @@ namespace Virgil.App.Views
 
         private void OnHudToggled(object sender, RoutedEventArgs e)
         {
-            Hud.Visibility = BtnHud.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            var visible = BtnHud.IsChecked == true;
+            Hud.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            _settings.Settings.ShowMiniHud = visible;
+            _settings.Save();
         }
     }
 }

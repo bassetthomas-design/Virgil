@@ -16,7 +16,7 @@
         <views:ActionsPanel x:Name="Actions" DockPanel.Dock="Right" Width="220"/>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="12">
-                <views:AvatarView DataContext="{Binding ElementName=Metrics, Path=DataContext}" HorizontalAlignment="Center"/>
+                <views:AvatarView x:Name="Avatar" DataContext="{Binding ElementName=Metrics, Path=DataContext}" HorizontalAlignment="Center"/>
                 <views:MiniHud x:Name="Hud" DataContext="{Binding ElementName=Metrics, Path=DataContext}" Margin="0,8,0,6"/>
                 <views:MetricsBar x:Name="Metrics" Margin="4,0,0,12" HorizontalAlignment="Left"/>
                 <views:ChatView x:Name="Chat"/>
