@@ -6,21 +6,27 @@
              mc:Ignorable="d" Height="32">
     <Border Background="#15161a" Padding="8">
         <DockPanel LastChildFill="False">
-            <StackPanel Orientation="Horizontal" Spacing="12">
+            <StackPanel Orientation="Horizontal">
+                <StackPanel.Resources>
+                    <Style TargetType="FrameworkElement">
+                        <Setter Property="Margin" Value="0,0,12,0"/>
+                    </Style>
+                </StackPanel.Resources>
+
                 <TextBlock Foreground="#9aa" Text="CPU:"/>
                 <TextBlock Foreground="White" Text="{Binding CpuUsage, StringFormat={}{0:F0}%}"/>
-                <TextBlock Foreground="#9aa" Text="Temp:" Margin="8,0,0,0"/>
+                <TextBlock Foreground="#9aa" Text="Temp:"/>
                 <TextBlock Foreground="White" Text="{Binding CpuTemp, StringFormat={}{0:F0}°C}"/>
 
-                <TextBlock Foreground="#9aa" Text="GPU:" Margin="16,0,0,0"/>
+                <TextBlock Foreground="#9aa" Text="GPU:"/>
                 <TextBlock Foreground="White" Text="{Binding GpuUsage, StringFormat={}{0:F0}%}"/>
-                <TextBlock Foreground="#9aa" Text="Temp:" Margin="8,0,0,0"/>
+                <TextBlock Foreground="#9aa" Text="Temp:"/>
                 <TextBlock Foreground="White" Text="{Binding GpuTemp, StringFormat={}{0:F0}°C}"/>
 
-                <TextBlock Foreground="#9aa" Text="RAM:" Margin="16,0,0,0"/>
+                <TextBlock Foreground="#9aa" Text="RAM:"/>
                 <TextBlock Foreground="White" Text="{Binding RamUsage, StringFormat={}{0:F0}%}"/>
 
-                <TextBlock Foreground="#9aa" Text="Disk:" Margin="16,0,0,0"/>
+                <TextBlock Foreground="#9aa" Text="Disk:"/>
                 <TextBlock Foreground="White" Text="{Binding DiskUsage, StringFormat={}{0:F0}%}"/>
             </StackPanel>
             <TextBlock DockPanel.Dock="Right" Foreground="#8fd" FontWeight="SemiBold" Text="{Binding Mood}"/>
