@@ -22,13 +22,14 @@ namespace Virgil.App.Services
         public Task<ProcessResult?> DefenderUpdateAndScanAsync() => RunPsAsync("defender_update_scan.ps1");
         public Task<ProcessResult?> OpenConfigAsync() => RunPsAsync("open_config.ps1");
 
-        private static Task<ProcessResult?> RunPsAsync(string script)
+        private static async Task<ProcessResult?> RunPsAsync(string script)
         {
             Directory.CreateDirectory(ScriptsDir);
             var path = Path.Combine(ScriptsDir, script);
-            if (!File.Exists(path)) return Task.FromResult<ProcessResult?>(null);
+            if (!File.Exists(path)) return null;
             var args = $"-ExecutionPolicy Bypass -File '{path}'";
-            return ProcessRunner.RunAsync("powershell.exe", args);
+            var res = await ProcessRunner.RunAsync("powershell.exe", args);
+            return res;
         }
     }
 }
