@@ -1,33 +1,63 @@
+using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Virgil.App.Models;
 using Virgil.App.Services;
 
-namespace Virgil.App.ViewModels;
-
-public sealed class MonitoringViewModel : INotifyPropertyChanged
+namespace Virgil.App.ViewModels
 {
-    private readonly MonitoringService _svc;
-
-    public MonitoringViewModel(MonitoringService svc)
+    public class MonitoringViewModel : INotifyPropertyChanged
     {
-        _svc = svc;
-        _svc.Updated += (_, snap) =>
+        private readonly MonitoringService _mon;
+
+        public MonitoringViewModel(MonitoringService mon)
         {
-            CpuUsage = snap.CpuUsage; CpuTemp = snap.CpuTemp;
-            GpuUsage = snap.GpuUsage; GpuTemp = snap.GpuTemp;
-            RamUsage = snap.RamUsage; DiskUsage = snap.DiskUsage; DiskTemp = snap.DiskTemp;
-        };
+            _mon = mon;
+            _mon.Updated += OnUpdated;
+            _mon.Start();
+        }
+
+        private double _cpuUsage;
+        public double CpuUsage { get => _cpuUsage; set { if (Set(ref _cpuUsage, value)) OnPropertyChanged(); } }
+
+        private double _cpuTemp;
+        public double CpuTemp { get => _cpuTemp; set { if (Set(ref _cpuTemp, value)) OnPropertyChanged(); } }
+
+        private double _gpuUsage;
+        public double GpuUsage { get => _gpuUsage; set { if (Set(ref _gpuUsage, value)) OnPropertyChanged(); } }
+
+        private double _gpuTemp;
+        public double GpuTemp { get => _gpuTemp; set { if (Set(ref _gpuTemp, value)) OnPropertyChanged(); } }
+
+        private double _ramUsage;
+        public double RamUsage { get => _ramUsage; set { if (Set(ref _ramUsage, value)) OnPropertyChanged(); } }
+
+        private double _diskUsage;
+        public double DiskUsage { get => _diskUsage; set { if (Set(ref _diskUsage, value)) OnPropertyChanged(); } }
+
+        private double _diskTemp;
+        public double DiskTemp { get => _diskTemp; set { if (Set(ref _diskTemp, value)) OnPropertyChanged(); } }
+
+        private void OnUpdated(object? sender, MetricsEventArgs e)
+        {
+            CpuUsage = e.CpuUsage;
+            CpuTemp  = e.CpuTemp;
+            GpuUsage = e.GpuUsage;
+            GpuTemp  = e.GpuTemp;
+            RamUsage = e.RamUsage;
+            DiskUsage = e.DiskUsage;
+            DiskTemp  = e.DiskTemp;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+        {
+            if (Equals(field, value)) return false;
+            field = value;
+            return true;
+        }
     }
-
-    private double _cpuUsage; public double CpuUsage { get=>_cpuUsage; private set{ _cpuUsage=value; OnPropertyChanged(); }}
-    private double _cpuTemp;  public double CpuTemp  { get=>_cpuTemp;  private set{ _cpuTemp=value;  OnPropertyChanged(); }}
-    private double _gpuUsage; public double GpuUsage { get=>_gpuUsage; private set{ _gpuUsage=value; OnPropertyChanged(); }}
-    private double _gpuTemp;  public double GpuTemp  { get=>_gpuTemp;  private set{ _gpuTemp=value;  OnPropertyChanged(); }}
-    private double _ramUsage; public double RamUsage { get=>_ramUsage; private set{ _ramUsage=value; OnPropertyChanged(); }}
-    private double _diskUsage;public double DiskUsage{ get=>_diskUsage;private set{ _diskUsage=value;OnPropertyChanged(); }}
-    private double _diskTemp; public double DiskTemp { get=>_diskTemp; private set{ _diskTemp=value; OnPropertyChanged(); }}
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
