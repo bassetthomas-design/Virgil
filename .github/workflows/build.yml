@@ -1,1 +1,34 @@
-bmFtZTogQnVpbGQKCm9uOgogIHB1c2g6CiAgICBicmFuY2hlczogW21haW4sIGZpeC9jaS1zYW5pdGl6ZS1jc3Byb2pdCgpham9iczogCiAgYnVpbGQ6CiAgICBydW5zLW9uOiB3aW5kb3dzLWxhdGVzdAogICAgc3RlcHM6CiAgICAgIC0gbmFtZTogQ2hlY2tvdXQKICAgICAgICB1c2VzOiBhY3Rpb25zL2NoZWNrb3V0QHY0CgogICAgICAtIG5hbWU6IFNldHVwIC5ORVQKICAgICAgICB1c2VzOiBhY3Rpb25zL3NldHVwLWRvdG5ldEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBkb3RuZXQtdmVyc2lvbjogOC4wLngKICAgICAgICBjYWNoZTogdHJ1ZQoKICAgICAgLSBuYW1lOiBJbnN0YWxsIHdpbmRvd3NkZXNrdG9wIHdvcmtsb2FkCiAgICAgICAgcnVuOiBkb3RuZXQgd29ya2xvYWQgaW5zdGFsbCB3aW5kb3dzZGVza3RvcAoKICAgICAgLSBuYW1lOiBIZXggZHVtcCBmaXJzdCBieXRlcyBvZiBjc3ByagogICAgICAgIHNoZWxsOiBwb3dlcnNoZWxsCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBbe2NvbW1hbmQ6ICJnaXQgY2xlYW4gLXhmZCIsIHNoZWxsOiB0cnVlfV0KICAgICAgICAgIFt7Y29tbWFuZDogJ0AkYnl0ZXMgPSBHZXQtQ29udGVudCAtRW5jb2RpbmcgQnl0ZSAnc3JjXFxWaXJnaWwuQXBwXFxWaXJnaWwuQXBwLmNzcHJqJycsIHNoZWxsOiBwb3dlcnNoZWxsIH1dCiAgICAgICAgICBbeyBjb21tYW5kOiAkYnl0ZXMuRm9yRWFjaCggeyBmb3JtYXQ6IFwiJTAyWEhcIiB9KSB9XQogICAgICAgICAgW3sgY29tbWFuZDogJ0BDT25zb2xlLldyaXRlTGluZSgkYnl0ZXMpJyB9XQoKICAgICAgLSBuYW1lOiBTYW5pdGl6ZSBjc3ByaiAoVVRGOCB3aXRob3V0IEJPTSkKICAgICAgICBzaGVsbDogcG93ZXJzaGVsbAogICAgICAgIHJ1bjogfAogICAgICAgICAgJGNvbnRlbnQgPSAoR2V0LUNvbnRlbnQgLVJhdyBzcmNcXFZpcmdpbC5BcHBcXFZpcmdpbC5BcHAuY3Nwcmp9CiAgICAgICAgICBTZXQtQ29udGVudCAtTm9OZXdsaW5lIC1FbmNvZGluZyBVVEY4IHNyY1xcVmlyZ2lsLkFwcFxcVmlyZ2lsLkFwcC5jc3ByagogICAgICAgICAgJ0BXYXNzYml0ZTogY3NwcmpzIHRleHQgcmV3cml0dGVuIGFzIFVURjggbm8gQk9NJwogICAgICAtIG5hbWU6IExpc3QgTlVHRVQgc291cmNlcyAoZGVidWcpCiAgICAgICAgcnVuOiBkb3RuZXQgbnVnZXQgbGlzdCBzb3VyY2UKCiAgICAgIC0gbmFtZTogUmVzdG9yZQogICAgICAgIHJ1bjogZG90bmV0IHJlc3RvcmUgVmlyZ2lsLnNsbiAtLWNvbmZpZ2ZpbGUgTlVHZXQuY29uZmlnIC0tdmVyYm9zaXR5IG1pbmltYWwKCiAgICAgIC0gbmFtZTogQnVpbGQKICAgICAgICBydW46IGRvdG5ldCBidWlsZCAtLWNvbmZpZ3VyYXRpb24gUmVsZWFzZQo=
+name: Build (Windows WPF)
+
+on:
+  push:
+    branches: [ main, fix/** ]
+  pull_request: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+        continue-on-error: false
+
+      - name: Install windowsdesktop workload
+        run: dotnet workload install windowsdesktop
+
+      - name: Sanitize csproj/props (UTF8 no BOM) + hexdump
+        shell: powershell
+        run: |
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          tools/ci/Sanitize-Csproj.ps1
+
+      - name: Dotnet restore (solution)
+        run: dotnet restore Virgil.sln --configfile NuGet.config -v minimal
+
+      - name: Build Release
+        run: dotnet build --configuration Release
