@@ -1,40 +1,45 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using Virgil.App.Models;
 
 namespace Virgil.App.Services
 {
     public class SettingsService
     {
-        private readonly string _path;
-        public AppSettings Settings { get; private set; } = new();
+        private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "settings.json");
 
-        public SettingsService(string? folder = null)
-        {
-            var baseDir = folder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil");
-            Directory.CreateDirectory(baseDir);
-            _path = Path.Combine(baseDir, "settings.json");
-            Load();
-        }
+        public AppSettings Settings { get; private set; }
 
-        public void Load()
+        public SettingsService()
         {
-            if (File.Exists(_path))
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            if (File.Exists(SettingsPath))
             {
-                var json = File.ReadAllText(_path);
-                Settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                try { Settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings(); }
+                catch { Settings = new AppSettings(); }
             }
-            else
-            {
-                Save();
-            }
+            else Settings = new AppSettings();
         }
 
         public void Save()
         {
             var json = JsonSerializer.Serialize(Settings, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_path, json);
+            File.WriteAllText(SettingsPath, json);
         }
+    }
+
+    public class AppSettings
+    {
+        public int MonitoringIntervalMs { get; set; } = 2000;
+        public int DefaultMessageTtlMs { get; set; } = 60000;
+        public MoodThreshold Mood { get; set; } = new();
+        public bool ShowMiniHud { get; set; } = true;
+    }
+
+    public class MoodThreshold
+    {
+        public double WarnTemp { get; set; } = 70;
+        public double AlertTemp { get; set; } = 85;
+        public double WarnCpu { get; set; } = 85;
     }
 }
