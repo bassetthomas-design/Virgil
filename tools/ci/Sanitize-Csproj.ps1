@@ -1,6 +1,16 @@
 Param(
-  [string[]]$Paths = @('src/Virgil.App/Virgil.App.csproj','src/Virgil.Core/Virgil.Core.csproj','src/Virgil.Agent/Virgil.Agent.csproj','tests/Virgil.Tests/Virgil.Tests.csproj','Directory.Build.props','NuGet.config')
+  [string[]]$Paths = @()
 )
+
+# If no explicit list provided, scan repo for *.csproj plus common props/config
+if(-not $Paths -or $Paths.Count -eq 0){
+  $Paths = @(Get-ChildItem -Recurse -File -Include *.csproj | ForEach-Object { $_.FullName })
+  if(Test-Path 'Directory.Build.props'){ $Paths += 'Directory.Build.props' }
+  if(Test-Path 'NuGet.config'){ $Paths += 'NuGet.config' }
+}
+
+Write-Host "Found files:"
+$Paths | ForEach-Object { Write-Host " - $_" }
 
 Write-Host 'HEXDUMP (first 32 bytes):'
 foreach($p in $Paths){
@@ -12,13 +22,24 @@ foreach($p in $Paths){
   }
 }
 
-Write-Host 'Sanitize files to UTF8 without BOM...'
+function Scrub-And-RewriteUtf8NoBom([string]$path){
+  $bytes = Get-Content -Raw -Encoding Byte -Path $path
+  # Decode as UTF8, preserving weird chars
+  $text  = [System.Text.Encoding]::UTF8.GetString($bytes)
+  # Force trim of any junk before first '<'
+  $idx = $text.IndexOf('<')
+  if($idx -gt 0){ $text = $text.Substring($idx) }
+  # Normalize newlines to LF to avoid CR garbage
+  $text = $text -replace '\r\n','
+' -replace '\r','
+'
+  # Write as UTF-8 without BOM
+  [System.IO.File]::WriteAllText((Resolve-Path $path), $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+Write-Host 'Sanitize files to UTF8 without BOM and strip pre-XML junk...'
 foreach($p in $Paths){
-  if(Test-Path $p){
-    $bytes = Get-Content -Raw -Encoding Byte -Path $p
-    $text  = [System.Text.Encoding]::UTF8.GetString($bytes)
-    [System.IO.File]::WriteAllText((Resolve-Path $p), $text, (New-Object System.Text.UTF8Encoding($false)))
-  }
+  if(Test-Path $p){ Scrub-And-RewriteUtf8NoBom $p }
 }
 
 Write-Host 'Validate XML...'
