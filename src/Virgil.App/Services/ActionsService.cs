@@ -27,7 +27,9 @@ namespace Virgil.App.Services
             Directory.CreateDirectory(ScriptsDir);
             var path = Path.Combine(ScriptsDir, script);
             if (!File.Exists(path)) return Task.CompletedTask;
-            return ProcessRunner.RunAsync("powershell.exe", $"-ExecutionPolicy Bypass -File ""{path}""");
+            // Use single quotes for PowerShell -File to avoid escaping hell
+            var args = $"-ExecutionPolicy Bypass -File '{path}'";
+            return ProcessRunner.RunAsync("powershell.exe", args);
         }
     }
 }
