@@ -5,11 +5,8 @@ namespace Virgil.App.Services
 {
     public class MonitoringService
     {
-        // New event expected by MonitoringViewModel
         public event EventHandler<MetricsEventArgs>? Updated;
-
-        // Legacy/simple event used elsewhere in MVP scaffolding
-        public event Action<double,double,double,double>? Metrics; // cpu,gpu,ram,temp (placeholders)
+        public event Action<double,double,double,double>? Metrics; // legacy simple tuple (cpu,gpu,ram,cpuTemp)
 
         private readonly Timer _timer = new(2000) { AutoReset = true };
 
@@ -23,12 +20,12 @@ namespace Virgil.App.Services
 
         private void Sample()
         {
-            // TODO: brancher LibreHardwareMonitor ici et remonter les vraies valeurs
-            double cpu = 0, gpu = 0, ram = 0, temp = 0;
+            // TODO: remplacer par vraies valeurs LibreHardwareMonitor
+            double cpuUsage = 0, gpuUsage = 0, ramUsage = 0, cpuTemp = 0;
+            double diskUsage = 0, gpuTemp = 0, diskTemp = 0;
 
-            // Emettre les deux formes d'événements pour compat
-            Metrics?.Invoke(cpu, gpu, ram, temp);
-            Updated?.Invoke(this, new MetricsEventArgs(cpu, gpu, ram, temp));
+            Metrics?.Invoke(cpuUsage, gpuUsage, ramUsage, cpuTemp);
+            Updated?.Invoke(this, new MetricsEventArgs(cpuUsage, gpuUsage, ramUsage, cpuTemp, diskUsage, gpuTemp, diskTemp));
         }
     }
 }
