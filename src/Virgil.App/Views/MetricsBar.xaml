@@ -1,35 +1,23 @@
 <UserControl x:Class="Virgil.App.Views.MetricsBar"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" Height="32">
-    <Border Background="#15161a" Padding="8">
-        <DockPanel LastChildFill="False">
-            <StackPanel Orientation="Horizontal">
-                <StackPanel.Resources>
-                    <Style TargetType="FrameworkElement">
-                        <Setter Property="Margin" Value="0,0,12,0"/>
-                    </Style>
-                </StackPanel.Resources>
-
-                <TextBlock Foreground="#9aa" Text="CPU:"/>
-                <TextBlock Foreground="White" Text="{Binding CpuUsage, StringFormat={}{0:F0}%}"/>
-                <TextBlock Foreground="#9aa" Text="Temp:"/>
-                <TextBlock Foreground="White" Text="{Binding CpuTemp, StringFormat={}{0:F0}°C}"/>
-
-                <TextBlock Foreground="#9aa" Text="GPU:"/>
-                <TextBlock Foreground="White" Text="{Binding GpuUsage, StringFormat={}{0:F0}%}"/>
-                <TextBlock Foreground="#9aa" Text="Temp:"/>
-                <TextBlock Foreground="White" Text="{Binding GpuTemp, StringFormat={}{0:F0}°C}"/>
-
-                <TextBlock Foreground="#9aa" Text="RAM:"/>
-                <TextBlock Foreground="White" Text="{Binding RamUsage, StringFormat={}{0:F0}%}"/>
-
-                <TextBlock Foreground="#9aa" Text="Disk:"/>
-                <TextBlock Foreground="White" Text="{Binding DiskUsage, StringFormat={}{0:F0}%}"/>
-            </StackPanel>
-            <TextBlock DockPanel.Dock="Right" Foreground="#8fd" FontWeight="SemiBold" Text="{Binding Mood}"/>
-        </DockPanel>
-    </Border>
+             Height="Auto" Width="Auto">
+    <StackPanel Orientation="Vertical" Margin="0,0,0,8">
+        <WrapPanel ItemHeight="24" ItemWidth="Auto">
+            <TextBlock Text="CPU:" FontWeight="SemiBold" Margin="0,0,6,0"/>
+            <TextBlock Text="{Binding CpuUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+            <TextBlock Text="Temp:" FontWeight="SemiBold" Margin="0,0,6,0"/>
+            <TextBlock Text="{Binding CpuTemp, StringFormat={}{0:F0}°C}" Margin="0,0,12,0"/>
+            <TextBlock Text="GPU:" FontWeight="SemiBold" Margin="0,0,6,0"/>
+            <TextBlock Text="{Binding GpuUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+            <TextBlock Text="Temp:" FontWeight="SemiBold" Margin="0,0,6,0"/>
+            <TextBlock Text="{Binding GpuTemp, StringFormat={}{0:F0}°C}" Margin="0,0,12,0"/>
+            <TextBlock Text="RAM:" FontWeight="SemiBold" Margin="0,0,6,0"/>
+            <TextBlock Text="{Binding RamUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+            <TextBlock Text="Disk:" FontWeight="SemiBold" Margin="0,0,6,0"/>
+            <TextBlock Text="{Binding DiskUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+        </WrapPanel>
+        <!-- Mood state label for quick read -->
+        <TextBlock Text="{Binding Mood}" Opacity="0.8" FontSize="12"/>
+    </StackPanel>
 </UserControl>
