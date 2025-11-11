@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
-using Virgil.App.Core;
 
 namespace Virgil.App.Converters
 {
@@ -10,17 +9,14 @@ namespace Virgil.App.Converters
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            var mood = value is MoodState m ? m : MoodState.Focused;
-            return mood switch
-            {
-                MoodState.Happy => (Brush)new SolidColorBrush(Color.FromRgb(0x54,0xF2,0xA8)),
-                MoodState.Warn  => (Brush)new SolidColorBrush(Color.FromRgb(0xFF,0xC1,0x3D)),
-                MoodState.Alert => (Brush)new SolidColorBrush(Color.FromRgb(0xFF,0x56,0x56)),
-                MoodState.Tired => (Brush)new SolidColorBrush(Color.FromRgb(0x88,0x88,0xAA)),
-                _ => (Brush)new SolidColorBrush(Color.FromRgb(0x5A,0x8D,0xFF)),
-            };
+            var mood = (value as string)?.ToLowerInvariant() ?? string.Empty;
+            // default calm blue
+            Color c = Color.FromRgb(0xD0, 0xF0, 0xFF);
+            if (mood.Contains("alert")) c = Color.FromRgb(0xFF, 0x55, 0x55);
+            else if (mood.Contains("warn") || mood.Contains("hot")) c = Color.FromRgb(0xFF, 0xA6, 0x3A);
+            else if (mood.Contains("happy") || mood.Contains("cool") ) c = Color.FromRgb(0x9A, 0xFF, 0x9A);
+            return new SolidColorBrush(c);
         }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
     }
 }
