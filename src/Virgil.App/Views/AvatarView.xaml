@@ -16,6 +16,7 @@
       <ScaleTransform x:Name="ScaleTransform" CenterX="80" CenterY="80"/>
     </Grid.RenderTransform>
 
+    <!-- Emerald bubble background -->
     <Ellipse StrokeThickness="2">
       <Ellipse.Fill>
         <RadialGradientBrush>
@@ -26,6 +27,7 @@
       <Ellipse.Stroke><SolidColorBrush Color="#2A4B3D"/></Ellipse.Stroke>
     </Ellipse>
 
+    <!-- Eyes -->
     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"/>
@@ -33,6 +35,7 @@
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
 
+      <!-- Left eye -->
       <Grid Grid.Column="0">
         <Grid.RenderTransform>
           <TransformGroup>
@@ -46,6 +49,7 @@
         <Ellipse x:Name="LeftEye" Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
       </Grid>
 
+      <!-- Right eye -->
       <Grid Grid.Column="2">
         <Grid.RenderTransform>
           <TransformGroup>
@@ -60,6 +64,7 @@
       </Grid>
     </Grid>
 
+    <!-- Aura -->
     <Ellipse IsHitTestVisible="False" Margin="-6">
       <Ellipse.Stroke><SolidColorBrush Color="#66A6FEE1"/></Ellipse.Stroke>
       <Ellipse.Effect>
