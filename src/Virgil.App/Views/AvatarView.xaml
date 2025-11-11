@@ -62,7 +62,9 @@
 
     <Ellipse IsHitTestVisible="False" Margin="-6">
       <Ellipse.Stroke><SolidColorBrush Color="#66A6FEE1"/></Ellipse.Stroke>
-      <Ellipse.Effect><DropShadowEffect Color="#FFA6FEE1" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/></DropShadowEffect></Ellipse.Effect>
+      <Ellipse.Effect>
+        <DropShadowEffect Color="#FFA6FEE1" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/>
+      </Ellipse.Effect>
     </Ellipse>
   </Grid>
 </UserControl>
