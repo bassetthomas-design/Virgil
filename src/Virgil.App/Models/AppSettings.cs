@@ -7,6 +7,8 @@ namespace Virgil.App.Models
         public MoodThreshold Mood { get; set; } = new();
         // Persist Mini HUD state
         public bool ShowMiniHud { get; set; } = true;
+        // Controls how chatty the companion mode is
+        public bool CompanionTalkative { get; set; } = false;
     }
 
     public class MoodThreshold
