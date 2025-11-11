@@ -3,36 +3,107 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Virgil.App.Converters"
              Height="160" Width="160">
-    <UserControl.Resources>
-        <conv:MoodToBrushConverter x:Key="MoodBrush"/>
-    </UserControl.Resources>
-    <Grid>
+  <UserControl.Resources>
+    <conv:MoodToBrushConverter x:Key="MoodBrush"/>
+    <!-- default palette from the photo -->
+    <SolidColorBrush x:Key="Mint" Color="#A6FEE1"/>
+  </UserControl.Resources>
+  <Grid>
+    <Grid.RenderTransform>
+      <ScaleTransform x:Name="ScaleTransform" CenterX="80" CenterY="80"/>
+    </Grid.RenderTransform>
+
+    <!-- Emerald bubble background -->
+    <Ellipse StrokeThickness="2">
+      <Ellipse.Fill>
+        <RadialGradientBrush>
+          <GradientStop Color="#36845D" Offset="0"/>
+          <GradientStop Color="#0F2420" Offset="1"/>
+        </RadialGradientBrush>
+      </Ellipse.Fill>
+      <Ellipse.Stroke><SolidColorBrush Color="#2A4B3D"/></Ellipse.Stroke>
+    </Ellipse>
+
+    <!-- Eyes: mint by default, color may change with mood -->
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="12"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+
+      <!-- Left eye -->
+      <Grid Grid.Column="0">
         <Grid.RenderTransform>
-            <ScaleTransform x:Name="ScaleTransform" CenterX="80" CenterY="80"/>
+          <TransformGroup>
+            <ScaleTransform x:Name="LeftEyeScale"/>
+            <SkewTransform x:Name="LeftEyeSkew"/>
+            <RotateTransform x:Name="LeftEyeRotate"/>
+          </TransformGroup>
         </Grid.RenderTransform>
-        <Ellipse StrokeThickness="2">
-            <Ellipse.Fill>
-                <RadialGradientBrush>
-                    <GradientStop Color="#162028" Offset="0"/>
-                    <GradientStop Color="#10161C" Offset="1"/>
-                </RadialGradientBrush>
-            </Ellipse.Fill>
-            <Ellipse.Stroke>
-                <SolidColorBrush Color="#2c3a44"/>
-            </Ellipse.Stroke>
-        </Ellipse>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Ellipse Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
-            <Ellipse Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}" Margin="12,0,0,0"/>
-        </StackPanel>
-        <!-- subtle outer aura depends on mood as well -->
-        <Ellipse IsHitTestVisible="False" Margin="-6">
-            <Ellipse.Stroke>
-                <SolidColorBrush Color="#40FFFFFF"/>
-            </Ellipse.Stroke>
-            <Ellipse.Effect>
-                <DropShadowEffect Color="White" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/>
-            </Ellipse.Effect>
-        </Ellipse>
+        <Ellipse x:Name="LeftEye" Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
+      </Grid>
+
+      <!-- Right eye -->
+      <Grid Grid.Column="2">
+        <Grid.RenderTransform>
+          <TransformGroup>
+            <ScaleTransform x:Name="RightEyeScale"/>
+            <SkewTransform x:Name="RightEyeSkew"/>
+            <RotateTransform x:Name="RightEyeRotate"/>
+          </TransformGroup>
+        </Grid.RenderTransform>
+        <Ellipse x:Name="RightEye" Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
+      </Grid>
     </Grid>
+
+    <!-- Aura -->
+    <Ellipse IsHitTestVisible="False" Margin="-6">
+      <Ellipse.Stroke><SolidColorBrush Color="#66A6FEE1"/></Ellipse.Stroke>
+      <Ellipse.Effect><DropShadowEffect Color="#FFA6FEE1" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/></Ellipse.Effect>
+    </Ellipse>
+  </Grid>
+
+  <!-- Basic eye expressions driven by Mood via simple triggers -->
+  <UserControl.Style>
+    <Style TargetType="UserControl">
+      <Style.Triggers>
+        <!-- Calm/neutral: default mint, round eyes -->
+        <DataTrigger Binding="{Binding Mood}" Value="Calm">
+          <Setter TargetName="LeftEyeScale" Property="ScaleY" Value="1"/>
+          <Setter TargetName="RightEyeScale" Property="ScaleY" Value="1"/>
+          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="0"/>
+          <Setter TargetName="RightEyeRotate" Property="Angle" Value="0"/>
+        </DataTrigger>
+
+        <!-- Focused/working: slightly narrowed vertically -->
+        <DataTrigger Binding="{Binding Mood}" Value="Focused">
+          <Setter TargetName="LeftEyeScale" Property="ScaleY" Value="0.75"/>
+          <Setter TargetName="RightEyeScale" Property="ScaleY" Value="0.75"/>
+        </DataTrigger>
+
+        <!-- Tired: droopy lids (compress Y) and slight rotate down -->
+        <DataTrigger Binding="{Binding Mood}" Value="Tired">
+          <Setter TargetName="LeftEyeScale" Property="ScaleY" Value="0.6"/>
+          <Setter TargetName="RightEyeScale" Property="ScaleY" Value="0.6"/>
+          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="8"/>
+          <Setter TargetName="RightEyeRotate" Property="Angle" Value="-8"/>
+        </DataTrigger>
+
+        <!-- Angry/Overheat: wider X, slight inward tilt -->
+        <DataTrigger Binding="{Binding Mood}" Value="Alert">
+          <Setter TargetName="LeftEyeScale" Property="ScaleX" Value="1.2"/>
+          <Setter TargetName="RightEyeScale" Property="ScaleX" Value="1.2"/>
+          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="-6"/>
+          <Setter TargetName="RightEyeRotate" Property="Angle" Value="6"/>
+        </DataTrigger>
+
+        <!-- Happy/Cool: tiny up-tilt -->
+        <DataTrigger Binding="{Binding Mood}" Value="Happy">
+          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="-4"/>
+          <Setter TargetName="RightEyeRotate" Property="Angle" Value="4"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+  </UserControl.Style>
 </UserControl>
