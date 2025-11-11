@@ -16,6 +16,7 @@ namespace Virgil.App.Views
         private readonly ActionsService _actionsSvc = new();
         private readonly ActionsViewModel _actionsVm;
         private readonly PulseController _pulse;
+        private BeatPulseService? _beat;
 
         public MainShell()
         {
@@ -44,6 +45,14 @@ namespace Virgil.App.Views
             {
                 Hud.Visibility = _settings.Settings.ShowMiniHud ? Visibility.Visible : Visibility.Collapsed;
                 BtnHud.IsChecked = _settings.Settings.ShowMiniHud;
+
+                // start beat pulse if enabled
+                if (_settings.Settings.EnableBeatPulse) {
+                    _beat = new BeatPulseService();
+                    _beat.Pulse += v => Dispatcher.Invoke(() => Avatar?.Pulse(v));
+                    _beat.Start();
+                }
+
                 _chat.Post("Virgil est en ligne.");
                 _chat.Post("Surveillance activée.", MessageType.Success, pinned: true);
                 _chat.Post("Petit message éphémère…", MessageType.Info, pinned: false, ttlMs: _settings.Settings.DefaultMessageTtlMs / 20);
@@ -60,6 +69,16 @@ namespace Virgil.App.Views
                 _mood.WarnTemp = _settings.Settings.Mood.WarnTemp;
                 _mood.AlertTemp = _settings.Settings.Mood.AlertTemp;
                 _mood.WarnCpu = _settings.Settings.Mood.WarnCpu;
+
+                // apply beat toggle live
+                if (_settings.Settings.EnableBeatPulse) {
+                    _beat ??= new BeatPulseService();
+                    _beat.Pulse += v => Dispatcher.Invoke(() => Avatar?.Pulse(v));
+                    _beat.Start();
+                } else {
+                    _beat?.Stop();
+                }
+
                 _chat.Post("Réglages appliqués", MessageType.Success, ttlMs: 3000);
             }
         }

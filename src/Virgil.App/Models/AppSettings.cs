@@ -5,10 +5,9 @@ namespace Virgil.App.Models
         public int MonitoringIntervalMs { get; set; } = 2000;
         public int DefaultMessageTtlMs { get; set; } = 60000;
         public MoodThreshold Mood { get; set; } = new();
-        // Persist Mini HUD state
         public bool ShowMiniHud { get; set; } = true;
-        // Controls how chatty the companion mode is
         public bool CompanionTalkative { get; set; } = false;
+        public bool EnableBeatPulse { get; set; } = true;
     }
 
     public class MoodThreshold
