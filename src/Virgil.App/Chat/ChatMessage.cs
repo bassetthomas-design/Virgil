@@ -1,13 +1,17 @@
-namespace Virgil.App.Chat;
+using System;
 
-public enum ChatKind { Info, Progress, Success, Warning, Error }
-
-public sealed class ChatMessage
+namespace Virgil.App.Chat
 {
-    public Guid Id { get; } = Guid.NewGuid();
-    public DateTime CreatedAt { get; } = DateTime.UtcNow;
-    public TimeSpan Ttl { get; init; } = TimeSpan.FromSeconds(60);
-    public string Text { get; init; } = string.Empty;
-    public ChatKind Kind { get; init; } = ChatKind.Info;
-    public int? Progress { get; init; }
+    public enum MessageType { Info, Warning, Error }
+    public enum ChatKind { Info, Warning, Error }
+
+    public class ChatMessage
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public string Role { get; set; } = "system";
+        public string Text { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public TimeSpan? Ttl { get; set; }
+        public MessageType Type { get; set; } = MessageType.Info;
+    }
 }
