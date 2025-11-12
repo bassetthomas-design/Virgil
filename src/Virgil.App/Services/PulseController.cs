@@ -1,53 +1,27 @@
+// AUTO-PATCH: disambiguate Mood by using Virgil.Domain
 using System;
-using System.Timers;
-using Virgil.App.Chat;
-using Virgil.App.ViewModels;
-using Virgil.App.Core;
+using System.Windows.Media;
+using Virgil.Domain; // single source of truth for Mood
 
 namespace Virgil.App.Services
 {
-    /// <summary>
-    /// Listens to chat messages and briefly adjusts the avatar mood.
-    /// </summary>
-    public sealed class PulseController : IDisposable
+    public class PulseController
     {
-        private readonly MonitoringViewModel _monitoring;
-        private readonly Timer _recovery;
+        private readonly Brush _okBrush = Brushes.MediumSpringGreen;
+        private readonly Brush _warnBrush = Brushes.Gold;
+        private readonly Brush _badBrush = Brushes.OrangeRed;
 
-        public PulseController(ChatService chat, MonitoringViewModel monitoring)
+        public Brush GetBrushForMood(Mood mood)
         {
-            _monitoring = monitoring;
-            _recovery = new Timer(1500) { AutoReset = false };
-            _recovery.Elapsed += OnRecovery;
-
-            chat.MessagePosted += OnMessagePosted;
-        }
-
-        private void OnMessagePosted(object sender, string text, ChatKind kind, int? ttlMs)
-        {
-            // Map chat kind to a short-lived mood pulse
-            _recovery.Stop();
-
-            _monitoring.CurrentMood = kind switch
+            switch (mood)
             {
-                ChatKind.Error => Mood.Angry,
-                ChatKind.Warning => Mood.Tired,
-                _ => Mood.Happy
-            };
-
-            _recovery.Interval = ttlMs.HasValue && ttlMs.Value > 0 ? ttlMs.Value : 1500;
-            _recovery.Start();
-        }
-
-        private void OnRecovery(object? s, ElapsedEventArgs e)
-        {
-            _monitoring.CurrentMood = Mood.Neutral;
-        }
-
-        public void Dispose()
-        {
-            _recovery.Elapsed -= OnRecovery;
-            _recovery.Dispose();
+                case Mood.Calm: return _okBrush;
+                case Mood.Focus: return _okBrush;
+                case Mood.Neutral: return _warnBrush;
+                case Mood.Tense: return _warnBrush;
+                case Mood.Stressed: return _badBrush;
+                default: return _warnBrush;
+            }
         }
     }
 }
