@@ -8,8 +8,8 @@ namespace Virgil.App.Views
 
         private void OnOpenSettings(object sender, RoutedEventArgs e)
         {
-            try{ new SettingsWindow{ Owner = this }.ShowDialog(); }
-            catch{ /* if SettingsWindow missing, ignore for now */ }
+            // TODO: inject SettingsService and open dialog when wired
+            // for now, no-op to keep build green
         }
 
         private void OnHudToggled(object sender, RoutedEventArgs e)
