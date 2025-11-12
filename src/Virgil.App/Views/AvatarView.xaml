@@ -5,7 +5,10 @@
              Height="160" Width="160">
   <UserControl.Resources>
     <conv:MoodToBrushConverter x:Key="MoodBrush"/>
-    <!-- default palette from the photo -->
+    <conv:MoodToScaleYConverter x:Key="MoodToScaleY"/>
+    <conv:MoodToScaleXConverter x:Key="MoodToScaleX"/>
+    <conv:MoodToAngleLeftConverter x:Key="MoodToAngleLeft"/>
+    <conv:MoodToAngleRightConverter x:Key="MoodToAngleRight"/>
     <SolidColorBrush x:Key="Mint" Color="#A6FEE1"/>
   </UserControl.Resources>
   <Grid>
@@ -24,7 +27,7 @@
       <Ellipse.Stroke><SolidColorBrush Color="#2A4B3D"/></Ellipse.Stroke>
     </Ellipse>
 
-    <!-- Eyes: mint by default, color may change with mood -->
+    <!-- Eyes -->
     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"/>
@@ -36,9 +39,11 @@
       <Grid Grid.Column="0">
         <Grid.RenderTransform>
           <TransformGroup>
-            <ScaleTransform x:Name="LeftEyeScale"/>
+            <ScaleTransform x:Name="LeftEyeScale"
+                            ScaleX="{Binding Mood, Converter={StaticResource MoodToScaleX}}"
+                            ScaleY="{Binding Mood, Converter={StaticResource MoodToScaleY}}"/>
             <SkewTransform x:Name="LeftEyeSkew"/>
-            <RotateTransform x:Name="LeftEyeRotate"/>
+            <RotateTransform x:Name="LeftEyeRotate" Angle="{Binding Mood, Converter={StaticResource MoodToAngleLeft}}"/>
           </TransformGroup>
         </Grid.RenderTransform>
         <Ellipse x:Name="LeftEye" Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
@@ -48,9 +53,11 @@
       <Grid Grid.Column="2">
         <Grid.RenderTransform>
           <TransformGroup>
-            <ScaleTransform x:Name="RightEyeScale"/>
+            <ScaleTransform x:Name="RightEyeScale"
+                            ScaleX="{Binding Mood, Converter={StaticResource MoodToScaleX}}"
+                            ScaleY="{Binding Mood, Converter={StaticResource MoodToScaleY}}"/>
             <SkewTransform x:Name="RightEyeSkew"/>
-            <RotateTransform x:Name="RightEyeRotate"/>
+            <RotateTransform x:Name="RightEyeRotate" Angle="{Binding Mood, Converter={StaticResource MoodToAngleRight}}"/>
           </TransformGroup>
         </Grid.RenderTransform>
         <Ellipse x:Name="RightEye" Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
@@ -60,50 +67,9 @@
     <!-- Aura -->
     <Ellipse IsHitTestVisible="False" Margin="-6">
       <Ellipse.Stroke><SolidColorBrush Color="#66A6FEE1"/></Ellipse.Stroke>
-      <Ellipse.Effect><DropShadowEffect Color="#FFA6FEE1" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/></Ellipse.Effect>
+      <Ellipse.Effect>
+        <DropShadowEffect Color="#FFA6FEE1" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/>
+      </Ellipse.Effect>
     </Ellipse>
   </Grid>
-
-  <!-- Basic eye expressions driven by Mood via simple triggers -->
-  <UserControl.Style>
-    <Style TargetType="UserControl">
-      <Style.Triggers>
-        <!-- Calm/neutral: default mint, round eyes -->
-        <DataTrigger Binding="{Binding Mood}" Value="Calm">
-          <Setter TargetName="LeftEyeScale" Property="ScaleY" Value="1"/>
-          <Setter TargetName="RightEyeScale" Property="ScaleY" Value="1"/>
-          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="0"/>
-          <Setter TargetName="RightEyeRotate" Property="Angle" Value="0"/>
-        </DataTrigger>
-
-        <!-- Focused/working: slightly narrowed vertically -->
-        <DataTrigger Binding="{Binding Mood}" Value="Focused">
-          <Setter TargetName="LeftEyeScale" Property="ScaleY" Value="0.75"/>
-          <Setter TargetName="RightEyeScale" Property="ScaleY" Value="0.75"/>
-        </DataTrigger>
-
-        <!-- Tired: droopy lids (compress Y) and slight rotate down -->
-        <DataTrigger Binding="{Binding Mood}" Value="Tired">
-          <Setter TargetName="LeftEyeScale" Property="ScaleY" Value="0.6"/>
-          <Setter TargetName="RightEyeScale" Property="ScaleY" Value="0.6"/>
-          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="8"/>
-          <Setter TargetName="RightEyeRotate" Property="Angle" Value="-8"/>
-        </DataTrigger>
-
-        <!-- Angry/Overheat: wider X, slight inward tilt -->
-        <DataTrigger Binding="{Binding Mood}" Value="Alert">
-          <Setter TargetName="LeftEyeScale" Property="ScaleX" Value="1.2"/>
-          <Setter TargetName="RightEyeScale" Property="ScaleX" Value="1.2"/>
-          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="-6"/>
-          <Setter TargetName="RightEyeRotate" Property="Angle" Value="6"/>
-        </DataTrigger>
-
-        <!-- Happy/Cool: tiny up-tilt -->
-        <DataTrigger Binding="{Binding Mood}" Value="Happy">
-          <Setter TargetName="LeftEyeRotate" Property="Angle" Value="-4"/>
-          <Setter TargetName="RightEyeRotate" Property="Angle" Value="4"/>
-        </DataTrigger>
-      </Style.Triggers>
-    </Style>
-  </UserControl.Style>
 </UserControl>
