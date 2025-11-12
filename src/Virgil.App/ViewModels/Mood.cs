@@ -1,3 +1,5 @@
-namespace Virgil.App.ViewModels;
-
-public enum Mood { Sleepy, Happy, Focused, Warn, Alert, Proud, Tired, Angry, Love, Chat }
+// DEPRECATED: use Virgil.Domain.Mood instead. Kept temporarily to avoid breaking XAML bindings.
+namespace Virgil.App.ViewModels
+{
+    // Intentionally left empty or with shims if needed later.
+}
