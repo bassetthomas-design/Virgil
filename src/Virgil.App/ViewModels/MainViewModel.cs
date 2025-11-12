@@ -4,10 +4,12 @@ namespace Virgil.App.ViewModels
 {
     public partial class MainViewModel
     {
-        // Remove invalid static return type usage. If PhraseEngine methods are needed, call them directly:
-        public void SeedWelcomeMessage(ChatService chat)
+        public MonitoringViewModel Monitoring { get; } = new();
+        private readonly PulseController _pulse;
+
+        public MainViewModel(ChatService chat)
         {
-            // Example: chat.Post(PhraseEngine.Welcome()); // assuming static method exists
+            _pulse = new PulseController(chat, Monitoring);
         }
     }
 }
