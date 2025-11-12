@@ -1,27 +1,34 @@
-// AUTO-PATCH: disambiguate Mood by using Virgil.Domain
 using System;
-using System.Windows.Media;
-using Virgil.Domain; // single source of truth for Mood
+using System.Timers;
+using Virgil.App.Chat;
+using Virgil.App.ViewModels;
+using Virgil.App.Core;
 
 namespace Virgil.App.Services
 {
-    public class PulseController
+    public class PulseController : IDisposable
     {
-        private readonly Brush _okBrush = Brushes.MediumSpringGreen;
-        private readonly Brush _warnBrush = Brushes.Gold;
-        private readonly Brush _badBrush = Brushes.OrangeRed;
+        private readonly MonitoringViewModel _monitoring;
+        private readonly Timer _recovery;
 
-        public Brush GetBrushForMood(Mood mood)
+        public PulseController(ChatService chat, MonitoringViewModel monitoring)
         {
-            switch (mood)
-            {
-                case Mood.Calm: return _okBrush;
-                case Mood.Focus: return _okBrush;
-                case Mood.Neutral: return _warnBrush;
-                case Mood.Tense: return _warnBrush;
-                case Mood.Stressed: return _badBrush;
-                default: return _warnBrush;
-            }
+            _monitoring = monitoring;
+            _recovery = new Timer(1500) { AutoReset = false };
+            _recovery.Elapsed += (_, __) => _monitoring.CurrentMood = default; // Neutral fallback
+
+            chat.MessagePosted += OnMessage;
         }
+
+        private void OnMessage(object sender, string text, ChatKind kind, int? ttlMs)
+        {
+            _recovery.Stop();
+            // Safe fallback to neutral until Core.Mood canonical set is finalized
+            _monitoring.CurrentMood = default;
+            _recovery.Interval = ttlMs.GetValueOrDefault(1500);
+            _recovery.Start();
+        }
+
+        public void Dispose() => _recovery.Dispose();
     }
 }
