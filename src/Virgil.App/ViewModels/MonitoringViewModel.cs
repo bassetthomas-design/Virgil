@@ -6,6 +6,10 @@ namespace Virgil.App.ViewModels
 {
     public partial class MonitoringViewModel : INotifyPropertyChanged
     {
+        public MonitoringViewModel() { }
+        // Shim to match existing MainWindow usage (temporary)
+        public MonitoringViewModel(object a, object b, object c) : this() { }
+
         private Mood _currentMood = default;
         public Mood CurrentMood
         {
