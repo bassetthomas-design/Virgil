@@ -22,7 +22,7 @@ namespace Virgil.App
                 Directory.CreateDirectory(dir);
                 var path = Path.Combine(dir, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.log");
                 File.WriteAllText(path, BuildReport(ex));
-                MessageBox.Show("Virgil a rencontré une erreur.\n\n"+path, "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show("Virgil a rencontré une erreur.\n\n"+path, "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
             }catch{}
         }
         private static string BuildReport(Exception? ex){
