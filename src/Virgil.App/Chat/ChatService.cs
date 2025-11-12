@@ -1,19 +1,16 @@
 using System;
-using System.Timers;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Virgil.App.Chat
 {
-    public class ChatService
+    public partial class ChatService
     {
-        public event Action<string, MessageType, bool, int?>? MessagePosted;
+        private readonly ObservableCollection<ChatMessage> _messages = new();
+        public ReadOnlyObservableCollection<ChatMessage> MessagesRO => new ReadOnlyObservableCollection<ChatMessage>(_messages);
 
-        // Base overload
-        public void Post(string message) => MessagePosted?.Invoke(message, MessageType.Info, false, null);
-
-        // Variadic for backward-compat calls
-        public void Post(string message, params object[] args) => MessagePosted?.Invoke(message, MessageType.Info, false, null);
-
-        // MVP signature with type/pinned/ttl
-        public void Post(string message, MessageType type, bool pinned = false, int? ttlMs = null)
-            => MessagePosted?.Invoke(message, type, pinned, ttlMs);
+        // ... existing members remain ...
     }
 }
