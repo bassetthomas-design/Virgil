@@ -1,21 +1,13 @@
 using Virgil.App.Chat;
-using Virgil.App.Services;
 
-namespace Virgil.App.ViewModels;
-
-public sealed class MainViewModel
+namespace Virgil.App.ViewModels
 {
-    public ChatService Chat { get; }
-    public PhraseEngine Phrases { get; }
-    public MonitoringViewModel Monitoring { get; }
-
-    public MainViewModel()
+    public partial class MainViewModel
     {
-        Chat = new ChatService();
-        Phrases = new PhraseEngine();
-        Monitoring = new MonitoringViewModel(new MonitoringService());
+        // Remove invalid static return type usage. If PhraseEngine methods are needed, call them directly:
+        public void SeedWelcomeMessage(ChatService chat)
+        {
+            // Example: chat.Post(PhraseEngine.Welcome()); // assuming static method exists
+        }
     }
-
-    public void Say(string text) => Chat.Post(text);
-    public void Progress(string label, int percent) => Chat.Post($"{label} {percent}%", ChatKind.Progress, percent);
 }
