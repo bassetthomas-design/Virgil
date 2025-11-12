@@ -3,33 +3,51 @@ using System.Threading.Tasks;
 
 namespace Virgil.App.Chat
 {
-    public delegate void MessagePostedHandler(object sender, string text, MessageType type, bool pinned, int? ttlMs);
+    // 4-arg handler expected by existing subscribers
+    public delegate void MessagePostedHandler(object sender, string text, ChatKind kind, int? ttlMs);
 
     public partial class ChatService
     {
         public event MessagePostedHandler? MessagePosted;
 
+        // Basic posts
         public Task Post(string text)
         {
-            MessagePosted?.Invoke(this, text, MessageType.Info, false, null);
+            MessagePosted?.Invoke(this, text, ChatKind.Info, null);
             return Task.CompletedTask;
         }
 
-        public Task Post(string text, MessageType type, bool pinned = false, int? ttlMs = null)
+        // Overloads with ChatKind
+        public Task Post(string text, ChatKind kind, bool pinned = false, int? ttlMs = null)
         {
-            MessagePosted?.Invoke(this, text, type, pinned, ttlMs);
+            MessagePosted?.Invoke(this, text, kind, ttlMs);
             return Task.CompletedTask;
         }
 
         public Task Post(string role, string text)
         {
-            MessagePosted?.Invoke(this, text, MessageType.Info, false, null);
+            MessagePosted?.Invoke(this, text, ChatKind.Info, null);
+            return Task.CompletedTask;
+        }
+
+        public Task Post(string role, string text, ChatKind kind, bool pinned = false, int? ttlMs = null)
+        {
+            MessagePosted?.Invoke(this, text, kind, ttlMs);
+            return Task.CompletedTask;
+        }
+
+        // Overloads with MessageType kept for compatibility (map to ChatKind)
+        public Task Post(string text, MessageType type, bool pinned = false, int? ttlMs = null)
+        {
+            var kind = type == MessageType.Error ? ChatKind.Error : type == MessageType.Warning ? ChatKind.Warning : ChatKind.Info;
+            MessagePosted?.Invoke(this, text, kind, ttlMs);
             return Task.CompletedTask;
         }
 
         public Task Post(string role, string text, MessageType type, bool pinned = false, int? ttlMs = null)
         {
-            MessagePosted?.Invoke(this, text, type, pinned, ttlMs);
+            var kind = type == MessageType.Error ? ChatKind.Error : type == MessageType.Warning ? ChatKind.Warning : ChatKind.Info;
+            MessagePosted?.Invoke(this, text, kind, ttlMs);
             return Task.CompletedTask;
         }
     }
