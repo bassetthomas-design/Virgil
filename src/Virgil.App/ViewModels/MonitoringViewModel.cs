@@ -1,15 +1,20 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Virgil.App.Core;
 
 namespace Virgil.App.ViewModels
 {
-    public partial class MonitoringViewModel
+    public partial class MonitoringViewModel : INotifyPropertyChanged
     {
-        public MonitoringViewModel()
+        private Mood _currentMood = default(Mood);
+        public Mood CurrentMood
         {
-            // temporarily avoid referencing missing Mood.Focused
-            CurrentMood = default(Mood);
+            get => _currentMood;
+            set { if (_currentMood.Equals(value)) return; _currentMood = value; OnPropertyChanged(); }
         }
 
-        public Mood CurrentMood { get; set; }
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
