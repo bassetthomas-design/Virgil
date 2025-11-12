@@ -1,21 +1,15 @@
 using Virgil.App.Chat;
 using Virgil.App.Services;
 
-namespace Virgil.App.ViewModels;
-
-public sealed class MainViewModel
+namespace Virgil.App.ViewModels
 {
-    public ChatService Chat { get; }
-    public PhraseEngine Phrases { get; }
-    public MonitoringViewModel Monitoring { get; }
-
-    public MainViewModel()
+    public partial class MainViewModel
     {
-        Chat = new ChatService();
-        Phrases = new PhraseEngine();
-        Monitoring = new MonitoringViewModel(new MonitoringService());
-    }
+        private readonly PulseController _pulse;
 
-    public void Say(string text) => Chat.Post(text);
-    public void Progress(string label, int percent) => Chat.Post($"{label} {percent}%", ChatKind.Progress, percent);
+        public MainViewModel(ChatService chat, MonitoringViewModel monitoring)
+        {
+            _pulse = new PulseController(chat, monitoring);
+        }
+    }
 }
