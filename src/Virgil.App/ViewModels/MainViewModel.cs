@@ -1,15 +1,15 @@
 using Virgil.App.Chat;
+using Virgil.App.Services;
 
 namespace Virgil.App.ViewModels
 {
     public partial class MainViewModel
     {
-        public MonitoringViewModel Monitoring { get; } = new();
         private readonly PulseController _pulse;
 
-        public MainViewModel(ChatService chat)
+        public MainViewModel(ChatService chat, MonitoringViewModel monitoring)
         {
-            _pulse = new PulseController(chat, Monitoring);
+            _pulse = new PulseController(chat, monitoring);
         }
     }
 }
