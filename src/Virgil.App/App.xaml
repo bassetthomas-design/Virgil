@@ -35,6 +35,6 @@
     </ResourceDictionary.MergedDictionaries>    <!-- Merge in Avatar theme -->
    
        
-        </ResourceDictionary>
+        
     </Application.Resources>
 </Application>
