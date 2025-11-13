@@ -1,11 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
-uusing Virgil.App.Interfaces;
+using Virgil.App.Interfaces;
 
-namespace Virgil.App.Views
+namespace Virgil.App.Views {
 {
     public partial class ActionsPanel : UserControl
-    {
+   
         public ActionsPanel()
         {
             InitializeComponent();
