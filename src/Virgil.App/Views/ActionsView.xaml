@@ -56,8 +56,8 @@
                         CommandParameter="browser_deep_clean"/>
             </StackPanel>
 
-            <!-- Réseau & Internet -->
-            <TextBlock Text="Réseau & Internet"
+            <!-- Réseau &amp; Internet -->
+            <TextBlock Text="Réseau &amp; Internet"
                        Foreground="#DDD"
                        FontSize="14"
                        FontWeight="SemiBold"
@@ -81,8 +81,8 @@
                         CommandParameter="network_latency_test"/>
             </StackPanel>
 
-            <!-- Performances & Gaming -->
-            <TextBlock Text="Performances & Gaming"
+            <!-- Performances &amp; Gaming -->
+            <TextBlock Text="Performances &amp; Gaming"
                        Foreground="#DDD"
                        FontSize="14"
                        FontWeight="SemiBold"
@@ -141,8 +141,8 @@
                         CommandParameter="rambo_repair"/>
             </StackPanel>
 
-            <!-- Virgil / Interface -->
-            <TextBlock Text="Virgil & interface"
+            <!-- Virgil &amp; interface -->
+            <TextBlock Text="Virgil &amp; interface"
                        Foreground="#DDD"
                        FontSize="14"
                        FontWeight="SemiBold"
