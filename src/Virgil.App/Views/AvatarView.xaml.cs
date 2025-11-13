@@ -1,32 +1,35 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 
 namespace Virgil.App.Views
 {
     public partial class AvatarView : UserControl
     {
-        public AvatarView() { InitializeComponent(); }
-
-        public void Pulse(double intensity)
+        public AvatarView()
         {
-            try
-            {
-                var sb = new Storyboard();
-                var animUp = new DoubleAnimation
-                {
-                    From = 1.0, To = 1.0 + 0.05 + 0.15 * intensity, Duration = TimeSpan.FromMilliseconds(140), AutoReverse = true, EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-                };
-                Storyboard.SetTarget(animUp, ScaleTransform);
-                Storyboard.SetTargetProperty(animUp, new PropertyPath("ScaleX"));
-                var animUpY = animUp.Clone();
-                Storyboard.SetTarget(animUpY, ScaleTransform);
-                Storyboard.SetTargetProperty(animUpY, new PropertyPath("ScaleY"));
-                sb.Children.Add(animUp); sb.Children.Add(animUpY);
-                sb.Begin();
-            }
-            catch { }
+            InitializeComponent();
+            Loaded += OnLoaded;
+        }
+
+        private void OnLoaded(object sender, RoutedEventArgs e)
+        {
+            // Simple intro scale animation
+            var sb = new Storyboard();
+
+            var scaleX = new DoubleAnimation(0.9, 1.0, new Duration(TimeSpan.FromMilliseconds(350))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+            var scaleY = new DoubleAnimation(0.9, 1.0, new Duration(TimeSpan.FromMilliseconds(350))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+
+            Storyboard.SetTarget(scaleX, AvatarRoot);
+            Storyboard.SetTarget(scaleY, AvatarRoot);
+            Storyboard.SetTargetProperty(scaleX, new PropertyPath(ScaleTransform.ScaleXProperty));
+            Storyboard.SetTargetProperty(scaleY, new PropertyPath(ScaleTransform.ScaleYProperty));
+
+            sb.Children.Add(scaleX);
+            sb.Children.Add(scaleY);
+            sb.Begin();
         }
     }
 }
