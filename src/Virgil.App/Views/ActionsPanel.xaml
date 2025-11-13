@@ -19,7 +19,7 @@
             <Button Content="Nettoyage navigateur (profond)" Tag="browser_deep_clean" Margin="0,0,0,8" Click="ActionButton_Click"/>
 
             <!-- Réseau & Internet -->
-            <TextBlock Text="Réseau & Internet" Margin="0,4,0,4" FontWeight="Bold"/>
+   <TextBlock Text="Réseau &amp; Internet" Margin="0,0,0,4" FontWeight="Bold"/>
             <Button Content="Diagnostic réseau rapide" Tag="network_diag" Margin="0,0,0,4" Click="ActionButton_Click"/>
             <Button Content="Réinitialisation réseau (soft)" Tag="network_soft_reset" Margin="0,0,0,4" Click="ActionButton_Click"/>
             <Button Content="Réinitialisation réseau (avancée)" Tag="network_hard_reset" Margin="0,0,0,4" Click="ActionButton_Click"/>
@@ -40,7 +40,7 @@
 
             <!-- Spéciaux -->
             <TextBlock Text="Spéciaux" Margin="0,4,0,4" FontWeight="Bold"/>
-            <Button Content="Mode RAMBO (réparer Explorer & cache icônes)" Tag="rambo_repair" Margin="0,0,0,4" Click="ActionButton_Click"/>
+   <Button Content="Mode RAMBO (réparer Explorer &amp; caamp;che icônes)" Tag="rambo_repair" Margin="0,0,0,4" Click="ActionButton_Click"/>
             <Button Content="Effet Thanos (effacer le chat)" Tag="chat_thanos" Margin="0,0,0,4" Click="ActionButton_Click"/>
             <Button Content="Recharger la configuration" Tag="app_reload_settings" Margin="0,0,0,4" Click="ActionButton_Click"/>
             <Button Content="Re-scanner le système" Tag="monitoring_rescan" Margin="0,0,0,0" Click="ActionButton_Click"/>
