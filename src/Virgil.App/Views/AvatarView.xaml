@@ -1,75 +1,66 @@
 <UserControl x:Class="Virgil.App.Views.AvatarView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:conv="clr-namespace:Virgil.App.Converters"
-             Height="160" Width="160">
-  <UserControl.Resources>
-    <conv:MoodToBrushConverter x:Key="MoodBrush"/>
-    <conv:MoodToScaleYConverter x:Key="MoodToScaleY"/>
-    <conv:MoodToScaleXConverter x:Key="MoodToScaleX"/>
-    <conv:MoodToAngleLeftConverter x:Key="MoodToAngleLeft"/>
-    <conv:MoodToAngleRightConverter x:Key="MoodToAngleRight"/>
-    <SolidColorBrush x:Key="Mint" Color="#A6FEE1"/>
-  </UserControl.Resources>
-  <Grid>
-    <Grid.RenderTransform>
-      <ScaleTransform x:Name="ScaleTransform" CenterX="80" CenterY="80"/>
-    </Grid.RenderTransform>
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:conv="clr-namespace:Virgil.App.Converters"
+    mc:Ignorable="d">
+    <UserControl.Resources>
+        <conv:MoodToBrushConverter x:Key="MoodBrush"/>
+        <conv:MoodToScaleXConverter x:Key="ScaleX"/>
+        <conv:MoodToScaleYConverter x:Key="ScaleY"/>
+        <conv:MoodToAngleLeftConverter x:Key="AngleLeft"/>
+        <conv:MoodToAngleRightConverter x:Key="AngleRight"/>
+    </UserControl.Resources>
 
-    <!-- Emerald bubble background -->
-    <Ellipse StrokeThickness="2">
-      <Ellipse.Fill>
-        <RadialGradientBrush>
-          <GradientStop Color="#36845D" Offset="0"/>
-          <GradientStop Color="#0F2420" Offset="1"/>
-        </RadialGradientBrush>
-      </Ellipse.Fill>
-      <Ellipse.Stroke><SolidColorBrush Color="#2A4B3D"/></Ellipse.Stroke>
-    </Ellipse>
+    <Grid Background="#0B0B0B">
+        <!-- Aura + disque existants -->
+        <Grid x:Name="AvatarCore" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid Width="220" Height="220">
+                <Ellipse Width="220" Height="220">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush GradientOrigin="0.47,0.45" RadiusX="1.0" RadiusY="1.0">
+                            <GradientStop Color="#0E3A2F" Offset="0"/>
+                            <GradientStop Color="#0A1F1A" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                    <Ellipse.Effect>
+                        <DropShadowEffect BlurRadius="20" ShadowDepth="0" Color="#88CFFFEA"/>
+                    </Ellipse.Effect>
+                </Ellipse>
+                <Ellipse Width="220" Height="220" Stroke="#CFFFEA" StrokeThickness="2"/>
+            </Grid>
+        </Grid>
 
-    <!-- Eyes -->
-    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="12"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
+        <!-- Couche yeux -->
+        <Grid x:Name="EyesLayer" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid Width="120" Height="50">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform 
+                            ScaleX="{Binding CurrentMood, Converter={StaticResource ScaleX}}"
+                            ScaleY="{Binding CurrentMood, Converter={StaticResource ScaleY}}"/>
+                    </TransformGroup>
+                </Grid.RenderTransform>
 
-      <!-- Left eye -->
-      <Grid Grid.Column="0">
-        <Grid.RenderTransform>
-          <TransformGroup>
-            <ScaleTransform x:Name="LeftEyeScale"
-                            ScaleX="{Binding Mood, Converter={StaticResource MoodToScaleX}}"
-                            ScaleY="{Binding Mood, Converter={StaticResource MoodToScaleY}}"/>
-            <SkewTransform x:Name="LeftEyeSkew"/>
-            <RotateTransform x:Name="LeftEyeRotate" Angle="{Binding Mood, Converter={StaticResource MoodToAngleLeft}}"/>
-          </TransformGroup>
-        </Grid.RenderTransform>
-        <Ellipse x:Name="LeftEye" Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
-      </Grid>
+                <Ellipse Width="22" Height="22" HorizontalAlignment="Left" Margin="0,0,58,0">
+                    <Ellipse.Fill>
+                        <SolidColorBrush Color="{Binding CurrentMood, Converter={StaticResource MoodBrush}}"/>
+                    </Ellipse.Fill>
+                    <Ellipse.RenderTransform>
+                        <RotateTransform Angle="{Binding CurrentMood, Converter={StaticResource AngleLeft}}" CenterX="11" CenterY="11"/>
+                    </Ellipse.RenderTransform>
+                </Ellipse>
 
-      <!-- Right eye -->
-      <Grid Grid.Column="2">
-        <Grid.RenderTransform>
-          <TransformGroup>
-            <ScaleTransform x:Name="RightEyeScale"
-                            ScaleX="{Binding Mood, Converter={StaticResource MoodToScaleX}}"
-                            ScaleY="{Binding Mood, Converter={StaticResource MoodToScaleY}}"/>
-            <SkewTransform x:Name="RightEyeSkew"/>
-            <RotateTransform x:Name="RightEyeRotate" Angle="{Binding Mood, Converter={StaticResource MoodToAngleRight}}"/>
-          </TransformGroup>
-        </Grid.RenderTransform>
-        <Ellipse x:Name="RightEye" Width="24" Height="24" Fill="{Binding Mood, Converter={StaticResource MoodBrush}}"/>
-      </Grid>
+                <Ellipse Width="22" Height="22" HorizontalAlignment="Right" Margin="58,0,0,0">
+                    <Ellipse.Fill>
+                        <SolidColorBrush Color="{Binding CurrentMood, Converter={StaticResource MoodBrush}}"/>
+                    </Ellipse.Fill>
+                    <Ellipse.RenderTransform>
+                        <RotateTransform Angle="{Binding CurrentMood, Converter={StaticResource AngleRight}}" CenterX="11" CenterY="11"/>
+                    </Ellipse.RenderTransform>
+                </Ellipse>
+            </Grid>
+        </Grid>
     </Grid>
-
-    <!-- Aura -->
-    <Ellipse IsHitTestVisible="False" Margin="-6">
-      <Ellipse.Stroke><SolidColorBrush Color="#66A6FEE1"/></Ellipse.Stroke>
-      <Ellipse.Effect>
-        <DropShadowEffect Color="#FFA6FEE1" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/>
-      </Ellipse.Effect>
-    </Ellipse>
-  </Grid>
 </UserControl>
