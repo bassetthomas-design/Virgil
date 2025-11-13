@@ -5,70 +5,162 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="12" Orientation="Vertical" Spacing="8">
-            <TextBlock Text="Actions système" Foreground="#DDD" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,6"/>
-
+        <StackPanel Margin="12">
             <!-- Maintenance rapide -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="Mises à jour complètes" Tag="UpdateAll" Margin="4"/>
-                <Button Content="Nettoyage rapide" Tag="QuickClean" Margin="4"/>
-                <Button Content="Vider Corbeille" Tag="EmptyRecycleBin" Margin="4"/>
-                <Button Content="Nettoyer Windows Store" Tag="WsReset" Margin="4"/>
-                <Button Content="Nettoyage DNS/Cache" Tag="FlushDns" Margin="4"/>
-                <Button Content="Réparer réseau (reset)" Tag="NetworkReset" Margin="4"/>
-                <Button Content="Renouveler IP" Tag="RenewIP" Margin="4"/>
-            </WrapPanel>
+            <TextBlock Text="Maintenance rapide"
+                       Foreground="#DDD"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,12">
+                <Button Content="Scan système express"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="quick_scan"/>
+                <Button Content="Nettoyage rapide"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="quick_clean"/>
+                <Button Content="Nettoyage navigateur (léger)"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="browser_soft_clean"/>
+                <Button Content="Libérer la RAM (soft)"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="ram_soft_free"/>
+            </StackPanel>
 
-            <!-- Vérifs système -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="SFC /scannow" Tag="Sfc" Margin="4"/>
-                <Button Content="DISM RestoreHealth" Tag="Dism" Margin="4"/>
-                <Button Content="Vérifier disque (CHKDSK)" Tag="Chkdsk" Margin="4"/>
-                <Button Content="Optimiser SSD/HDD" Tag="Defrag" Margin="4"/>
-                <Button Content="Reconstruire index recherche" Tag="RebuildIndex" Margin="4"/>
-            </WrapPanel>
+            <!-- Maintenance avancée -->
+            <TextBlock Text="Maintenance avancée"
+                       Foreground="#DDD"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,12">
+                <Button Content="Nettoyage disque avancé"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="deep_disk_clean"/>
+                <Button Content="Vérification disque"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="disk_check"/>
+                <Button Content="Vérification intégrité système"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="system_integrity"/>
+                <Button Content="Nettoyage navigateur (profond)"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="browser_deep_clean"/>
+            </StackPanel>
 
-            <!-- Explorateur / UI -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="Mode Rambo (icônes)" Tag="RamboIconCache" Margin="4"/>
-                <Button Content="Redémarrer Explorer" Tag="RestartExplorer" Margin="4"/>
-                <Button Content="Purger cache miniatures" Tag="ClearThumbCache" Margin="4"/>
-                <Button Content="Nettoyer temp utilisateur" Tag="CleanTemp" Margin="4"/>
-            </WrapPanel>
+            <!-- Réseau & Internet -->
+            <TextBlock Text="Réseau & Internet"
+                       Foreground="#DDD"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,12">
+                <Button Content="Diagnostic réseau rapide"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="network_diag"/>
+                <Button Content="Réinitialisation réseau (soft)"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="network_soft_reset"/>
+                <Button Content="Réinitialisation réseau (avancée)"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="network_hard_reset"/>
+                <Button Content="Test latence / stabilité"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="network_latency_test"/>
+            </StackPanel>
 
-            <!-- Réseau pro -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="Réinitialiser Winsock" Tag="WinsockReset" Margin="4"/>
-                <Button Content="Reset proxy" Tag="ProxyReset" Margin="4"/>
-                <Button Content="Test ping internet" Tag="PingTest" Margin="4"/>
-            </WrapPanel>
+            <!-- Performances & Gaming -->
+            <TextBlock Text="Performances & Gaming"
+                       Foreground="#DDD"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,12">
+                <Button Content="Activer mode Performance / Gaming"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="perf_mode_on"/>
+                <Button Content="Revenir en mode normal"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="perf_mode_off"/>
+                <Button Content="Analyser les programmes au démarrage"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="startup_analyze"/>
+                <Button Content="Fermer la session gaming (jeux + overlays)"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="gaming_kill_session"/>
+            </StackPanel>
 
-            <!-- Drivers / Store / Services -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="MàJ pilotes" Tag="DriversUpdate" Margin="4"/>
-                <Button Content="Redémarrer service audio" Tag="RestartAudioSvc" Margin="4"/>
-                <Button Content="Redémarrer service impression" Tag="RestartPrintSvc" Margin="4"/>
-            </WrapPanel>
+            <!-- Mises à jour -->
+            <TextBlock Text="Mises à jour"
+                       Foreground="#DDD"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,12">
+                <Button Content="Mettre à jour les logiciels installés"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="apps_update_all"/>
+                <Button Content="Lancer la mise à jour Windows"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="windows_update"/>
+                <Button Content="Vérifier les drivers graphiques"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="gpu_driver_check"/>
+            </StackPanel>
 
-            <!-- Utilitaires -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="Gestionnaire de tâches" Tag="OpenTaskMgr" Margin="4"/>
-                <Button Content="Services Windows" Tag="OpenServices" Margin="4"/>
-                <Button Content="Paramètres réseau" Tag="OpenNetworkSettings" Margin="4"/>
-            </WrapPanel>
+            <!-- Mode RAMBO -->
+            <TextBlock Text="Mode RAMBO"
+                       Foreground="#FF4D4D"
+                       FontSize="14"
+                       FontWeight="Bold"
+                       Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,12">
+                <Button Content="Mode RAMBO (réparer l'explorateur et le cache d'icônes)"
+                        Margin="0,0,0,4"
+                        ToolTip="Redémarre l'explorateur Windows et nettoie les caches d'icônes. L'écran peut clignoter."
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="rambo_repair"/>
+            </StackPanel>
 
-            <!-- Énergie -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="Redémarrer" Tag="Reboot" Margin="4"/>
-                <Button Content="Éteindre" Tag="Shutdown" Margin="4"/>
-                <Button Content="Veille" Tag="Sleep" Margin="4"/>
-            </WrapPanel>
-
-            <!-- Fun / multimédia -->
-            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
-                <Button Content="Pulse musique (détection)" Tag="MusicPulse" Margin="4"/>
-                <Button Content="Sync YouTube" Tag="YouTubePulse" Margin="4"/>
-            </WrapPanel>
+            <!-- Virgil / Interface -->
+            <TextBlock Text="Virgil & interface"
+                       Foreground="#DDD"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,12">
+                <Button Content="Effet Thanos (vider le chat)"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="chat_thanos"/>
+                <Button Content="Recharger la configuration"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="app_reload_settings"/>
+                <Button Content="Re-scan système / monitoring"
+                        Margin="0,0,0,4"
+                        Command="{Binding ExecuteActionCommand}"
+                        CommandParameter="monitoring_rescan"/>
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
