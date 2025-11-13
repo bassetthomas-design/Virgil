@@ -30,11 +30,11 @@
             <Setter Property="Background" Value="{DynamicResource App.PanelBrush}"/>
         </Style>
 
-        <!-- Merge in Avatar theme -->
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/AvatarTheme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Themes/AvatarTheme.xaml" />
+    </ResourceDictionary.MergedDictionaries>    <!-- Merge in Avatar theme -->
+   
+       
         </ResourceDictionary>
     </Application.Resources>
 </Application>
