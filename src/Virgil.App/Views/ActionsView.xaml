@@ -1,0 +1,74 @@
+<UserControl x:Class="Virgil.App.Views.ActionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12" Orientation="Vertical" Spacing="8">
+            <TextBlock Text="Actions système" Foreground="#DDD" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,6"/>
+
+            <!-- Maintenance rapide -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="Mises à jour complètes" Tag="UpdateAll" Margin="4"/>
+                <Button Content="Nettoyage rapide" Tag="QuickClean" Margin="4"/>
+                <Button Content="Vider Corbeille" Tag="EmptyRecycleBin" Margin="4"/>
+                <Button Content="Nettoyer Windows Store" Tag="WsReset" Margin="4"/>
+                <Button Content="Nettoyage DNS/Cache" Tag="FlushDns" Margin="4"/>
+                <Button Content="Réparer réseau (reset)" Tag="NetworkReset" Margin="4"/>
+                <Button Content="Renouveler IP" Tag="RenewIP" Margin="4"/>
+            </WrapPanel>
+
+            <!-- Vérifs système -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="SFC /scannow" Tag="Sfc" Margin="4"/>
+                <Button Content="DISM RestoreHealth" Tag="Dism" Margin="4"/>
+                <Button Content="Vérifier disque (CHKDSK)" Tag="Chkdsk" Margin="4"/>
+                <Button Content="Optimiser SSD/HDD" Tag="Defrag" Margin="4"/>
+                <Button Content="Reconstruire index recherche" Tag="RebuildIndex" Margin="4"/>
+            </WrapPanel>
+
+            <!-- Explorateur / UI -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="Mode Rambo (icônes)" Tag="RamboIconCache" Margin="4"/>
+                <Button Content="Redémarrer Explorer" Tag="RestartExplorer" Margin="4"/>
+                <Button Content="Purger cache miniatures" Tag="ClearThumbCache" Margin="4"/>
+                <Button Content="Nettoyer temp utilisateur" Tag="CleanTemp" Margin="4"/>
+            </WrapPanel>
+
+            <!-- Réseau pro -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="Réinitialiser Winsock" Tag="WinsockReset" Margin="4"/>
+                <Button Content="Reset proxy" Tag="ProxyReset" Margin="4"/>
+                <Button Content="Test ping internet" Tag="PingTest" Margin="4"/>
+            </WrapPanel>
+
+            <!-- Drivers / Store / Services -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="MàJ pilotes" Tag="DriversUpdate" Margin="4"/>
+                <Button Content="Redémarrer service audio" Tag="RestartAudioSvc" Margin="4"/>
+                <Button Content="Redémarrer service impression" Tag="RestartPrintSvc" Margin="4"/>
+            </WrapPanel>
+
+            <!-- Utilitaires -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="Gestionnaire de tâches" Tag="OpenTaskMgr" Margin="4"/>
+                <Button Content="Services Windows" Tag="OpenServices" Margin="4"/>
+                <Button Content="Paramètres réseau" Tag="OpenNetworkSettings" Margin="4"/>
+            </WrapPanel>
+
+            <!-- Énergie -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="Redémarrer" Tag="Reboot" Margin="4"/>
+                <Button Content="Éteindre" Tag="Shutdown" Margin="4"/>
+                <Button Content="Veille" Tag="Sleep" Margin="4"/>
+            </WrapPanel>
+
+            <!-- Fun / multimédia -->
+            <WrapPanel ItemWidth="230" ItemHeight="36" Margin="0,0,0,8">
+                <Button Content="Pulse musique (détection)" Tag="MusicPulse" Margin="4"/>
+                <Button Content="Sync YouTube" Tag="YouTubePulse" Margin="4"/>
+            </WrapPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
