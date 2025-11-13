@@ -1,13 +1,49 @@
 <UserControl x:Class="Virgil.App.Views.ActionsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Height="Auto" Width="220">
-    <StackPanel Margin="8">
-        <Button Content="Surveillance ON/OFF" Margin="0,0,0,8" Command="{Binding SurveillanceCommand}"/>
-        <Button Content="Maintenance complète" Margin="0,0,0,8" Command="{Binding MaintenanceCommand}"/>
-        <Button Content="Nettoyage intelligent" Margin="0,0,0,8" Command="{Binding SmartCleanupCommand}"/>
-        <Button Content="Nettoyer navigateurs" Margin="0,0,0,8" Command="{Binding CleanBrowsersCommand}"/>
-        <Button Content="Tout mettre à jour" Margin="0,0,0,8" Command="{Binding UpdateAllCommand}"/>
-        <Button Content="Defender (MAJ + Scan)" Margin="0,0,0,8" Command="{Binding DefenderCommand}"/>
-        <Button Content="Ouvrir configuration" Command="{Binding OpenConfigCommand}"/>
-    </StackPanel>
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="220">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="8">
+            <!-- Maintenance rapide -->
+            <TextBlock Text="Maintenance rapide" Margin="0,0,0,4" FontWeight="Bold"/>
+            <Button Content="Scan système express" Tag="quick_scan" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Nettoyage rapide" Tag="quick_clean" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Nettoyage navigateur (léger)" Tag="browser_soft_clean" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Libérer la RAM (soft)" Tag="ram_soft_free" Margin="0,0,0,8" Click="ActionButton_Click"/>
+
+            <!-- Maintenance avancée -->
+            <TextBlock Text="Maintenance avancée" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Nettoyage disque avancé" Tag="deep_disk_clean" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Vérification disque" Tag="disk_check" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Vérification intégrité système" Tag="system_integrity" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Nettoyage navigateur (profond)" Tag="browser_deep_clean" Margin="0,0,0,8" Click="ActionButton_Click"/>
+
+            <!-- Réseau & Internet -->
+            <TextBlock Text="Réseau & Internet" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Diagnostic réseau rapide" Tag="network_diag" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Réinitialisation réseau (soft)" Tag="network_soft_reset" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Réinitialisation réseau (avancée)" Tag="network_hard_reset" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Test latence / stabilité" Tag="network_latency_test" Margin="0,0,0,8" Click="ActionButton_Click"/>
+
+            <!-- Gaming / Performance -->
+            <TextBlock Text="Gaming / Performance" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Activer mode Performance / Gaming" Tag="perf_mode_on" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Revenir en mode normal" Tag="perf_mode_off" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Analyser démarrage" Tag="startup_analyze" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Fermer session gaming" Tag="gaming_kill_session" Margin="0,0,0,8" Click="ActionButton_Click"/>
+
+            <!-- Mises à jour -->
+            <TextBlock Text="Mises à jour" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Mettre à jour les logiciels" Tag="apps_update_all" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Lancer la mise à jour Windows" Tag="windows_update" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Vérifier les drivers GPU" Tag="gpu_driver_check" Margin="0,0,0,8" Click="ActionButton_Click"/>
+
+            <!-- Spéciaux -->
+            <TextBlock Text="Spéciaux" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Mode RAMBO (réparer Explorer & cache icônes)" Tag="rambo_repair" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Effet Thanos (effacer le chat)" Tag="chat_thanos" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Recharger la configuration" Tag="app_reload_settings" Margin="0,0,0,4" Click="ActionButton_Click"/>
+            <Button Content="Re-scanner le système" Tag="monitoring_rescan" Margin="0,0,0,0" Click="ActionButton_Click"/>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
