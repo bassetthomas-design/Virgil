@@ -4,7 +4,7 @@
         xmlns:views="clr-namespace:Virgil.App.Views"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
         Title="Virgil" Height="720" Width="1080">
-  <<Grid Background="{StaticResource App.BackgroundBrush}">
+<Grid Background="{StaticResource App.BackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="40"/>
             <RowDefinition Height="*"/>
