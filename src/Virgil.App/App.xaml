@@ -4,39 +4,39 @@
     Startup="Application_Startup">
     <Application.Resources>
         <ResourceDictionary>
-            <!-- Merge in Avatar theme -->
-
-    <ResourceDictionary>
-
-<ResourceDictionary.MergedDictionaries>
+            <!-- Thème Avatar -->
+            <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/AvatarTheme.xaml" />
             </ResourceDictionary.MergedDictionaries>
-
-            <!-- Dark theme resources -->
-            <SolidColorBrush x:Key="App.BackgroundBrush" Color="#0A0A0D"/>
-            <SolidColorBrush x:Key="App.PanelBrush" Color="#1E1E2E"/>
-            <SolidColorBrush x:Key="App.ForegroundBrush" Color="#F0F0F0"/>
-            <SolidColorBrush x:Key="App.SubtleBrush" Color="#2B2B37"/>
-
-            <!-- Default text style -->
+            <!-- Couleurs globales thème sombre -->
+            <SolidColorBrush x:Key="App.BackgroundBrush" Color="#0A0A0D" />
+            <SolidColorBrush x:Key="App.PanelBrush" Color="#1E1E2E" />
+            <SolidColorBrush x:Key="App.BorderBrush" Color="#25253A" />
+            <SolidColorBrush x:Key="App.AccentBrush" Color="#4FD1C5" />
+            <SolidColorBrush x:Key="App.AccentBrushSoft" Color="#CFFFEA" />
+            <SolidColorBrush x:Key="App.TextPrimaryBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="App.TextSecondaryBrush" Color="#C0C4D4" />
+            <SolidColorBrush x:Key="App.WarningBrush" Color="#F6AD55" />
+            <SolidColorBrush x:Key="App.ErrorBrush" Color="#FC8181" />
+            <SolidColorBrush x:Key="App.SuccessBrush" Color="#68D391" />
+            <!-- Style global des fenêtres -->
+            <Style TargetType="Window">
+                <Setter Property="Background" Value="{StaticResource App.BackgroundBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource App.TextPrimaryBrush}" />
+            </Style>
+            <!-- Style global du texte -->
             <Style TargetType="TextBlock">
-                <Setter Property="Foreground" Value="{DynamicResource App.ForegroundBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource App.TextPrimaryBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
             </Style>
-
-            <!-- Default button style -->
+            <!-- Style global des boutons -->
             <Style TargetType="Button">
-                <Setter Property="Foreground" Value="{DynamicResource App.ForegroundBrush}"/>
-                <Setter Property="Background" Value="{DynamicResource App.PanelBrush}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource App.SubtleBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Padding" Value="6,3"/>
-                <Setter Property="Margin" Value="2"/>
-            </Style>
-
-            <!-- GroupBox style -->
-            <Style TargetType="GroupBox">
-                <Setter Property="Foreground" Value="{DynamicResource App.ForegroundBrush}"/>
-                <Setter Property="Background" Value="{DynamicResource App.PanelBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource App.TextPrimaryBrush}" />
+                <Setter Property="Background" Value="{StaticResource App.PanelBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource App.BorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="6,4" />
+                <Setter Property="Margin" Value="0,2,0,2" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>
