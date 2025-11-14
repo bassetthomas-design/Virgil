@@ -2,8 +2,8 @@ using System;
 
 namespace Virgil.App.Chat
 {
-    public enum MessageType { Info, Warning, Error }
-    public enum ChatKind { Info, Warning, Error }
+    public enum MessageType { Info, Warning, Error, Success }
+    public enum ChatKind    { Info, Warning, Error, Success }
 
     public class ChatMessage
     {
