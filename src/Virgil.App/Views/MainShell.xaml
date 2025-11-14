@@ -29,7 +29,7 @@
         <views:ActionsPanel Grid.Row="1" Grid.Column="0" DataContext="{Binding Actions}"/>
 
         <!-- Avatar and metrics -->
-        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource App.PanelBrush}">
             <controls:AvatarView Width="192" Height="192" DataContext="{Binding Monitoring}"/>
             <views:MetricsBar Width="200" Margin="0,8,0,0" DataContext="{Binding Monitoring}"/>
         </StackPanel>
