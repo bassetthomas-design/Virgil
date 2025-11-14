@@ -21,7 +21,7 @@ namespace Virgil.App.Services
 
     public sealed class SystemMonitorService : ISystemMonitorService, IDisposable
     {
-        private Timer? _timer;
+        private System.Threading.Timer? _timer;
         private bool _isRunning;
 
         public event EventHandler<SystemMonitorSnapshot>? SnapshotUpdated;
@@ -33,7 +33,7 @@ namespace Virgil.App.Services
 
             _isRunning = true;
 
-            _timer = new Timer(OnTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+            _timer = new System.Threading.Timer(OnTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
 
             return Task.CompletedTask;
         }
