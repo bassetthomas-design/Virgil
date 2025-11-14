@@ -7,6 +7,7 @@
         <Grid.Effect>
             <DropShadowEffect BlurRadius="32" ShadowDepth="0" Opacity="0.85" Color="#88E8FFF5"/>
         </Grid.Effect>
+  
 
         <Grid.RenderTransform>
             <TransformGroup>
@@ -18,6 +19,11 @@
 
         <Image x:Name="ImgBack" Stretch="Uniform" Opacity="1"/>
         <Image x:Name="ImgFront" Stretch="Uniform" Opacity="0"/>
+
+        <Canvas IsHitTestVisible="False">
+            <Ellipse Width="24" Height="24" Fill="#E8FFF5" Canvas.Left="64" Canvas.Top="80"/>
+            <Ellipse Width="24" Height="24" Fill="#E8FFF5" Canvas.Left="104" Canvas.Top="80"/>
+        </Canvas>
 
         <Grid x:Name="BlinkOverlay" Opacity="0" IsHitTestVisible="False">
             <Rectangle Fill="#AA000000">
