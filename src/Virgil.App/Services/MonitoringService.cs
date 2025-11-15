@@ -1,4 +1,6 @@
 using System;
+using System.Timers;
+
 using LibreHardwareMonitor.Hardware;
 using Virgil.App.Models;
 
