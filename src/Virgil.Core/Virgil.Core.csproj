@@ -20,4 +20,10 @@
     <None Include="virgil-dialogues.json" CopyToOutputDirectory="Always" Condition="Exists('virgil-dialogues.json')" />
   </ItemGroup>
 
+  <!-- Domain + Services (actions, orchestrateur, services métier) -->
+  <ItemGroup>
+    <Compile Include="..\Virgil.Domain\**\*.cs" />
+    <Compile Include="..\Virgil.Services\**\*.cs" />
+  </ItemGroup>
+
 </Project>
