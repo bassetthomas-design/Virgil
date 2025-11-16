@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,21 @@ namespace Virgil.App.Chat
     public partial class ChatService : IChatService
     {
         private readonly List<ChatMessage> _messages = new();
+
+        // Very small built-in panel of default phrases Virgil can use when
+        // he wants to comment the system state or fill the silence. This can
+        // later be replaced or extended by data coming from JSON or another
+        // domain service.
+        private static readonly string[] _defaultPhrases = new[]
+        {
+            "Je garde un oeil sur le système.",
+            "Tout est calme pour l’instant.",
+            "Je reste en veille, prêt à intervenir.",
+            "Scan en cours… rien à signaler.",
+            "Je surveille les process, tranquille."
+        };
+
+        private static readonly Random _random = new();
 
         /// <inheritdoc />
         public IReadOnlyList<ChatMessage> Messages => _messages;
@@ -40,6 +56,22 @@ namespace Virgil.App.Chat
             // be leveraged later to drive styling or routing.
             var message = new ChatMessage("assistant", content);
             _messages.Add(message);
+        }
+
+        /// <summary>
+        /// Picks a random phrase from Virgil's default panel and posts it as
+        /// a system/assistant message. This is the building block for the
+        /// small talk / ambient commentary behaviour.
+        /// </summary>
+        public void PostRandomPhrase()
+        {
+            if (_defaultPhrases.Length == 0)
+            {
+                return;
+            }
+
+            var content = _defaultPhrases[_random.Next(_defaultPhrases.Length)];
+            PostSystemMessage(content, MessageType.Info, ChatKind.Info);
         }
     }
 }
