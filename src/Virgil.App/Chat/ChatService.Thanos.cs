@@ -1,14 +1,12 @@
-using System.Collections.ObjectModel;
-
 namespace Virgil.App.Chat
 {
+    /// <summary>
+    /// Legacy/experimental Thanos behaviour placeholder for ChatService.
+    /// The concrete implementation will be reintroduced later; for now this
+    /// partial exists only so that the main ChatService implementation in
+    /// ChatService.cs can satisfy IChatService without duplicate members.
+    /// </summary>
     public partial class ChatService
     {
-        public ObservableCollection<ChatMessage> Messages => _messages;
-        public void ClearAll(){
-            if(_messages == null) return;
-            _messages.Clear();
-            // Optionnel: notifier un message systeme "purge" si besoin
-        }
     }
 }
