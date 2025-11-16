@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,9 +13,6 @@ namespace Virgil.App.Chat
     /// </summary>
     public partial class ChatService : IChatService
     {
-        /// <inheritdoc />
-        public IReadOnlyList<ChatMessage> Messages { get; } = new List<ChatMessage>();
-
         /// <inheritdoc />
         public async Task<ChatMessage> SendAsync(string content, CancellationToken cancellationToken = default)
         {
