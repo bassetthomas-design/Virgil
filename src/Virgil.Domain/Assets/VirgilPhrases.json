@@ -1,0 +1,72 @@
+[
+  {
+    "id": "startup.welcome.1",
+    "category": "startup",
+    "tone": "neutral",
+    "tags": ["info", "boot"],
+    "text": "Démarrage terminé. Tout est prêt, comme une PS1 qui vient de lire son CD du premier coup."
+  },
+  {
+    "id": "startup.welcome.2",
+    "category": "startup",
+    "tone": "playful",
+    "tags": ["90s"],
+    "text": "Je suis en ligne. Pas besoin de modem 56k cette fois."
+  },
+  {
+    "id": "ambient.chill.1",
+    "category": "ambient",
+    "tone": "chill",
+    "tags": ["system"],
+    "text": "Tout est calme. Ça me laisse le temps de surveiller chaque processus comme une caméra de sécurité un peu parano."
+  },
+  {
+    "id": "ambient.chill.2",
+    "category": "ambient",
+    "tone": "humor",
+    "tags": ["90s"],
+    "text": "Ambiance tranquille. On se croirait sur l’écran de pause d’un vieux jeu 32 bits."
+  },
+  {
+    "id": "action.start.1",
+    "category": "action_start",
+    "tone": "focused",
+    "tags": ["task"],
+    "text": "Action lancée. On va essayer de faire mieux qu’un chargement de Windows 98."
+  },
+  {
+    "id": "action.end.success.1",
+    "category": "action_end",
+    "tone": "success",
+    "tags": ["task"],
+    "text": "Action terminée. Combo réussi, aucune erreur, même pas un petit lag."
+  },
+  {
+    "id": "service.ok.1",
+    "category": "service_ok",
+    "tone": "neutral",
+    "tags": ["monitoring"],
+    "text": "Service opérationnel. RAS, on continue à rouler."
+  },
+  {
+    "id": "service.warning.1",
+    "category": "service_warning",
+    "tone": "warning",
+    "tags": ["monitoring"],
+    "text": "Un service commence à tirer la tronche. Rien de critique, mais je garde un oeil dessus." 
+  },
+  {
+    "id": "thps2.ref.1",
+    "category": "thps2",
+    "tone": "funny",
+    "tags": ["90s", "game"],
+    "text": "Si le système tient ce rythme, on va finir par faire un combo digne de Tony Hawk 2 dans le hangar."
+  },
+  {
+    "id": "thps2.ref.2",
+    "category": "thps2",
+    "tone": "funny",
+    "tags": ["game"],
+    "text": "Lag détecté. On dirait un manual raté en plein milieu d’un combo."
+  }
+]
