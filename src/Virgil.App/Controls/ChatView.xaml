@@ -1,74 +1,50 @@
-<?xml version="1.0" encoding="utf-8"?>
 <UserControl x:Class="Virgil.App.Controls.ChatView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:chat="clr-namespace:Virgil.App.Chat"
-             xmlns:conv="clr-namespace:Virgil.App.Converters"
-             mc:Ignorable="d">
-  <UserControl.Resources>
-    <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
-    <SolidColorBrush x:Key="BubbleBg" Color="#1C1C22"/>
-    <SolidColorBrush x:Key="BubbleBorder" Color="#333333"/>
-    <SolidColorBrush x:Key="BubbleText" Color="#EDEDED"/>
-    <Style x:Key="BubbleBorderStyle" TargetType="Border">
-      <Setter Property="Background" Value="{StaticResource BubbleBg}"/>
-      <Setter Property="BorderBrush" Value="{StaticResource BubbleBorder}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="Padding" Value="10"/>
-    </Style>
+             mc:Ignorable="d"
+             d:DesignHeight="400" d:DesignWidth="600">
 
-    <Style x:Key="ChatItemStyle" TargetType="ContentPresenter">
-      <Setter Property="Margin" Value="0,0,0,8"/>
-      <Setter Property="Opacity" Value="0"/>
-      <Setter Property="RenderTransform">
-        <Setter.Value><TranslateTransform Y="6"/></Setter.Value>
-      </Setter>
-      <Style.Triggers>
-        <EventTrigger RoutedEvent="Loaded">
-          <BeginStoryboard>
-            <Storyboard>
-              <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.20"/>
-              <DoubleAnimation Storyboard.TargetProperty="(ContentPresenter.RenderTransform).Y" From="6" To="0" Duration="0:0:0.20"/>
-            </Storyboard>
-          </BeginStoryboard>
-        </EventTrigger>
-        <EventTrigger RoutedEvent="Unloaded">
-          <BeginStoryboard>
-            <Storyboard>
-              <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.40"/>
-              <DoubleAnimation Storyboard.TargetProperty="(ContentPresenter.RenderTransform).Y" To="-10" Duration="0:0:0.40"/>
-            </Storyboard>
-          </BeginStoryboard>
-        </EventTrigger>
-      </Style.Triggers>
-    </Style>
-  </UserControl.Resources>
+    <!-- Simplified chat view used on the dev branch. The original template
+         referenced a concrete ChatMessage CLR type from XAML, which became
+         brittle once the chat pipeline was refactored into Core. This version
+         keeps the surface minimal and relies on standard item templates bound
+         from the view model instead of hard-typing the message DTO. -->
 
-  <Border BorderBrush="#333" BorderThickness="1" CornerRadius="8" Padding="12" Background="{DynamicResource App.PanelBrush}">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <ItemsControl ItemsSource="{Binding Messages}">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemContainerStyle>
-          <Style TargetType="ContentPresenter" BasedOn="{StaticResource ChatItemStyle}"/>
-        </ItemsControl.ItemContainerStyle>
-        <ItemsControl.Resources>
-          <DataTemplate DataType="{x:Type chat:ChatMessage}">
-            <Border Style="{StaticResource BubbleBorderStyle}">
-              <StackPanel>
-                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="{StaticResource BubbleText}"/>
-                <ProgressBar Height="6" Margin="0,6,0,0" Minimum="0" Maximum="100"
-                             Visibility="{Binding Progress, Converter={StaticResource NullToVisibility}}"
-                             Value="{Binding Progress}"/>
-              </StackPanel>
-            </Border>
-          </DataTemplate>
-        </ItemsControl.Resources>
-      </ItemsControl>
-    </ScrollViewer>
-  </Border>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Messages list -->
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="MessagesList"
+                          Margin="8"
+                          ItemsSource="{Binding Messages}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Content}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,2"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Input area placeholder (actual behaviour wired in code-behind / VM) -->
+        <DockPanel Grid.Row="1" Margin="8">
+            <TextBox x:Name="InputBox"
+                     DockPanel.Dock="Left"
+                     MinWidth="100"
+                     VerticalAlignment="Center"
+                     Text="{Binding Input, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            <Button Content="Send"
+                    Margin="8,0,0,0"
+                    Padding="12,4"
+                    VerticalAlignment="Center"
+                    Command="{Binding SendCommand}"/>
+        </DockPanel>
+    </Grid>
 </UserControl>
