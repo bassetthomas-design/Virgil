@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,25 +9,20 @@ namespace Virgil.App.Chat
     /// This version implements the shared IChatService contract so that
     /// higher layers can depend on the abstraction defined in Core while
     /// the internal behaviour continues to evolve.
+    /// Other aspects of the behaviour (such as Thanos / history clearing)
+    /// live in partial declarations of this class.
     /// </summary>
-    public class ChatService : IChatService
+    public partial class ChatService : IChatService
     {
-        private readonly ObservableCollection<ChatMessage> _messages = new();
-
         /// <inheritdoc />
-        public IReadOnlyList<ChatMessage> Messages => _messages;
+        public IReadOnlyList<ChatMessage> Messages { get; } = new List<ChatMessage>();
 
         /// <inheritdoc />
         public async Task<ChatMessage> SendAsync(string content, CancellationToken cancellationToken = default)
         {
             // Basic placeholder implementation to keep the dev branch build
             // green while the full AI/chat pipeline is being wired.
-            var userMessage = new ChatMessage("user", content);
-            _messages.Add(userMessage);
-
             var assistantMessage = new ChatMessage("assistant", string.Empty);
-            _messages.Add(assistantMessage);
-
             await Task.CompletedTask;
             return assistantMessage;
         }
