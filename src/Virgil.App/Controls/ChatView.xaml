@@ -6,19 +6,12 @@
              mc:Ignorable="d"
              d:DesignHeight="400" d:DesignWidth="600">
 
-    <!-- Simplified chat view used on the dev branch. The original template
-         referenced a concrete ChatMessage CLR type from XAML, which became
-         brittle once the chat pipeline was refactored into Core. This version
-         keeps the surface minimal and relies on standard item templates bound
-         from the view model instead of hard-typing the message DTO. -->
-
+    <!-- Read-only chat view: Virgil speaks, user does not type. -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Messages list -->
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="MessagesList"
                           Margin="8"
@@ -32,19 +25,5 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
-
-        <!-- Input area placeholder (actual behaviour wired in code-behind / VM) -->
-        <DockPanel Grid.Row="1" Margin="8">
-            <TextBox x:Name="InputBox"
-                     DockPanel.Dock="Left"
-                     MinWidth="100"
-                     VerticalAlignment="Center"
-                     Text="{Binding Input, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-            <Button Content="Send"
-                    Margin="8,0,0,0"
-                    Padding="12,4"
-                    VerticalAlignment="Center"
-                    Command="{Binding SendCommand}"/>
-        </DockPanel>
     </Grid>
 </UserControl>
