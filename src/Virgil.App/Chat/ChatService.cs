@@ -1,16 +1,36 @@
-using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Virgil.App.Chat
 {
-    public partial class ChatService
+    /// <summary>
+    /// Default chat pipeline implementation for the Virgil application.
+    /// This version implements the shared IChatService contract so that
+    /// higher layers can depend on the abstraction defined in Core while
+    /// the internal behaviour continues to evolve.
+    /// </summary>
+    public class ChatService : IChatService
     {
         private readonly ObservableCollection<ChatMessage> _messages = new();
-        public ReadOnlyObservableCollection<ChatMessage> MessagesRO => new ReadOnlyObservableCollection<ChatMessage>(_messages);
 
-        // ... existing members remain ...
+        /// <inheritdoc />
+        public IReadOnlyList<ChatMessage> Messages => _messages;
+
+        /// <inheritdoc />
+        public async Task<ChatMessage> SendAsync(string content, CancellationToken cancellationToken = default)
+        {
+            // Basic placeholder implementation to keep the dev branch build
+            // green while the full AI/chat pipeline is being wired.
+            var userMessage = new ChatMessage("user", content);
+            _messages.Add(userMessage);
+
+            var assistantMessage = new ChatMessage("assistant", string.Empty);
+            _messages.Add(assistantMessage);
+
+            await Task.CompletedTask;
+            return assistantMessage;
+        }
     }
 }
