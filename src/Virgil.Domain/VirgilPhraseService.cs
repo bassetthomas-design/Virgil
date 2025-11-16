@@ -77,8 +77,41 @@ namespace Virgil.Domain
             return list[_random.Next(list.Count)];
         }
 
+        /// <summary>
+        /// Picks a random phrase filtered by category and, optionally, tone.
+        /// </summary>
+        public VirgilPhrase? GetRandomByCategoryAndTone(string category, string? tone = null)
+        {
+            if (_phrases.Count == 0)
+            {
+                return null;
+            }
+
+            IEnumerable<VirgilPhrase> pool = _phrases
+                .Where(p => string.Equals(p.Category, category, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(tone))
+            {
+                pool = pool.Where(p => string.Equals(p.Tone, tone, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var list = pool.ToList();
+            if (list.Count == 0)
+            {
+                return null;
+            }
+
+            return list[_random.Next(list.Count)];
+        }
+
         public VirgilPhrase? GetRandomAmbient() => GetRandom("ambient");
         public VirgilPhrase? GetRandomStartup() => GetRandom("startup");
         public VirgilPhrase? GetRandomThps2() => GetRandom("thps2");
+
+        // More focused helpers so the app code stays readable when wiring narration.
+        public VirgilPhrase? GetRandomActionStart() => GetRandom("action_start");
+        public VirgilPhrase? GetRandomActionEnd() => GetRandom("action_end");
+        public VirgilPhrase? GetRandomServiceOk() => GetRandom("service_ok");
+        public VirgilPhrase? GetRandomServiceWarning() => GetRandom("service_warning");
     }
 }
