@@ -6,44 +6,84 @@
         <StackPanel Margin="8">
             <!-- Maintenance rapide -->
             <TextBlock Text="Maintenance rapide" Margin="0,0,0,4" FontWeight="Bold"/>
-            <Button Content="Scan système express" Tag="quick_scan" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Nettoyage rapide" Tag="quick_clean" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Nettoyage navigateur (léger)" Tag="browser_soft_clean" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Libérer la RAM (soft)" Tag="ram_soft_free" Margin="0,0,0,8" Click="ActionButton_Click"/>
+            <Button Content="Scan système express" Tag="quick_scan" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Nettoyage rapide" Tag="quick_clean" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Nettoyage navigateur (léger)" Tag="browser_soft_clean" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Libérer la RAM (soft)" Tag="ram_soft_free" Margin="0,0,0,8"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
 
             <!-- Maintenance avancée -->
             <TextBlock Text="Maintenance avancée" Margin="0,4,0,4" FontWeight="Bold"/>
-            <Button Content="Nettoyage disque avancé" Tag="deep_disk_clean" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Vérification disque" Tag="disk_check" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Vérification intégrité système" Tag="system_integrity" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Nettoyage navigateur (profond)" Tag="browser_deep_clean" Margin="0,0,0,8" Click="ActionButton_Click"/>
+            <Button Content="Nettoyage disque avancé" Tag="deep_disk_clean" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Nettoyage navigateur (profond)" Tag="browser_deep_clean" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
 
-            <!-- Réseau & Internet -->
-   <TextBlock Text="Réseau &amp; Internet" Margin="0,0,0,4" FontWeight="Bold"/>
-            <Button Content="Diagnostic réseau rapide" Tag="network_diag" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Réinitialisation réseau (soft)" Tag="network_soft_reset" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Réinitialisation réseau (avancée)" Tag="network_hard_reset" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Test latence / stabilité" Tag="network_latency_test" Margin="0,0,0,8" Click="ActionButton_Click"/>
+            <!-- Réseau -->
+            <TextBlock Text="Réseau" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Diagnostic réseau" Tag="network_diag" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Reset réseau (soft)" Tag="network_soft_reset" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Reset réseau (complet)" Tag="network_hard_reset" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Test de latence" Tag="network_latency_test" Margin="0,0,0,8"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
 
-            <!-- Gaming / Performance -->
-            <TextBlock Text="Gaming / Performance" Margin="0,4,0,4" FontWeight="Bold"/>
-            <Button Content="Activer mode Performance / Gaming" Tag="perf_mode_on" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Revenir en mode normal" Tag="perf_mode_off" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Analyser démarrage" Tag="startup_analyze" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Fermer session gaming" Tag="gaming_kill_session" Margin="0,0,0,8" Click="ActionButton_Click"/>
+            <!-- Performance -->
+            <TextBlock Text="Performance" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Activer le mode performance" Tag="perf_mode_on" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Désactiver le mode performance" Tag="perf_mode_off" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Analyser le démarrage" Tag="startup_analyze" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Couper les apps de fond (gaming)" Tag="gaming_kill_session" Margin="0,0,0,8"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
 
             <!-- Mises à jour -->
             <TextBlock Text="Mises à jour" Margin="0,4,0,4" FontWeight="Bold"/>
-            <Button Content="Mettre à jour les logiciels" Tag="apps_update_all" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Lancer la mise à jour Windows" Tag="windows_update" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Vérifier les drivers GPU" Tag="gpu_driver_check" Margin="0,0,0,8" Click="ActionButton_Click"/>
+            <Button Content="Mettre à jour les logiciels" Tag="apps_update_all" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Lancer la mise à jour Windows" Tag="windows_update" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Vérifier les drivers GPU" Tag="gpu_driver_check" Margin="0,0,0,8"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
 
             <!-- Spéciaux -->
             <TextBlock Text="Spéciaux" Margin="0,4,0,4" FontWeight="Bold"/>
-   <Button Content="Mode RAMBO (réparer Explorer &amp; caamp;che icônes)" Tag="rambo_repair" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Effet Thanos (effacer le chat)" Tag="chat_thanos" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Recharger la configuration" Tag="app_reload_settings" Margin="0,0,0,4" Click="ActionButton_Click"/>
-            <Button Content="Re-scanner le système" Tag="monitoring_rescan" Margin="0,0,0,0" Click="ActionButton_Click"/>
+            <Button Content="Mode RAMBO (réparer Explorer &amp; cache)" Tag="rambo_repair" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Effet Thanos (effacer le chat)" Tag="chat_thanos" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Recharger la configuration" Tag="app_reload_settings" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Re-scanner le système" Tag="monitoring_rescan" Margin="0,0,0,0"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
