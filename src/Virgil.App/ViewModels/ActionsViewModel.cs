@@ -15,16 +15,27 @@ namespace Virgil.App.ViewModels
     {
         private readonly SystemActionsService _systemActions;
         private readonly VirgilNarrationService _virgil;
+        private readonly INetworkActionsService _network;
+        private readonly IPerformanceActionsService _performance;
+        private readonly ISpecialActionsService _special;
 
         /// <summary>
         /// Commande appelée par les boutons d'ActionsPanel.xaml, avec l'identifiant d'action en paramètre.
         /// </summary>
         public ICommand InvokeActionCommand { get; }
 
-        public ActionsViewModel(SystemActionsService systemActions, VirgilNarrationService virgil)
+        public ActionsViewModel(
+            SystemActionsService systemActions,
+            VirgilNarrationService virgil,
+            INetworkActionsService network,
+            IPerformanceActionsService performance,
+            ISpecialActionsService special)
         {
             _systemActions = systemActions ?? throw new ArgumentNullException(nameof(systemActions));
             _virgil = virgil ?? throw new ArgumentNullException(nameof(virgil));
+            _network = network ?? throw new ArgumentNullException(nameof(network));
+            _performance = performance ?? throw new ArgumentNullException(nameof(performance));
+            _special = special ?? throw new ArgumentNullException(nameof(special));
 
             InvokeActionCommand = new RelayCommand(param =>
             {
@@ -59,7 +70,6 @@ namespace Virgil.App.ViewModels
             }
             catch
             {
-                // Les erreurs sont remontées via la narration / logs internes.
                 success = false;
             }
             finally
@@ -70,8 +80,6 @@ namespace Virgil.App.ViewModels
 
         /// <summary>
         /// Mapping des identifiants d'action (Tags UI) vers les appels backend.
-        /// Pour l'instant, on route uniquement vers les actions système principales.
-        /// Les autres identifiants tombent en no-op (Task.CompletedTask).
         /// </summary>
         private Task ExecuteActionCoreAsync(string actionId)
         {
@@ -82,12 +90,12 @@ namespace Virgil.App.ViewModels
                 "smart_cleanup"       => _systemActions.RunSmartCleanupAsync(),
                 "quick_clean"         => _systemActions.RunSmartCleanupAsync(),
 
-                // Navigateurs : tant que le backend ne distingue pas soft/deep, on route sur le même
+                // Navigateurs
                 "browsers_clean"      => _systemActions.RunCleanBrowsersAsync(),
                 "browser_soft_clean"  => _systemActions.RunCleanBrowsersAsync(),
                 "browser_deep_clean"  => _systemActions.RunCleanBrowsersAsync(),
 
-                // Mises à jour : on utilise la mise à jour globale en attendant des actions plus fines
+                // Mises à jour
                 "updates_all"         => _systemActions.RunUpdateAllAsync(),
                 "apps_update_all"     => _systemActions.RunUpdateAllAsync(),
                 "windows_update"      => _systemActions.RunUpdateAllAsync(),
@@ -99,7 +107,25 @@ namespace Virgil.App.ViewModels
                 // Configuration
                 "open_config"         => _systemActions.OpenConfigAsync(),
 
-                // Par défaut : pas encore implémenté côté backend, on ne fait rien
+                // Réseau
+                "network_diag"         => _network.RunDiagnosticsAsync(),
+                "network_soft_reset"   => _network.SoftResetAsync(),
+                "network_hard_reset"   => _network.HardResetAsync(),
+                "network_latency_test" => _network.RunLatencyTestAsync(),
+
+                // Performance
+                "perf_mode_on"        => _performance.EnablePerfModeAsync(),
+                "perf_mode_off"       => _performance.DisablePerfModeAsync(),
+                "startup_analyze"     => _performance.AnalyzeStartupAsync(),
+                "gaming_kill_session"  => _performance.KillGamingSessionProcessesAsync(),
+
+                // Spéciaux
+                "rambo_repair"        => _special.RamboRepairAsync(),
+                "chat_thanos"         => _special.PurgeChatHistoryAsync(),
+                "app_reload_settings" => _special.ReloadSettingsAsync(),
+                "monitoring_rescan"   => _special.RescanMonitoringAsync(),
+
+                // Par défaut : non implémenté
                 _                         => Task.CompletedTask
             };
         }
