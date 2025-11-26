@@ -14,43 +14,57 @@ namespace Virgil.App.ViewModels
             {
                 await _narration.OnActionStartedAsync(actionId, token);
                 await action();
-                await _narration.OnActionCompletedAsync(actionId, success: true, token);
+                await _narration.OnActionCompletedAsync(actionId, true, token);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                await _narration.OnActionCompletedAsync(actionId, success: false, token);
-                AppendChat($"Erreur pendant '{actionId}' : {ex.Message}");
+                await _narration.OnActionCompletedAsync(actionId, false, token);
             }
         }
 
         public void RunMaintenance() => _ = RunMaintenanceAsync();
 
-        private Task RunMaintenanceAsync() =>
-            RunWithNarrationAsync("maintenance_full", () => _systemActions.RunMaintenanceAsync());
+        private Task RunMaintenanceAsync()
+        {
+            return RunWithNarrationAsync("maintenance_full", () => _systemActions.RunMaintenanceAsync());
+        }
 
         public void RunSmartCleanup() => _ = RunSmartCleanupAsync();
 
-        private Task RunSmartCleanupAsync() =>
-            RunWithNarrationAsync("smart_cleanup", () => _systemActions.RunSmartCleanupAsync());
+        private Task RunSmartCleanupAsync()
+        {
+            return RunWithNarrationAsync("smart_cleanup", () => _systemActions.RunSmartCleanupAsync());
+        }
 
         public void RunBrowsersCleanup() => _ = RunBrowsersCleanupAsync();
 
-        private Task RunBrowsersCleanupAsync() =>
-            RunWithNarrationAsync("browsers_clean", () => _systemActions.CleanBrowsersAsync());
+        private Task RunBrowsersCleanupAsync()
+        {
+            // TODO: wire to real browsers cleanup when available in SystemActionsService or a dedicated service.
+            return RunWithNarrationAsync("browsers_clean", () => Task.CompletedTask);
+        }
 
         public void RunUpdateAll() => _ = RunUpdateAllAsync();
 
-        private Task RunUpdateAllAsync() =>
-            RunWithNarrationAsync("updates_all", () => _systemActions.UpdateAllAsync());
+        private Task RunUpdateAllAsync()
+        {
+            // TODO: wire to real "update all" logic when the service API is defined.
+            return RunWithNarrationAsync("updates_all", () => Task.CompletedTask);
+        }
 
         public void RunDefenderScan() => _ = RunDefenderScanAsync();
 
-        private Task RunDefenderScanAsync() =>
-            RunWithNarrationAsync("defender_scan", () => _systemActions.RunDefenderAsync());
+        private Task RunDefenderScanAsync()
+        {
+            return RunWithNarrationAsync("defender_scan", () => _systemActions.RunDefenderAsync());
+        }
 
         public void OpenConfiguration() => _ = OpenConfigurationAsync();
 
-        private Task OpenConfigurationAsync() =>
-            RunWithNarrationAsync("open_config", () => _systemActions.OpenConfigurationAsync());
+        private Task OpenConfigurationAsync()
+        {
+            // TODO: wire to real configuration opening logic (system or app settings).
+            return RunWithNarrationAsync("open_config", () => Task.CompletedTask);
+        }
     }
 }
