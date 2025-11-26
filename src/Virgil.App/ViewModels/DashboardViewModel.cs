@@ -3,7 +3,6 @@ using System.Windows.Input;
 using Virgil.App.Core;
 using Virgil.App.Services;
 using Virgil.Services;
-using Virgil.Services.Chat;
 using Virgil.Services.Narration;
 
 namespace Virgil.App.ViewModels
