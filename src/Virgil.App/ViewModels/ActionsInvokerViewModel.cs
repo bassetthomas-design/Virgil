@@ -23,7 +23,7 @@ namespace Virgil.App.ViewModels
 
         public ICommand InvokeActionCommand { get; }
 
-        public void InvokeAction(string actionId)
+        public void InvokeAction(string? actionId)
         {
             if (string.IsNullOrWhiteSpace(actionId))
                 return;
