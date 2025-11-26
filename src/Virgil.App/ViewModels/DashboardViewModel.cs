@@ -1,8 +1,9 @@
 using System;
 using System.Windows.Input;
-using Virgil.App.Chat;
 using Virgil.App.Core;
 using Virgil.App.Services;
+using Virgil.Services;
+using Virgil.Services.Narration;
 
 namespace Virgil.App.ViewModels
 {
