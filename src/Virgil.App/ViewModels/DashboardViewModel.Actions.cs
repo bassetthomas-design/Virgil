@@ -36,21 +36,21 @@ namespace Virgil.App.ViewModels
         public void RunBrowsersCleanup() => _ = RunBrowsersCleanupAsync();
 
         private Task RunBrowsersCleanupAsync() =>
-            RunWithNarrationAsync("browsers_clean", () => _systemActions.RunBrowsersCleanupAsync());
+            RunWithNarrationAsync("browsers_clean", () => _systemActions.CleanBrowsersAsync());
 
         public void RunUpdateAll() => _ = RunUpdateAllAsync();
 
         private Task RunUpdateAllAsync() =>
-            RunWithNarrationAsync("updates_all", () => _systemActions.RunUpdateAllAsync());
+            RunWithNarrationAsync("updates_all", () => _systemActions.UpdateAllAsync());
 
         public void RunDefenderScan() => _ = RunDefenderScanAsync();
 
         private Task RunDefenderScanAsync() =>
-            RunWithNarrationAsync("defender_scan", () => _systemActions.RunDefenderScanAsync());
+            RunWithNarrationAsync("defender_scan", () => _systemActions.RunDefenderAsync());
 
         public void OpenConfiguration() => _ = OpenConfigurationAsync();
 
         private Task OpenConfigurationAsync() =>
-            RunWithNarrationAsync("open_config", () => _systemActions.OpenConfigAsync());
+            RunWithNarrationAsync("open_config", () => _systemActions.OpenConfigurationAsync());
     }
 }
