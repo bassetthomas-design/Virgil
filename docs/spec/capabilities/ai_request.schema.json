@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VirgilPrime AI Request",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "os": {
+          "type": "string"
+        },
+        "build": {
+          "type": "string"
+        },
+        "isAdmin": {
+          "type": "boolean"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "os",
+        "build",
+        "isAdmin"
+      ]
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "cpuPct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "ramPct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "diskFreeGB": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gpuPct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "tempsC": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "CORE",
+            "ADVANCED",
+            "EXPERT"
+          ]
+        },
+        "expertUnlocked": {
+          "type": "boolean"
+        },
+        "allowlistCapabilityIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "level",
+        "expertUnlocked",
+        "allowlistCapabilityIds"
+      ]
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "capabilityId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OK",
+              "FAILED",
+              "SKIPPED"
+            ]
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capabilityId",
+          "status",
+          "at"
+        ]
+      }
+    },
+    "userIntent": {
+      "type": "string"
+    },
+    "capabilityCatalogDigest": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "machine",
+    "policies",
+    "userIntent",
+    "capabilityCatalogDigest"
+  ]
+}

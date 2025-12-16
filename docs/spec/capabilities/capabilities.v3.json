@@ -1,0 +1,1451 @@
+{
+  "name": "VirgilPrime",
+  "version": "3.0.0-spec",
+  "generatedAt": "2025-12-16T09:23:04.994836Z",
+  "capabilitySchemaVersion": "1.0",
+  "levels": [
+    "CORE",
+    "ADVANCED",
+    "EXPERT",
+    "BONUS"
+  ],
+  "domains": [
+    "APPX",
+    "AUDIT",
+    "CLEANING",
+    "CONSISTENCY",
+    "DISK",
+    "HARDWARE",
+    "LOGGING",
+    "META",
+    "MONITORING",
+    "NETWORK",
+    "PERFORMANCE",
+    "PRIVACY",
+    "REGISTRY",
+    "REPAIR",
+    "SECURITY",
+    "SERVICES",
+    "STARTUP",
+    "TASKSCHED",
+    "TOOLS",
+    "TROUBLESHOOT",
+    "UNINSTALL",
+    "UPDATES",
+    "USERPROFILES"
+  ],
+  "capabilities": [
+    {
+      "id": "CLEAN_RECYCLE_BIN",
+      "title": "Vider la corbeille (intelligent)",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minAgeDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "includeTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "Supprime le contenu de la corbeille avec options d'âge et de types.",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_TEMP_USER",
+      "title": "Nettoyer les temporaires utilisateur",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "Nettoyer les temporaires utilisateur",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_TEMP_WINDOWS",
+      "title": "Nettoyer les temporaires Windows",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT_OPTIONAL"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "Nettoyer les temporaires Windows",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_WER_REPORTS",
+      "title": "Nettoyer Windows Error Reporting",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Nettoyer Windows Error Reporting",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_CRASH_DUMPS",
+      "title": "Nettoyer dumps crash/BSOD",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT_OPTIONAL"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "keepLatest": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxTotalMB": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "description": "Nettoyer dumps crash/BSOD",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_WINDOWS_LOGS",
+      "title": "Nettoyer logs Windows non critiques",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Nettoyer logs Windows non critiques",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_UPDATE_CACHE_SOFT",
+      "title": "Nettoyer cache Windows Update (soft)",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Nettoyer cache Windows Update (soft)",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_WEBVIEW2_CACHE",
+      "title": "Nettoyer cache WebView2",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Nettoyer cache WebView2",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_BROWSER_CACHE_ALL",
+      "title": "Nettoyer cache navigateurs (tous détectés)",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "CACHE_ONLY",
+              "SMART",
+              "DEEP",
+              "NUCLEAR"
+            ]
+          },
+          "keepPasswords": {
+            "type": "boolean"
+          }
+        }
+      },
+      "description": "Nettoyer cache navigateurs (tous détectés)",
+      "tags": []
+    },
+    {
+      "id": "CLEAN_APP_CACHE",
+      "title": "Nettoyer cache applicatif (par profile d'app)",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "appId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "CACHE",
+              "CACHE_AND_LOGS",
+              "FULL_SAFE"
+            ]
+          }
+        }
+      },
+      "description": "Nettoyer cache applicatif (par profile d'app)",
+      "tags": []
+    },
+    {
+      "id": "ANALYZE_DISK_LARGE_FILES",
+      "title": "Analyse fichiers volumineux",
+      "level": "CORE",
+      "domain": "DISK",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "roots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "minSizeMB": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "description": "Analyse fichiers volumineux",
+      "tags": []
+    },
+    {
+      "id": "ANALYZE_DISK_OLD_FILES",
+      "title": "Analyse fichiers anciens",
+      "level": "CORE",
+      "domain": "DISK",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "roots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "minAgeDays": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "description": "Analyse fichiers anciens",
+      "tags": []
+    },
+    {
+      "id": "ANALYZE_DISK_DUPLICATES_HASH",
+      "title": "Détecter duplicats (hash réel)",
+      "level": "CORE",
+      "domain": "DISK",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "roots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hash": {
+            "type": "string",
+            "enum": [
+              "SHA256",
+              "BLAKE3"
+            ]
+          }
+        }
+      },
+      "description": "Détecter duplicats (hash réel)",
+      "tags": []
+    },
+    {
+      "id": "DEFENDER_UPDATE_SIGNATURES",
+      "title": "Mettre à jour signatures Defender",
+      "level": "CORE",
+      "domain": "SECURITY",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mettre à jour signatures Defender",
+      "tags": []
+    },
+    {
+      "id": "DEFENDER_SCAN_QUICK",
+      "title": "Scan rapide Defender",
+      "level": "CORE",
+      "domain": "SECURITY",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scan rapide Defender",
+      "tags": []
+    },
+    {
+      "id": "WINDOWS_UPDATE_SCAN",
+      "title": "Scanner Windows Update",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scanner Windows Update",
+      "tags": []
+    },
+    {
+      "id": "WINDOWS_UPDATE_INSTALL",
+      "title": "Installer Windows Update",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [
+        "RESTORE_POINT_OPTIONAL"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Installer Windows Update",
+      "tags": []
+    },
+    {
+      "id": "APPS_UPDATE_WINGET_ALL",
+      "title": "Mettre à jour apps via winget",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "includeUnknown": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "MACHINE",
+              "AUTO"
+            ]
+          }
+        }
+      },
+      "description": "Mettre à jour apps via winget",
+      "tags": []
+    },
+    {
+      "id": "DRIVERS_SCAN",
+      "title": "Scanner drivers obsolètes",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scanner drivers obsolètes",
+      "tags": []
+    },
+    {
+      "id": "DRIVERS_UPDATE_GPU",
+      "title": "Mettre à jour driver GPU (via sources approuvées)",
+      "level": "ADVANCED",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "DRIVER_BACKUP"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mettre à jour driver GPU (via sources approuvées)",
+      "tags": []
+    },
+    {
+      "id": "MONITOR_START",
+      "title": "Démarrer la surveillance",
+      "level": "CORE",
+      "domain": "MONITORING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "refreshSeconds": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 10
+          }
+        }
+      },
+      "description": "Démarrer la surveillance",
+      "tags": []
+    },
+    {
+      "id": "MONITOR_STOP",
+      "title": "Arrêter la surveillance",
+      "level": "CORE",
+      "domain": "MONITORING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Arrêter la surveillance",
+      "tags": []
+    },
+    {
+      "id": "ALERTS_CONFIGURE",
+      "title": "Configurer seuils d'alerte",
+      "level": "CORE",
+      "domain": "MONITORING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cpuTempWarn": {
+            "type": "number"
+          },
+          "cpuTempAlert": {
+            "type": "number"
+          },
+          "gpuTempWarn": {
+            "type": "number"
+          },
+          "gpuTempAlert": {
+            "type": "number"
+          },
+          "diskFreeWarnGB": {
+            "type": "number"
+          },
+          "diskFreeAlertGB": {
+            "type": "number"
+          },
+          "ramWarnPct": {
+            "type": "number"
+          },
+          "ramAlertPct": {
+            "type": "number"
+          }
+        }
+      },
+      "description": "Configurer seuils d'alerte",
+      "tags": []
+    },
+    {
+      "id": "AUDIT_FULL_SYSTEM_REPORT",
+      "title": "Mode audit: rapport système complet (lecture seule)",
+      "level": "CORE",
+      "domain": "AUDIT",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mode audit: rapport système complet (lecture seule)",
+      "tags": []
+    },
+    {
+      "id": "AUDIT_EXPORT_REPORT_JSON",
+      "title": "Exporter rapport audit (JSON)",
+      "level": "CORE",
+      "domain": "AUDIT",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Exporter rapport audit (JSON)",
+      "tags": []
+    },
+    {
+      "id": "AUDIT_EXPORT_REPORT_PDF",
+      "title": "Exporter rapport audit (PDF)",
+      "level": "ADVANCED",
+      "domain": "AUDIT",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Exporter rapport audit (PDF)",
+      "tags": []
+    },
+    {
+      "id": "CONSISTENCY_SCAN",
+      "title": "Scanner incohérences système (startup/services/drivers)",
+      "level": "ADVANCED",
+      "domain": "CONSISTENCY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scanner incohérences système (startup/services/drivers)",
+      "tags": []
+    },
+    {
+      "id": "CONSISTENCY_FIX_STARTUP_BROKEN_LINKS",
+      "title": "Corriger entrées startup cassées",
+      "level": "EXPERT",
+      "domain": "CONSISTENCY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "STARTUP_SNAPSHOT"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Corriger entrées startup cassées",
+      "tags": []
+    },
+    {
+      "id": "CONSISTENCY_FIX_SERVICE_DEPENDENCIES",
+      "title": "Corriger dépendances services incohérentes",
+      "level": "EXPERT",
+      "domain": "CONSISTENCY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "SERVICES_SNAPSHOT",
+        "RESTORE_POINT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Corriger dépendances services incohérentes",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_WU_LOOP",
+      "title": "Playbook: Windows Update en boucle",
+      "level": "ADVANCED",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT_OPTIONAL"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: Windows Update en boucle",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_STORE_INSTALL_FAIL",
+      "title": "Playbook: Store install fail",
+      "level": "ADVANCED",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: Store install fail",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_DEFENDER_DISABLED_BY_POLICY",
+      "title": "Playbook: Defender désactivé par policy",
+      "level": "EXPERT",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "REGISTRY_BACKUP_TARGETED"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: Defender désactivé par policy",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_PROFILE_TEMPORARY",
+      "title": "Playbook: profil temporaire",
+      "level": "EXPERT",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "ACL_BACKUP"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: profil temporaire",
+      "tags": []
+    },
+    {
+      "id": "USERPROFILES_ENUMERATE",
+      "title": "Lister profils utilisateurs (SID)",
+      "level": "ADVANCED",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Lister profils utilisateurs (SID)",
+      "tags": []
+    },
+    {
+      "id": "USERPROFILES_DETECT_ORPHANS",
+      "title": "Détecter profils fantômes/orphelins",
+      "level": "ADVANCED",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Détecter profils fantômes/orphelins",
+      "tags": []
+    },
+    {
+      "id": "USERPROFILES_CLEAN_TARGET_SID",
+      "title": "Nettoyage ciblé par SID",
+      "level": "ADVANCED",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "USERPROFILE_SNAPSHOT"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sid": {
+            "type": "string"
+          },
+          "areas": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "TEMP",
+                "BROWSER",
+                "APP_CACHE",
+                "DOWNLOADS",
+                "RECYCLE_BIN"
+              ]
+            }
+          }
+        }
+      },
+      "description": "Nettoyage ciblé par SID",
+      "tags": []
+    },
+    {
+      "id": "USERPROFILES_REPAIR_BASIC",
+      "title": "Réparation basique profil utilisateur",
+      "level": "EXPERT",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "ACL_BACKUP",
+        "REGISTRY_BACKUP_TARGETED"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sid": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Réparation basique profil utilisateur",
+      "tags": []
+    },
+    {
+      "id": "HW_HEALTH_SMART_READ",
+      "title": "Lire SMART disques",
+      "level": "ADVANCED",
+      "domain": "HARDWARE",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Lire SMART disques",
+      "tags": []
+    },
+    {
+      "id": "HW_HEALTH_BATTERY_REPORT",
+      "title": "Rapport batterie (cycles/santé)",
+      "level": "ADVANCED",
+      "domain": "HARDWARE",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Rapport batterie (cycles/santé)",
+      "tags": []
+    },
+    {
+      "id": "HW_HEALTH_DEVICE_MANAGER_ERRORS",
+      "title": "Lister périphériques en erreur",
+      "level": "ADVANCED",
+      "domain": "HARDWARE",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Lister périphériques en erreur",
+      "tags": []
+    },
+    {
+      "id": "LOG_EXPORT_BUNDLE",
+      "title": "Exporter bundle logs/support",
+      "level": "CORE",
+      "domain": "LOGGING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "includeAudit": {
+            "type": "boolean"
+          },
+          "includeSystemInfo": {
+            "type": "boolean"
+          }
+        }
+      },
+      "description": "Exporter bundle logs/support",
+      "tags": []
+    },
+    {
+      "id": "LOG_IMMUTABLE_APPEND",
+      "title": "Journal append-only (tamper-evident)",
+      "level": "ADVANCED",
+      "domain": "LOGGING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Journal append-only (tamper-evident)",
+      "tags": []
+    },
+    {
+      "id": "PROOF_AI_NO_EXECUTION",
+      "title": "Preuve: exécution déterministe (pas d'IA)",
+      "level": "CORE",
+      "domain": "LOGGING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Preuve: exécution déterministe (pas d'IA)",
+      "tags": []
+    },
+    {
+      "id": "RESET_WINDOWS_UPDATE_HARD",
+      "title": "Reset Windows Update (hard)",
+      "level": "EXPERT",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "WU_COMPONENT_BACKUP"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Reset Windows Update (hard)",
+      "tags": []
+    },
+    {
+      "id": "RESET_MICROSOFT_STORE",
+      "title": "Reset Microsoft Store",
+      "level": "ADVANCED",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Reset Microsoft Store",
+      "tags": []
+    },
+    {
+      "id": "RESET_NETWORK_SOFT",
+      "title": "Reset réseau (soft)",
+      "level": "ADVANCED",
+      "domain": "NETWORK",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Reset réseau (soft)",
+      "tags": []
+    },
+    {
+      "id": "RESET_NETWORK_HARD",
+      "title": "Reset réseau (hard)",
+      "level": "EXPERT",
+      "domain": "NETWORK",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "NETCFG_BACKUP"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Reset réseau (hard)",
+      "tags": []
+    },
+    {
+      "id": "REPAIR_SFC",
+      "title": "Réparation SFC",
+      "level": "ADVANCED",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Réparation SFC",
+      "tags": []
+    },
+    {
+      "id": "REPAIR_DISM_RESTOREHEALTH",
+      "title": "Réparation DISM RestoreHealth",
+      "level": "ADVANCED",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Réparation DISM RestoreHealth",
+      "tags": []
+    },
+    {
+      "id": "REGISTRY_BACKUP_TARGETED",
+      "title": "Sauvegarde registre ciblée (interne)",
+      "level": "CORE",
+      "domain": "REGISTRY",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Sauvegarde registre ciblée (interne)",
+      "tags": []
+    },
+    {
+      "id": "REGISTRY_CLEAN_ORPHAN_KEYS",
+      "title": "Nettoyage registre: clés orphelines (allowlist)",
+      "level": "EXPERT",
+      "domain": "REGISTRY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "REGISTRY_BACKUP_TARGETED",
+        "RESTORE_POINT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "aggressiveness": {
+            "type": "string",
+            "enum": [
+              "SAFE",
+              "AGGRESSIVE"
+            ]
+          }
+        }
+      },
+      "description": "Nettoyage registre: clés orphelines (allowlist)",
+      "tags": []
+    },
+    {
+      "id": "STARTUP_SNAPSHOT",
+      "title": "Snapshot startup entries (interne)",
+      "level": "CORE",
+      "domain": "STARTUP",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Snapshot startup entries (interne)",
+      "tags": []
+    },
+    {
+      "id": "STARTUP_DISABLE_ENTRY",
+      "title": "Désactiver entrée de démarrage",
+      "level": "ADVANCED",
+      "domain": "STARTUP",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "STARTUP_SNAPSHOT"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Désactiver entrée de démarrage",
+      "tags": []
+    },
+    {
+      "id": "SERVICES_SNAPSHOT",
+      "title": "Snapshot services (interne)",
+      "level": "CORE",
+      "domain": "SERVICES",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Snapshot services (interne)",
+      "tags": []
+    },
+    {
+      "id": "SERVICE_SET_STARTUP_TYPE",
+      "title": "Changer type de démarrage service",
+      "level": "EXPERT",
+      "domain": "SERVICES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "SERVICES_SNAPSHOT",
+        "RESTORE_POINT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "serviceName": {
+            "type": "string"
+          },
+          "startupType": {
+            "type": "string",
+            "enum": [
+              "AUTOMATIC",
+              "AUTOMATIC_DELAYED",
+              "MANUAL",
+              "DISABLED"
+            ]
+          }
+        }
+      },
+      "description": "Changer type de démarrage service",
+      "tags": []
+    },
+    {
+      "id": "TASKSCHED_EXPORT_TASK",
+      "title": "Exporter tâche planifiée (interne)",
+      "level": "CORE",
+      "domain": "TASKSCHED",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Exporter tâche planifiée (interne)",
+      "tags": []
+    },
+    {
+      "id": "TASKSCHED_DISABLE_TASK",
+      "title": "Désactiver tâche planifiée",
+      "level": "ADVANCED",
+      "domain": "TASKSCHED",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "TASKSCHED_EXPORT_TASK"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "taskPath": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Désactiver tâche planifiée",
+      "tags": []
+    },
+    {
+      "id": "UNINSTALL_STANDARD",
+      "title": "Désinstallation standard",
+      "level": "CORE",
+      "domain": "UNINSTALL",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT_OPTIONAL"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "silent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "description": "Désinstallation standard",
+      "tags": []
+    },
+    {
+      "id": "APPX_LIST",
+      "title": "Lister packages AppX",
+      "level": "ADVANCED",
+      "domain": "APPX",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Lister packages AppX",
+      "tags": []
+    },
+    {
+      "id": "PRIVACY_DISABLE_TRACKING_PROFILE",
+      "title": "Appliquer profil confidentialité",
+      "level": "EXPERT",
+      "domain": "PRIVACY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "REGISTRY_BACKUP_TARGETED",
+        "SERVICES_SNAPSHOT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "BALANCED",
+              "STRICT"
+            ]
+          }
+        }
+      },
+      "description": "Appliquer profil confidentialité",
+      "tags": []
+    },
+    {
+      "id": "GAMING_MODE_SNAPSHOT",
+      "title": "Snapshot état pre-gaming (interne)",
+      "level": "CORE",
+      "domain": "PERFORMANCE",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Snapshot état pre-gaming (interne)",
+      "tags": []
+    },
+    {
+      "id": "GAMING_MODE_ENTER",
+      "title": "Activer mode gaming",
+      "level": "EXPERT",
+      "domain": "PERFORMANCE",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "GAMING_MODE_SNAPSHOT"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Activer mode gaming",
+      "tags": []
+    },
+    {
+      "id": "GAMING_MODE_EXIT",
+      "title": "Désactiver mode gaming",
+      "level": "ADVANCED",
+      "domain": "PERFORMANCE",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Désactiver mode gaming",
+      "tags": []
+    },
+    {
+      "id": "TOOLS_PROCESS_MANAGER",
+      "title": "Outil: gestionnaire de processus avancé",
+      "level": "ADVANCED",
+      "domain": "TOOLS",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Outil: gestionnaire de processus avancé",
+      "tags": []
+    },
+    {
+      "id": "TOOLS_EVENT_VIEWER",
+      "title": "Outil: Event Viewer intégré",
+      "level": "ADVANCED",
+      "domain": "TOOLS",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Outil: Event Viewer intégré",
+      "tags": []
+    },
+    {
+      "id": "META_CLI_ENABLE",
+      "title": "Activer interface CLI",
+      "level": "BONUS",
+      "domain": "META",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Activer interface CLI",
+      "tags": []
+    },
+    {
+      "id": "META_PORTABLE_MODE",
+      "title": "Mode portable",
+      "level": "BONUS",
+      "domain": "META",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mode portable",
+      "tags": []
+    }
+  ]
+}

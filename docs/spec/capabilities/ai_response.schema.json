@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VirgilPrime AI Response",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "type": "string"
+    },
+    "tone": {
+      "type": "string",
+      "enum": [
+        "PRO",
+        "SNARK_LIGHT",
+        "SNARK_MEDIUM",
+        "SILENT_CRITICAL"
+      ]
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "capabilityId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "capabilityId",
+          "reason",
+          "priority"
+        ]
+      }
+    },
+    "plan": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "capabilityId": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object"
+          },
+          "needsConfirmation": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capabilityId",
+          "params",
+          "needsConfirmation"
+        ]
+      }
+    },
+    "requiresUserConfirmation": {
+      "type": "boolean"
+    },
+    "safetyNotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "message",
+    "tone",
+    "recommendations",
+    "plan",
+    "requiresUserConfirmation",
+    "safetyNotes"
+  ]
+}
