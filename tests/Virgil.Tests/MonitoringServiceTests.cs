@@ -6,11 +6,13 @@ namespace Virgil.Tests;
 
 public class MonitoringServiceTests
 {
+    private static bool IsWindowsPlatform() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
     [Fact]
     public void MonitoringService_ShouldInstantiateWithLatestMetrics()
     {
         // Skip on non-Windows platforms as PerformanceCounters are Windows-specific
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!IsWindowsPlatform())
         {
             return;
         }
@@ -27,7 +29,7 @@ public class MonitoringServiceTests
     public void LatestMetrics_ShouldHaveInitializedProperties()
     {
         // Skip on non-Windows platforms as PerformanceCounters are Windows-specific
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!IsWindowsPlatform())
         {
             return;
         }
