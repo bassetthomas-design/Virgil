@@ -12,4 +12,10 @@
     <ProjectReference Include="..\Virgil.Core\Virgil.Core.csproj" />
     <ProjectReference Include="..\Virgil.Agent\Virgil.Agent.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="scripts\**\*.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
