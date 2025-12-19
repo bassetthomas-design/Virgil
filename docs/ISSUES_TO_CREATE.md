@@ -14,7 +14,7 @@ Le document détaillé `TODO_TRACKING.md` contient toutes les informations néce
 
 #### Issue 1: SystemMonitorService - Métriques complètes
 ```
-Titre: [Phase 1] SystemMonitorService - Implémenter métriques complètes (CPU/GPU/RAM/Disque/Températures)
+Titre: [Phase 1] SystemMonitorService - Implement complete metrics
 Labels: enhancement, phase-1, monitoring
 Liée à: #74
 

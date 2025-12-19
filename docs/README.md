@@ -85,4 +85,4 @@ Pour contribuer à la documentation:
 
 - [README principal](../README.md)
 - [PROJECT_STATUS.md](../PROJECT_STATUS.md) - État actuel du projet
-- [Issues GitHub](https://github.com/bassetthomas-design/Virgil/issues) - Suivi des tâches
+- Issues GitHub - Suivi des tâches (voir le repo GitHub)

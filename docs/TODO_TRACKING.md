@@ -19,7 +19,7 @@ Ce document liste tous les TODOs trouvés dans le code source de Virgil, organis
 Le `SystemMonitorService` est le service principal de monitoring du système. Actuellement, il ne retourne que des valeurs nulles/zéro pour CPU et RAM. Il manque l'implémentation complète des métriques.
 
 ### Issue suggérée:
-- **Titre**: `[Phase 1] SystemMonitorService - Implémenter métriques complètes (CPU/GPU/RAM/Disque/Températures)`
+- **Titre**: `[Phase 1] SystemMonitorService - Implement complete metrics`
 - **Label**: `enhancement`, `phase-1`, `monitoring`
 - **Phase liée**: Issue #74 - System: MonitoringService (Phase 1)
 
@@ -299,10 +299,10 @@ La fenêtre de paramètres charge/sauvegarde la configuration en JSON mais ne pa
 
 ### Par Composant:
 
-- **Monitoring** (5 issues): #1, #2, #5, #8, #10
+- **Monitoring** (5 issues): #1, #2, #5, #7, #8
 - **Configuration/Settings** (3 issues): #4, #6, #9
-- **Chat** (2 issues): #3, #10
-- **UI/UX** (3 issues): #7, #8, #11
+- **Chat** (2 issues): #3, #8
+- **UI/UX** (3 issues): #7, #10, #11
 
 ---
 
