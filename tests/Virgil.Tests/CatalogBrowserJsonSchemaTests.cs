@@ -10,8 +10,7 @@ namespace Virgil.Tests;
 public class CatalogBrowserJsonSchemaTests
 {
     private const string BrowsersJsonPath = "docs/spec/capabilities/catalog/browsers.json";
-
-    private static string GetRepositoryRoot()
+    private static readonly Lazy<string> RepositoryRoot = new Lazy<string>(() =>
     {
         var currentDir = Directory.GetCurrentDirectory();
         while (currentDir != null && !File.Exists(Path.Combine(currentDir, "Virgil.sln")))
@@ -19,6 +18,11 @@ public class CatalogBrowserJsonSchemaTests
             currentDir = Directory.GetParent(currentDir)?.FullName;
         }
         return currentDir ?? throw new InvalidOperationException("Cannot find repository root");
+    });
+
+    private static string GetRepositoryRoot()
+    {
+        return RepositoryRoot.Value;
     }
 
     [Fact]
@@ -112,7 +116,11 @@ public class CatalogBrowserJsonSchemaTests
         {
             if (capability.TryGetProperty("id", out var idProp))
             {
-                actualIds.Add(idProp.GetString()!);
+                var id = idProp.GetString();
+                if (id != null)
+                {
+                    actualIds.Add(id);
+                }
             }
         }
 
@@ -183,7 +191,10 @@ public class CatalogBrowserJsonSchemaTests
         foreach (var capability in capabilities.EnumerateArray())
         {
             var id = capability.GetProperty("id").GetString();
-            ids.Add(id!);
+            if (id != null)
+            {
+                ids.Add(id);
+            }
         }
 
         // Assert
@@ -265,7 +276,7 @@ public class CatalogBrowserJsonSchemaTests
             var id = capability.GetProperty("id").GetString();
             var risk = capability.GetProperty("risk").GetString();
             
-            Assert.Contains(risk, validRiskLevels, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains(risk, validRiskLevels);
         }
     }
 
@@ -286,7 +297,7 @@ public class CatalogBrowserJsonSchemaTests
             var id = capability.GetProperty("id").GetString();
             var level = capability.GetProperty("level").GetString();
             
-            Assert.Contains(level, validLevels, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains(level, validLevels);
         }
     }
 
