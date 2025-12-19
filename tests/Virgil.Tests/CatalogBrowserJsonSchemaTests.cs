@@ -9,11 +9,28 @@ namespace Virgil.Tests;
 
 public class CatalogBrowserJsonSchemaTests
 {
-    private const string BrowsersCatalogPath = "../../../../../docs/spec/capabilities/catalog/browsers.json";
+    private static string FindBrowsersCatalogPath()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var currentDir = new DirectoryInfo(baseDir);
+        
+        // Search upwards for the project root (where .sln file exists)
+        while (currentDir != null && !File.Exists(Path.Combine(currentDir.FullName, "Virgil.sln")))
+        {
+            currentDir = currentDir.Parent;
+        }
+        
+        if (currentDir == null)
+        {
+            throw new InvalidOperationException($"Could not find project root from: {baseDir}");
+        }
+        
+        return Path.Combine(currentDir.FullName, "docs", "spec", "capabilities", "catalog", "browsers.json");
+    }
     
     private static JsonDocument LoadBrowsersCatalog()
     {
-        var fullPath = Path.Combine(AppContext.BaseDirectory, BrowsersCatalogPath);
+        var fullPath = FindBrowsersCatalogPath();
         if (!File.Exists(fullPath))
         {
             throw new FileNotFoundException($"browsers.json not found at: {fullPath}");
@@ -27,7 +44,7 @@ public class CatalogBrowserJsonSchemaTests
     public void BrowsersCatalog_ShouldExist()
     {
         // Arrange & Act
-        var fullPath = Path.Combine(AppContext.BaseDirectory, BrowsersCatalogPath);
+        var fullPath = FindBrowsersCatalogPath();
         
         // Assert
         Assert.True(File.Exists(fullPath), $"browsers.json should exist at: {fullPath}");
@@ -326,7 +343,9 @@ public class CatalogBrowserJsonSchemaTests
         {
             if (capability.TryGetProperty("id", out var idProp))
             {
-                actualIds.Add(idProp.GetString()!);
+                var id = idProp.GetString();
+                Assert.NotNull(id);
+                actualIds.Add(id);
             }
         }
         
