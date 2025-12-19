@@ -1,4 +1,7 @@
 using System.Windows;
+using Virgil.App.Chat;
+using Virgil.App.Services;
+using Virgil.App.ViewModels;
 
 namespace Virgil.App.Views
 {
@@ -13,6 +16,22 @@ namespace Virgil.App.Views
         public MainShell()
         {
             InitializeComponent();
+
+            // Initialize services
+            var chat = new ChatService();
+            var monitoringService = new MonitoringService();
+            var settingsService = new SettingsService();
+            var networkInsightService = new NetworkInsightService();
+
+            // Create monitoring ViewModel
+            var monitoringVm = new MonitoringViewModel(
+                monitoringService,
+                settingsService,
+                networkInsightService
+            );
+
+            // Create and set the main ViewModel as DataContext
+            DataContext = new MainViewModel(chat, monitoringVm);
         }
 
         /// <summary>

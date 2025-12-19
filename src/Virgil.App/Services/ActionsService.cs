@@ -16,7 +16,7 @@ namespace Virgil.App.Services
         }
 
         public Task<ProcessResult?> MaintenanceCompleteAsync() => RunPsAsync("maintenance_complete.ps1");
-        public Task<ProcessResult?> SmartCleanupAsync() => RunPsAsync("smart_cleanup.ps1");
+        public Task<ProcessResult?> SmartCleanupAsync() => RunPsAsync("cleanup_smart.ps1");
         public Task<ProcessResult?> CleanBrowsersAsync() => RunPsAsync("clean_browsers.ps1");
         public Task<ProcessResult?> UpdateAllAsync() => RunPsAsync("update_all.ps1");
         public Task<ProcessResult?> DefenderUpdateAndScanAsync() => RunPsAsync("defender_update_scan.ps1");

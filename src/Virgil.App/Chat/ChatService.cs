@@ -56,6 +56,9 @@ namespace Virgil.App.Chat
             // be leveraged later to drive styling or routing.
             var message = new ChatMessage("assistant", content);
             _messages.Add(message);
+            
+            // Also trigger the event so UI is notified
+            MessagePosted?.Invoke(this, content, kind, null);
         }
 
         /// <summary>

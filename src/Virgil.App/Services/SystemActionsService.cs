@@ -9,7 +9,7 @@ namespace Virgil.App.Services
         private static string ScriptsDir => Path.Combine(AppContext.BaseDirectory, "scripts");
 
         public Task RunMaintenanceAsync() => RunPsAsync("maintenance_complete.ps1");
-        public Task RunSmartCleanupAsync() => RunPsAsync("smart_cleanup.ps1");
+        public Task RunSmartCleanupAsync() => RunPsAsync("cleanup_smart.ps1");
         public Task RunCleanBrowsersAsync() => RunPsAsync("clean_browsers.ps1");
         public Task RunUpdateAllAsync() => RunPsAsync("update_all.ps1");
         public Task RunDefenderAsync() => RunPsAsync("defender_update_scan.ps1");
