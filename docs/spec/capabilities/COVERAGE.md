@@ -128,6 +128,7 @@ Notes :
 ## Historique des modifications
 - 2025-12-19 : Ajout de 10 capabilities navigateurs dans catalog/browsers.json (CLEAN_BROWSER_COOKIES_SELECTIVE, CLEAN_BROWSER_HISTORY, CLEAN_BROWSER_STORAGE_LOCAL, CLEAN_BROWSER_STORAGE_SESSION, CLEAN_BROWSER_EXTENSIONS_LIST, CLEAN_BROWSER_CACHE_PER_PROFILE, CLEAN_BROWSER_SESSIONS_PRESERVE_LOGGED_IN, CLEAN_BROWSER_PROFILES_INACTIVE, CLEAN_BROWSER_DOWNLOADS_LIST, CLEAN_BROWSER_FORM_AUTOFILL)
 - 2025-12-16 : Création initiale (template)
+- 2025-12-19 : Ajout de 10 capabilities navigateurs dans catalog/browsers.json (cookies sélectifs, historique, stockage local/session, extensions, cache par profil, sessions, profils inactifs, téléchargements, auto-complétion)
 
 ---
 
