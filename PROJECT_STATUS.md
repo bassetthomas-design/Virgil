@@ -71,12 +71,18 @@ Date de révision : 19 décembre 2024
    - Target: >80% de couverture de code
 
 2. **TODOs à Adresser**
-   - Plusieurs TODOs identifiés dans le code:
+   - **13 TODOs identifiés** dans le code source (19 décembre 2024)
+   - Documentation complète créée:
+     - `docs/TODO_TRACKING.md` - Analyse détaillée de tous les TODOs avec contexte
+     - `docs/ISSUES_TO_CREATE.md` - Guide pour créer les issues GitHub
+   - TODOs principaux par composant:
      - `AdvancedMonitoringService.cs` - Intégration smartctl/LibreHardwareMonitor
-     - `SpecialActionsService.cs` - Service de persistance d'historique
+     - `SpecialActionsService.cs` - Service de persistance d'historique + config
      - `SystemMonitorService.cs` - Métriques GPU, disque, températures
-     - `MainShell.xaml.cs` - Finaliser le flux UX des paramètres
-   - Créer des issues GitHub pour tracker ces TODOs
+     - `MainShell.xaml.cs` - Finaliser le flux UX des paramètres + HUD toggle
+     - `SettingsWindow.xaml.cs` - ViewModel pour databinding
+     - `ChatViewModel.Thanos.cs` - Effet Thanos complet
+   - **Action requise**: Créer 11 issues GitHub (voir `docs/ISSUES_TO_CREATE.md`)
 
 ### Priorité Moyenne
 3. **Sécurité**
