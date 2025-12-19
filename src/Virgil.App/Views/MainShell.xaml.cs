@@ -2,6 +2,8 @@ using System.Windows;
 using Virgil.App.Chat;
 using Virgil.App.Services;
 using Virgil.App.ViewModels;
+using Virgil.Domain;
+using Virgil.Services.Narration;
 
 namespace Virgil.App.Views
 {
@@ -23,6 +25,14 @@ namespace Virgil.App.Views
             var settingsService = new SettingsService();
             var networkInsightService = new NetworkInsightService();
 
+            // Services d'actions
+            var systemActionsService = new SystemActionsService();
+            var networkActionsService = new NetworkActionsService();
+            var performanceActionsService = new PerformanceActionsService();
+            var specialActionsService = new SpecialActionsService();
+            var phraseService = new VirgilPhraseService();
+            var narrationService = new VirgilNarrationService(chat, phraseService);
+
             // Create monitoring ViewModel
             var monitoringVm = new MonitoringViewModel(
                 monitoringService,
@@ -30,8 +40,17 @@ namespace Virgil.App.Views
                 networkInsightService
             );
 
+            // Create actions ViewModel
+            var actionsVm = new ActionsViewModel(
+                systemActionsService,
+                narrationService,
+                networkActionsService,
+                performanceActionsService,
+                specialActionsService
+            );
+
             // Create and set the main ViewModel as DataContext
-            DataContext = new MainViewModel(chat, monitoringVm);
+            DataContext = new MainViewModel(chat, monitoringVm, actionsVm);
         }
 
         /// <summary>
