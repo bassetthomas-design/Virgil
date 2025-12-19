@@ -4,7 +4,7 @@
   "generatedAt": "2025-12-19T13:58:54.194394Z",
   "capabilitySchemaVersion": "1.0",
   "domain": "PERFORMANCE",
-  "description": "Pack de capabilities pour performance (stubs)",
+  "description": "Pack de capabilities pour performance et surveillance (PERFORMANCE, MONITORING)",
   "capabilities": [
     {
       "id": "MONITOR_START",

@@ -4,7 +4,7 @@
   "generatedAt": "2025-12-19T13:58:54.193622Z",
   "capabilitySchemaVersion": "1.0",
   "domain": "CLEANING",
-  "description": "Pack de capabilities pour nettoyage avancé (stubs)",
+  "description": "Pack de capabilities pour nettoyage avancé et analyse disque (CLEANING, DISK)",
   "capabilities": [
     {
       "id": "CLEAN_RECYCLE_BIN",
