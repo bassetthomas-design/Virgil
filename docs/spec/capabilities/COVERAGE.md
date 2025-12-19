@@ -42,13 +42,18 @@ Notes :
 - Préciser exclusions et critères d'âge/fichiers verrouillés pour chaque capability.
 
 ## Navigateurs
-- Cache global -> ✅ CLEAN_BROWSER_CACHE_ALL (si présent)
-- Cookies sélectifs -> ❌ (TODO : BROWSERS_COOKIE_CLEAN_SELECTIVE)
-- Historique -> ❌ (TODO : BROWSERS_HISTORY_CLEAN)
-- IndexedDB / LocalStorage -> ❌ (TODO : BROWSERS_STORAGE_CLEAN)
-- Sessions / Connexions -> ❌ (TODO : BROWSERS_SESSIONS_MANAGE)
-- Extensions orphelines -> ❌ (TODO : BROWSERS_EXTENSIONS_ORPHAN_CLEAN)
-- Modes : Soft / Smart / Deep / Nuclear -> ❌ (définir per-level playbooks)
+- Cache global -> ✅ CLEAN_BROWSER_CACHE_ALL
+- Cache par profil -> ✅ CLEAN_BROWSER_CACHE_PER_PROFILE
+- Cookies sélectifs -> ✅ CLEAN_BROWSER_COOKIES_SELECTIVE (avec exclusions de domaines)
+- Historique -> ✅ CLEAN_BROWSER_HISTORY (avec options keep_last_n et olderThanDays)
+- IndexedDB / LocalStorage -> ✅ CLEAN_BROWSER_STORAGE_LOCAL (avec exclusions de domaines)
+- SessionStorage -> ✅ CLEAN_BROWSER_STORAGE_SESSION
+- Sessions / Connexions -> ✅ CLEAN_BROWSER_SESSIONS_PRESERVE_LOGGED_IN (avec préservation des connexions)
+- Extensions orphelines -> ✅ CLEAN_BROWSER_EXTENSIONS_LIST (liste et nettoyage d'extensions)
+- Profils inactifs -> ✅ CLEAN_BROWSER_PROFILES_INACTIVE (détection et nettoyage)
+- Liste téléchargements -> ✅ CLEAN_BROWSER_DOWNLOADS_LIST
+- Auto-remplissage -> ✅ CLEAN_BROWSER_FORM_AUTOFILL (adresses, paiements, avec exclusion de mots de passe)
+- Modes : Soft / Smart / Deep / Nuclear -> ⚠️ (utiliser mode parameter dans CLEAN_BROWSER_CACHE_ALL)
 
 ## Performance / optimisation
 - Priorité processus -> ❌ (TODO : PERF_SET_PROCESS_PRIORITY)
@@ -99,8 +104,8 @@ Notes :
 - Switch admin-guided -> ⚠️ (partiel)
 
 ## Playbooks transverses (exemples)
-- "Clean browser deep" -> playbook : [BROWSERS_STORAGE_CLEAN, BROWSERS_HISTORY_CLEAN, BROWSERS_COOKIE_CLEAN_SELECTIVE, BROWSERS_EXTENSIONS_ORPHAN_CLEAN]
-  - état : ❌ (à créer)
+- "Clean browser deep" -> playbook : [CLEAN_BROWSER_STORAGE_LOCAL, CLEAN_BROWSER_STORAGE_SESSION, CLEAN_BROWSER_HISTORY, CLEAN_BROWSER_COOKIES_SELECTIVE, CLEAN_BROWSER_EXTENSIONS_LIST, CLEAN_BROWSER_CACHE_PER_PROFILE]
+  - état : ✅ (toutes les capabilities sont maintenant disponibles)
 - "System health check" -> playbook : [PERF_BASIC_CHECK, NETWORK_BASIC_DIAGNOSIS, SECURITY_PERMISSIONS_AUDIT]
   - état : ⚠️ (certains éléments manquent)
 
@@ -121,6 +126,7 @@ Notes :
 ---
 
 ## Historique des modifications
+- 2025-12-19 : Ajout de 10 capabilities navigateurs dans catalog/browsers.json (CLEAN_BROWSER_COOKIES_SELECTIVE, CLEAN_BROWSER_HISTORY, CLEAN_BROWSER_STORAGE_LOCAL, CLEAN_BROWSER_STORAGE_SESSION, CLEAN_BROWSER_EXTENSIONS_LIST, CLEAN_BROWSER_CACHE_PER_PROFILE, CLEAN_BROWSER_SESSIONS_PRESERVE_LOGGED_IN, CLEAN_BROWSER_PROFILES_INACTIVE, CLEAN_BROWSER_DOWNLOADS_LIST, CLEAN_BROWSER_FORM_AUTOFILL)
 - 2025-12-16 : Création initiale (template)
 
 ---
