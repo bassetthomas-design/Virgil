@@ -3,6 +3,8 @@ using System.Windows;
 using Virgil.App.Chat;
 using Virgil.App.ViewModels;
 using Virgil.App.Services;
+using Virgil.Domain;
+using Virgil.Services.Narration;
 
 namespace Virgil.App
 {
@@ -20,7 +22,23 @@ namespace Virgil.App
                 new NetworkInsightService()
             );
 
-            DataContext = new MainViewModel(chat, monitoringVm);
+            // Services d'actions
+            var systemActionsService = new SystemActionsService();
+            var networkActionsService = new NetworkActionsService();
+            var performanceActionsService = new PerformanceActionsService();
+            var specialActionsService = new SpecialActionsService();
+            var phraseService = new VirgilPhraseService();
+            var narrationService = new VirgilNarrationService(chat, phraseService);
+
+            var actionsVm = new ActionsViewModel(
+                systemActionsService,
+                narrationService,
+                networkActionsService,
+                performanceActionsService,
+                specialActionsService
+            );
+
+            DataContext = new MainViewModel(chat, monitoringVm, actionsVm);
         }
     }
 }
