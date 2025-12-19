@@ -1,20 +1,23 @@
 {
   "name": "browsers",
   "version": "1.0",
-  "generatedAt": "2025-12-19T13:58:54.193449Z",
+  "generatedAt": "2025-12-19T15:00:00.000000Z",
   "capabilitySchemaVersion": "1.0",
   "domain": "CLEANING",
-  "description": "Pack de capabilities pour navigateurs (nettoyage complet)",
+  "description": "Pack de capabilities pour navigateurs - nettoyage avancé et gestion des données de navigation",
   "capabilities": [
     {
       "id": "CLEAN_BROWSER_COOKIES_SELECTIVE",
-      "title": "Nettoyage sélectif des cookies navigateur",
-      "description": "Supprime les cookies des navigateurs de manière sélective, permettant de préserver les cookies des sites de confiance.",
+      "title": "Nettoyer cookies navigateurs (sélectif)",
       "level": "CORE",
-      "risk": "LOW",
-      "dry_run": true,
-      "rollback": "Les cookies supprimés peuvent être restaurés depuis une sauvegarde préalable si créée. Sinon, les utilisateurs devront se reconnecter manuellement.",
-      "inputs": {
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_COOKIES_BACKUP"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -22,41 +25,52 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
           },
-          "preserveDomains": {
+          "profiles": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Domaines dont les cookies doivent être préservés"
+            }
+          },
+          "excludeDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "olderThanDays": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Supprimer uniquement les cookies plus anciens que N jours"
+            "minimum": 0
           }
-        },
-        "required": ["browsers"]
+        }
       },
-      "example": {
-        "browsers": ["chrome", "firefox"],
-        "preserveDomains": ["google.com", "github.com", "microsoft.com"],
-        "olderThanDays": 30
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "cookies"]
+      "description": "Nettoie sélectivement les cookies des navigateurs en préservant les domaines spécifiés et en respectant les critères d'âge",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
       "id": "CLEAN_BROWSER_HISTORY",
-      "title": "Nettoyage de l'historique de navigation",
-      "description": "Supprime l'historique de navigation des navigateurs détectés, avec options de filtrage par période et par navigateur.",
+      "title": "Nettoyer historique navigateurs",
       "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_HISTORY_BACKUP"
+      ],
       "risk": "LOW",
-      "dry_run": true,
-      "rollback": "L'historique supprimé ne peut pas être restauré automatiquement. Une sauvegarde manuelle préalable est recommandée.",
-      "inputs": {
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -64,39 +78,50 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "olderThanDays": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Supprimer uniquement l'historique plus ancien que N jours"
+            "minimum": 0
           },
           "keepLastN": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Conserver les N dernières entrées"
+            "minimum": 0
           }
-        },
-        "required": ["browsers"]
+        }
       },
-      "example": {
-        "browsers": ["chrome", "edge"],
-        "olderThanDays": 90,
-        "keepLastN": 100
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "history"]
+      "description": "Nettoie l'historique de navigation avec options pour conserver les N dernières entrées ou supprimer uniquement les anciennes",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
       "id": "CLEAN_BROWSER_STORAGE_LOCAL",
-      "title": "Nettoyage du stockage local (LocalStorage)",
-      "description": "Supprime les données LocalStorage des navigateurs, permettant de libérer de l'espace et de réinitialiser les préférences web.",
+      "title": "Nettoyer LocalStorage navigateurs",
       "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_STORAGE_BACKUP"
+      ],
       "risk": "MEDIUM",
-      "dry_run": true,
-      "rollback": "Le LocalStorage ne peut pas être restauré automatiquement. Les applications web perdront leurs données locales et devront être reconfigurées.",
-      "inputs": {
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -104,43 +129,46 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
-          },
-          "preserveDomains": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Domaines dont le LocalStorage doit être préservé"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
           },
           "profiles": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Profils spécifiques à nettoyer (vide = tous)"
+            }
+          },
+          "excludeDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
-        },
-        "required": ["browsers"]
+        }
       },
-      "example": {
-        "browsers": ["chrome", "firefox"],
-        "preserveDomains": ["github.com"],
-        "profiles": ["Default", "Profile 1"]
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "storage"]
+      "description": "Nettoie le LocalStorage des navigateurs avec possibilité d'exclure des domaines spécifiques",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
       "id": "CLEAN_BROWSER_STORAGE_SESSION",
-      "title": "Nettoyage du stockage de session (SessionStorage)",
-      "description": "Supprime les données SessionStorage des navigateurs pour nettoyer les sessions temporaires et libérer de l'espace.",
+      "title": "Nettoyer SessionStorage navigateurs",
       "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
       "risk": "LOW",
-      "dry_run": true,
-      "rollback": "Le SessionStorage ne peut pas être restauré. Les sessions web actives peuvent nécessiter un rechargement.",
-      "inputs": {
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -148,35 +176,42 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
           },
           "profiles": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Profils spécifiques à nettoyer (vide = tous)"
+            }
           }
-        },
-        "required": ["browsers"]
+        }
       },
-      "example": {
-        "browsers": ["all"],
-        "profiles": []
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "storage", "session"]
+      "description": "Nettoie le SessionStorage des navigateurs (données temporaires de session)",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
       "id": "CLEAN_BROWSER_EXTENSIONS_LIST",
-      "title": "Liste et nettoyage des extensions orphelines",
-      "description": "Identifie et supprime les extensions de navigateur orphelines, désactivées ou non utilisées pour améliorer les performances.",
+      "title": "Lister et nettoyer extensions navigateurs",
       "level": "ADVANCED",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_EXTENSIONS_BACKUP"
+      ],
       "risk": "MEDIUM",
-      "dry_run": true,
-      "rollback": "Les extensions supprimées peuvent être réinstallées depuis le store du navigateur. Les paramètres et données des extensions seront perdus.",
-      "inputs": {
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -184,90 +219,46 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à analyser"
-          },
-          "removeDisabled": {
-            "type": "boolean",
-            "description": "Supprimer les extensions désactivées"
-          },
-          "removeOrphaned": {
-            "type": "boolean",
-            "description": "Supprimer les extensions orphelines (sans métadonnées valides)"
-          },
-          "preserveExtensionIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "IDs d'extensions à préserver"
-          }
-        },
-        "required": ["browsers"]
-      },
-      "example": {
-        "browsers": ["chrome", "edge"],
-        "removeDisabled": true,
-        "removeOrphaned": true,
-        "preserveExtensionIds": ["cjpalhdlnbpafiamejdnhcphjbkeiagm"]
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "extensions"]
-    },
-    {
-      "id": "CLEAN_BROWSER_CACHE_PER_PROFILE",
-      "title": "Nettoyage du cache par profil",
-      "description": "Supprime le cache des navigateurs de manière ciblée par profil utilisateur, permettant un nettoyage granulaire.",
-      "level": "CORE",
-      "risk": "LOW",
-      "dry_run": true,
-      "rollback": "Le cache sera recréé automatiquement lors de la navigation. Pas de restauration nécessaire.",
-      "inputs": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "browsers": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
           },
           "profiles": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Profils spécifiques à nettoyer"
+            }
           },
-          "cacheTypes": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": ["http", "media", "images", "scripts", "all"]
-            },
-            "description": "Types de cache à supprimer"
+          "removeOrphaned": {
+            "type": "boolean"
+          },
+          "removeDisabled": {
+            "type": "boolean"
           }
-        },
-        "required": ["browsers", "profiles"]
+        }
       },
-      "example": {
-        "browsers": ["chrome"],
-        "profiles": ["Default", "Work"],
-        "cacheTypes": ["http", "images"]
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "cache", "profiles"]
+      "description": "Liste les extensions installées et permet de nettoyer les extensions orphelines ou désactivées",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
-      "id": "CLEAN_BROWSER_SESSIONS_PRESERVE_LOGGED_IN",
-      "title": "Nettoyage des sessions en préservant les connexions actives",
-      "description": "Nettoie les données de session des navigateurs tout en préservant les sessions de connexion actives sur les sites spécifiés.",
-      "level": "ADVANCED",
-      "risk": "MEDIUM",
-      "dry_run": true,
-      "rollback": "Les sessions non préservées nécessiteront une reconnexion manuelle. Aucune restauration automatique possible.",
-      "inputs": {
+      "id": "CLEAN_BROWSER_CACHE_PER_PROFILE",
+      "title": "Nettoyer cache navigateurs par profil",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -275,40 +266,100 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "includeImageCache": {
+            "type": "boolean"
+          },
+          "includeMediaCache": {
+            "type": "boolean"
+          }
+        }
+      },
+      "description": "Nettoie le cache des navigateurs de manière ciblée par profil utilisateur avec options pour types de cache",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
+    },
+    {
+      "id": "CLEAN_BROWSER_SESSIONS_PRESERVE_LOGGED_IN",
+      "title": "Nettoyer sessions navigateurs en préservant connexions",
+      "level": "ADVANCED",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_SESSION_BACKUP"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "browsers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "preserveLoggedIn": {
-            "type": "boolean",
-            "description": "Préserver les sessions de connexion actives"
+            "type": "boolean"
           },
           "preserveDomains": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Domaines dont les sessions doivent être préservées"
+            }
           }
-        },
-        "required": ["browsers"]
+        }
       },
-      "example": {
-        "browsers": ["chrome", "firefox"],
-        "preserveLoggedIn": true,
-        "preserveDomains": ["gmail.com", "office.com", "github.com"]
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "sessions"]
+      "description": "Nettoie les sessions de navigation tout en préservant les authentifications et domaines spécifiés",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
       "id": "CLEAN_BROWSER_PROFILES_INACTIVE",
-      "title": "Nettoyage des profils inactifs",
-      "description": "Identifie et supprime les profils de navigateur qui n'ont pas été utilisés depuis une période définie.",
+      "title": "Nettoyer profils navigateurs inactifs",
       "level": "ADVANCED",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_PROFILE_BACKUP"
+      ],
       "risk": "HIGH",
-      "dry_run": true,
-      "rollback": "Les profils supprimés ne peuvent pas être restaurés automatiquement. Toutes les données du profil (favoris, mots de passe, extensions) seront perdues.",
-      "inputs": {
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -316,41 +367,46 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à analyser"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
           },
           "inactiveDays": {
             "type": "integer",
-            "minimum": 30,
-            "description": "Nombre de jours d'inactivité avant qu'un profil soit considéré inactif"
+            "minimum": 30
           },
-          "preserveProfiles": {
+          "excludeProfiles": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Noms de profils à toujours préserver"
+            }
           }
-        },
-        "required": ["browsers", "inactiveDays"]
+        }
       },
-      "example": {
-        "browsers": ["chrome", "edge"],
-        "inactiveDays": 90,
-        "preserveProfiles": ["Default"]
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "profiles"]
+      "description": "Détecte et nettoie les profils de navigateurs non utilisés depuis un nombre de jours spécifié",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
       "id": "CLEAN_BROWSER_DOWNLOADS_LIST",
-      "title": "Nettoyage de la liste des téléchargements",
-      "description": "Supprime l'historique des téléchargements des navigateurs sans supprimer les fichiers téléchargés eux-mêmes.",
+      "title": "Nettoyer liste téléchargements navigateurs",
       "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_DOWNLOADS_BACKUP"
+      ],
       "risk": "LOW",
-      "dry_run": true,
-      "rollback": "L'historique des téléchargements ne peut pas être restauré. Les fichiers téléchargés restent intacts.",
-      "inputs": {
+      "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -358,74 +414,89 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
-          },
-          "olderThanDays": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "Supprimer uniquement les entrées plus anciennes que N jours"
-          },
-          "keepLastN": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "Conserver les N dernières entrées"
-          }
-        },
-        "required": ["browsers"]
-      },
-      "example": {
-        "browsers": ["all"],
-        "olderThanDays": 60,
-        "keepLastN": 50
-      },
-      "tags": ["browsers", "cleaning", "dry-run", "downloads"]
-    },
-    {
-      "id": "CLEAN_BROWSER_FORM_AUTOFILL",
-      "title": "Nettoyage des données de remplissage automatique",
-      "description": "Supprime les données de remplissage automatique (adresses, formulaires) des navigateurs, excluant les mots de passe.",
-      "level": "CORE",
-      "risk": "LOW",
-      "dry_run": true,
-      "rollback": "Les données de remplissage automatique ne peuvent pas être restaurées. Les utilisateurs devront ressaisir leurs informations.",
-      "inputs": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "browsers": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": ["chrome", "firefox", "edge", "opera", "brave", "all"]
-            },
-            "description": "Liste des navigateurs à nettoyer"
-          },
-          "dataTypes": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": ["addresses", "phone-numbers", "emails", "credit-cards", "all"]
-            },
-            "description": "Types de données à supprimer"
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
           },
           "profiles": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Profils spécifiques à nettoyer (vide = tous)"
+            }
+          },
+          "olderThanDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keepLastN": {
+            "type": "integer",
+            "minimum": 0
           }
-        },
-        "required": ["browsers"]
+        }
       },
-      "example": {
-        "browsers": ["chrome", "edge"],
-        "dataTypes": ["addresses", "phone-numbers"],
-        "profiles": ["Default"]
+      "description": "Nettoie l'historique des téléchargements dans les navigateurs (ne supprime pas les fichiers téléchargés)",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
+    },
+    {
+      "id": "CLEAN_BROWSER_FORM_AUTOFILL",
+      "title": "Nettoyer données auto-remplissage navigateurs",
+      "level": "ADVANCED",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [
+        "BROWSER_AUTOFILL_BACKUP"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "browsers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Chrome",
+                "Firefox",
+                "Edge",
+                "Brave",
+                "Opera"
+              ]
+            }
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "includeAddresses": {
+            "type": "boolean"
+          },
+          "includePaymentMethods": {
+            "type": "boolean"
+          },
+          "excludePasswords": {
+            "type": "boolean"
+          }
+        }
       },
-      "tags": ["browsers", "cleaning", "dry-run", "autofill", "forms"]
+      "description": "Nettoie les données d'auto-remplissage des formulaires (adresses, moyens de paiement) tout en préservant optionnellement les mots de passe",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     }
   ]
 }
