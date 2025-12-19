@@ -9,93 +9,320 @@ namespace Virgil.Tests;
 
 public class CatalogBrowserJsonSchemaTests
 {
-    private const string BrowsersJsonPath = "docs/spec/capabilities/catalog/browsers.json";
-    private static readonly Lazy<string> RepositoryRoot = new Lazy<string>(() =>
+    private static string FindBrowsersCatalogPath()
     {
-        var currentDir = Directory.GetCurrentDirectory();
-        while (currentDir != null && !File.Exists(Path.Combine(currentDir, "Virgil.sln")))
+        var baseDir = AppContext.BaseDirectory;
+        var currentDir = new DirectoryInfo(baseDir);
+        
+        // Search upwards for the project root (where .sln file exists)
+        while (currentDir != null && !File.Exists(Path.Combine(currentDir.FullName, "Virgil.sln")))
         {
-            currentDir = Directory.GetParent(currentDir)?.FullName;
+            currentDir = currentDir.Parent;
         }
-        return currentDir ?? throw new InvalidOperationException("Cannot find repository root");
-    });
-
-    private static string GetRepositoryRoot()
+        
+        if (currentDir == null)
+        {
+            throw new InvalidOperationException($"Could not find project root from: {baseDir}");
+        }
+        
+        return Path.Combine(currentDir.FullName, "docs", "spec", "capabilities", "catalog", "browsers.json");
+    }
+    
+    private static JsonDocument LoadBrowsersCatalog()
     {
-        return RepositoryRoot.Value;
+        var fullPath = FindBrowsersCatalogPath();
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"browsers.json not found at: {fullPath}");
+        }
+        
+        var json = File.ReadAllText(fullPath);
+        return JsonDocument.Parse(json);
     }
 
     [Fact]
-    public void BrowsersJson_ShouldExist()
+    public void BrowsersCatalog_ShouldExist()
     {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-
+        // Arrange & Act
+        var fullPath = FindBrowsersCatalogPath();
+        
         // Assert
-        Assert.True(File.Exists(filePath), $"browsers.json should exist at {filePath}");
+        Assert.True(File.Exists(fullPath), $"browsers.json should exist at: {fullPath}");
     }
 
     [Fact]
-    public void BrowsersJson_ShouldBeValidJson()
+    public void BrowsersCatalog_ShouldBeValidJson()
     {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-
-        // Act & Assert
-        var exception = Record.Exception(() => JsonDocument.Parse(jsonContent));
+        // Arrange & Act
+        var exception = Record.Exception(() => LoadBrowsersCatalog());
+        
+        // Assert
         Assert.Null(exception);
     }
 
     [Fact]
-    public void BrowsersJson_ShouldHaveRequiredRootFields()
+    public void BrowsersCatalog_ShouldHaveRequiredTopLevelFields()
     {
         // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
+        using var doc = LoadBrowsersCatalog();
         var root = doc.RootElement;
-
-        // Assert
-        Assert.True(root.TryGetProperty("name", out _), "Root should have 'name' property");
-        Assert.True(root.TryGetProperty("version", out _), "Root should have 'version' property");
-        Assert.True(root.TryGetProperty("generatedAt", out _), "Root should have 'generatedAt' property");
-        Assert.True(root.TryGetProperty("capabilitySchemaVersion", out _), "Root should have 'capabilitySchemaVersion' property");
-        Assert.True(root.TryGetProperty("domain", out _), "Root should have 'domain' property");
-        Assert.True(root.TryGetProperty("description", out _), "Root should have 'description' property");
-        Assert.True(root.TryGetProperty("capabilities", out _), "Root should have 'capabilities' property");
+        
+        // Act & Assert
+        Assert.True(root.TryGetProperty("name", out _), "Missing 'name' field");
+        Assert.True(root.TryGetProperty("version", out _), "Missing 'version' field");
+        Assert.True(root.TryGetProperty("generatedAt", out _), "Missing 'generatedAt' field");
+        Assert.True(root.TryGetProperty("capabilitySchemaVersion", out _), "Missing 'capabilitySchemaVersion' field");
+        Assert.True(root.TryGetProperty("domain", out _), "Missing 'domain' field");
+        Assert.True(root.TryGetProperty("description", out _), "Missing 'description' field");
+        Assert.True(root.TryGetProperty("capabilities", out _), "Missing 'capabilities' field");
     }
 
     [Fact]
-    public void BrowsersJson_CapabilitiesShouldBeArray()
+    public void BrowsersCatalog_Capabilities_ShouldBeArray()
     {
         // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
+        using var doc = LoadBrowsersCatalog();
         var root = doc.RootElement;
-
+        
         // Act
         var capabilities = root.GetProperty("capabilities");
-
+        
         // Assert
         Assert.Equal(JsonValueKind.Array, capabilities.ValueKind);
     }
 
     [Fact]
-    public void BrowsersJson_ShouldContainExpectedCapabilities()
+    public void BrowsersCatalog_Capabilities_ShouldNotBeEmpty()
     {
         // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        
+        // Act
+        var capabilities = root.GetProperty("capabilities");
+        var count = capabilities.GetArrayLength();
+        
+        // Assert
+        Assert.True(count > 0, "Capabilities array should not be empty");
+    }
 
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldHaveRequiredFields()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            Assert.True(capability.TryGetProperty("id", out _), $"Capability missing 'id' field");
+            Assert.True(capability.TryGetProperty("title", out _), $"Capability '{id}' missing 'title' field");
+            Assert.True(capability.TryGetProperty("description", out _), $"Capability '{id}' missing 'description' field");
+            Assert.True(capability.TryGetProperty("level", out _), $"Capability '{id}' missing 'level' field");
+            Assert.True(capability.TryGetProperty("domain", out _), $"Capability '{id}' missing 'domain' field");
+            Assert.True(capability.TryGetProperty("requiresAdmin", out _), $"Capability '{id}' missing 'requiresAdmin' field");
+            Assert.True(capability.TryGetProperty("supportsDryRun", out _), $"Capability '{id}' missing 'supportsDryRun' field");
+            Assert.True(capability.TryGetProperty("rollback", out _), $"Capability '{id}' missing 'rollback' field");
+            Assert.True(capability.TryGetProperty("risk", out _), $"Capability '{id}' missing 'risk' field");
+            Assert.True(capability.TryGetProperty("paramsSchema", out _), $"Capability '{id}' missing 'paramsSchema' field");
+            Assert.True(capability.TryGetProperty("tags", out _), $"Capability '{id}' missing 'tags' field");
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldHaveUniqueIds()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
+        // Act
+        var ids = new List<string>();
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            if (capability.TryGetProperty("id", out var idProp))
+            {
+                var id = idProp.GetString();
+                Assert.NotNull(id);
+                Assert.DoesNotContain(id, ids);
+                ids.Add(id);
+            }
+        }
+        
+        // Assert
+        Assert.True(ids.Count > 0, "Should have at least one capability with an ID");
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldSupportDryRun()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            Assert.True(capability.TryGetProperty("supportsDryRun", out var dryRunProp), 
+                $"Capability '{id}' missing 'supportsDryRun' field");
+            Assert.True(dryRunProp.GetBoolean(), 
+                $"Capability '{id}' must have supportsDryRun set to true");
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldNotHaveUnexpectedFields()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
+        var expectedFields = new HashSet<string>
+        {
+            "id", "title", "description", "level", "domain", 
+            "requiresAdmin", "supportsDryRun", "rollback", "risk", 
+            "paramsSchema", "tags"
+        };
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            foreach (var property in capability.EnumerateObject())
+            {
+                Assert.True(expectedFields.Contains(property.Name), 
+                    $"Capability '{id}' has unexpected field: '{property.Name}'");
+            }
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_RollbackShouldBeArray()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            if (capability.TryGetProperty("rollback", out var rollbackProp))
+            {
+                Assert.True(rollbackProp.ValueKind == JsonValueKind.Array, 
+                    $"Capability '{id}' rollback should be an array");
+            }
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_TagsShouldBeArray()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            if (capability.TryGetProperty("tags", out var tagsProp))
+            {
+                Assert.True(tagsProp.ValueKind == JsonValueKind.Array, 
+                    $"Capability '{id}' tags should be an array");
+            }
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ParamsSchemaShouldBeObject()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            if (capability.TryGetProperty("paramsSchema", out var schemaProp))
+            {
+                Assert.True(schemaProp.ValueKind == JsonValueKind.Object, 
+                    $"Capability '{id}' paramsSchema should be an object");
+            }
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldHaveValidRiskLevel()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        var validRiskLevels = new[] { "LOW", "MEDIUM", "HIGH", "CRITICAL" };
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            if (capability.TryGetProperty("risk", out var riskProp))
+            {
+                var risk = riskProp.GetString();
+                Assert.NotNull(risk);
+                Assert.Contains(risk, validRiskLevels);
+            }
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldHaveValidLevel()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        var validLevels = new[] { "CORE", "ADVANCED", "EXPERT", "BONUS" };
+        
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+            
+            if (capability.TryGetProperty("level", out var levelProp))
+            {
+                var level = levelProp.GetString();
+                Assert.NotNull(level);
+                Assert.Contains(level, validLevels);
+            }
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_ShouldContainExpectedCapabilities()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+        
         var expectedIds = new[]
         {
             "CLEAN_BROWSER_COOKIES_SELECTIVE",
@@ -109,7 +336,7 @@ public class CatalogBrowserJsonSchemaTests
             "CLEAN_BROWSER_DOWNLOADS_LIST",
             "CLEAN_BROWSER_FORM_AUTOFILL"
         };
-
+        
         // Act
         var actualIds = new List<string>();
         foreach (var capability in capabilities.EnumerateArray())
@@ -117,237 +344,15 @@ public class CatalogBrowserJsonSchemaTests
             if (capability.TryGetProperty("id", out var idProp))
             {
                 var id = idProp.GetString();
-                if (id != null)
-                {
-                    actualIds.Add(id);
-                }
+                Assert.NotNull(id);
+                actualIds.Add(id);
             }
         }
-
+        
         // Assert
         foreach (var expectedId in expectedIds)
         {
             Assert.Contains(expectedId, actualIds);
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_AllCapabilitiesShouldHaveRequiredFields()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-
-        var requiredFields = new[] { "id", "title", "description", "level", "risk", "supportsDryRun", "rollback", "paramsSchema", "tags" };
-
-        // Act & Assert
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            foreach (var field in requiredFields)
-            {
-                Assert.True(
-                    capability.TryGetProperty(field, out _),
-                    $"Capability should have '{field}' property. Missing in: {(capability.TryGetProperty("id", out var id) ? id.GetString() : "unknown")}"
-                );
-            }
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_AllCapabilitiesShouldHaveDryRunEnabled()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-
-        // Act & Assert
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            var id = capability.GetProperty("id").GetString();
-            var supportsDryRun = capability.GetProperty("supportsDryRun").GetBoolean();
-            
-            Assert.True(supportsDryRun, $"Capability {id} should have supportsDryRun=true");
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_AllCapabilityIdsShouldBeUnique()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-
-        // Act
-        var ids = new List<string>();
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            var id = capability.GetProperty("id").GetString();
-            if (id != null)
-            {
-                ids.Add(id);
-            }
-        }
-
-        // Assert
-        var duplicates = ids.GroupBy(x => x)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .ToList();
-
-        Assert.Empty(duplicates);
-    }
-
-    [Fact]
-    public void BrowsersJson_ParamsSchemaShouldBeValidObject()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-
-        // Act & Assert
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            var id = capability.GetProperty("id").GetString();
-            var paramsSchema = capability.GetProperty("paramsSchema");
-            
-            Assert.Equal(JsonValueKind.Object, paramsSchema.ValueKind);
-            Assert.True(paramsSchema.TryGetProperty("type", out var typeProp), $"paramsSchema in {id} should have 'type' property");
-            Assert.Equal("object", typeProp.GetString());
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_TagsShouldBeArrayAndContainExpectedTags()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-
-        // Act & Assert
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            var id = capability.GetProperty("id").GetString();
-            var tags = capability.GetProperty("tags");
-            
-            Assert.Equal(JsonValueKind.Array, tags.ValueKind);
-            
-            var tagsList = new List<string>();
-            foreach (var tag in tags.EnumerateArray())
-            {
-                tagsList.Add(tag.GetString()!);
-            }
-            
-            // All browser capabilities should have "browsers", "cleaning", and "dry-run" tags
-            Assert.Contains("browsers", tagsList, StringComparer.OrdinalIgnoreCase);
-            Assert.Contains("cleaning", tagsList, StringComparer.OrdinalIgnoreCase);
-            Assert.Contains("dry-run", tagsList, StringComparer.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_RiskLevelShouldBeValid()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-        var validRiskLevels = new[] { "LOW", "MEDIUM", "HIGH", "CRITICAL" };
-
-        // Act & Assert
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            var id = capability.GetProperty("id").GetString();
-            var risk = capability.GetProperty("risk").GetString();
-            
-            Assert.Contains(risk, validRiskLevels);
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_LevelShouldBeValid()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-        var validLevels = new[] { "CORE", "ADVANCED", "EXPERT", "BONUS" };
-
-        // Act & Assert
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            var id = capability.GetProperty("id").GetString();
-            var level = capability.GetProperty("level").GetString();
-            
-            Assert.Contains(level, validLevels);
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_RollbackShouldBeArray()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var capabilities = doc.RootElement.GetProperty("capabilities");
-
-        // Act & Assert
-        foreach (var capability in capabilities.EnumerateArray())
-        {
-            var id = capability.GetProperty("id").GetString();
-            var rollback = capability.GetProperty("rollback");
-            
-            Assert.Equal(JsonValueKind.Array, rollback.ValueKind);
-        }
-    }
-
-    [Fact]
-    public void BrowsersJson_ShouldNotContainUnexpectedRootFields()
-    {
-        // Arrange
-        var repoRoot = GetRepositoryRoot();
-        var filePath = Path.Combine(repoRoot, BrowsersJsonPath);
-        var jsonContent = File.ReadAllText(filePath);
-        var doc = JsonDocument.Parse(jsonContent);
-        var root = doc.RootElement;
-
-        var expectedFields = new HashSet<string>
-        {
-            "name", "version", "generatedAt", "capabilitySchemaVersion", 
-            "domain", "description", "capabilities"
-        };
-
-        // Act
-        var actualFields = new List<string>();
-        foreach (var prop in root.EnumerateObject())
-        {
-            actualFields.Add(prop.Name);
-        }
-
-        // Assert
-        foreach (var field in actualFields)
-        {
-            Assert.Contains(field, expectedFields);
         }
     }
 }
