@@ -7,3 +7,13 @@ Ce dossier contient la **source de vérité** des actions exécutables par Virgi
 - `ai_response.schema.json` : schéma JSON de la réponse IA (plan = IDs)
 
 Règle d’or : l’IA propose, le moteur déterministe exécute (allowlist + dry-run + rollback + logs).
+
+## Catalog Packs
+
+Les packs dans `catalog/` organisent les capabilities par domaine :
+
+- **browsers.json** : Nettoyage et gestion des navigateurs (cache, cookies, historique, storage, sessions, profils, extensions, téléchargements, auto-remplissage)
+- **cleaning.json** : Nettoyage système avancé (temporaires, corbeille, logs, dumps)
+- **audit.json**, **security.json**, **network.json**, etc. : autres domaines fonctionnels
+
+Chaque pack est validé par des tests unitaires dans `Virgil.Tests/`.
