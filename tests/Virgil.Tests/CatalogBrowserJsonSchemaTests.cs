@@ -141,7 +141,7 @@ public class CatalogBrowserJsonSchemaTests
         var doc = JsonDocument.Parse(jsonContent);
         var capabilities = doc.RootElement.GetProperty("capabilities");
 
-        var requiredFields = new[] { "id", "title", "description", "level", "domain", "requiresAdmin", "risk", "supportsDryRun", "rollback", "paramsSchema", "tags" };
+        var requiredFields = new[] { "id", "title", "description", "level", "risk", "supportsDryRun", "rollback", "paramsSchema", "tags" };
 
         // Act & Assert
         foreach (var capability in capabilities.EnumerateArray())

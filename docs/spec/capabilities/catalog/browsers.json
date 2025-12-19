@@ -390,7 +390,8 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Domaines dont les sessions doivent être préservées"
           }
         },
         "required": [
