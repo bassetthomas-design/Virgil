@@ -1,1 +1,73 @@
-{"name":"security","version":"1.0","generatedAt":"2025-12-16T00:00:00Z","capabilitySchemaVersion":"1.0","domain":"SECURITY","description":"Pack de capabilities pour security (stubs)","capabilities":[]} 
+{
+  "name": "security",
+  "version": "1.0",
+  "generatedAt": "2025-12-19T13:58:54.195308Z",
+  "capabilitySchemaVersion": "1.0",
+  "domain": "SECURITY",
+  "description": "Pack de capabilities pour sécurité et confidentialité (SECURITY, PRIVACY)",
+  "capabilities": [
+    {
+      "id": "DEFENDER_UPDATE_SIGNATURES",
+      "title": "Mettre à jour signatures Defender",
+      "level": "CORE",
+      "domain": "SECURITY",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mettre à jour signatures Defender",
+      "tags": []
+    },
+    {
+      "id": "DEFENDER_SCAN_QUICK",
+      "title": "Scan rapide Defender",
+      "level": "CORE",
+      "domain": "SECURITY",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scan rapide Defender",
+      "tags": []
+    },
+    {
+      "id": "PRIVACY_DISABLE_TRACKING_PROFILE",
+      "title": "Appliquer profil confidentialité",
+      "level": "EXPERT",
+      "domain": "PRIVACY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "REGISTRY_BACKUP_TARGETED",
+        "SERVICES_SNAPSHOT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "BALANCED",
+              "STRICT"
+            ]
+          }
+        }
+      },
+      "description": "Appliquer profil confidentialité",
+      "tags": []
+    }
+  ]
+}

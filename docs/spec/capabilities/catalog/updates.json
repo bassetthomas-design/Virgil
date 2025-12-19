@@ -1,1 +1,112 @@
-{"name":"updates","version":"1.0","generatedAt":"2025-12-16T00:00:00Z","capabilitySchemaVersion":"1.0","domain":"UPDATES","description":"Pack de capabilities pour updates (stubs)","capabilities":[]} 
+{
+  "name": "updates",
+  "version": "1.0",
+  "generatedAt": "2025-12-19T13:58:54.196932Z",
+  "capabilitySchemaVersion": "1.0",
+  "domain": "UPDATES",
+  "description": "Pack de capabilities pour updates (stubs)",
+  "capabilities": [
+    {
+      "id": "WINDOWS_UPDATE_SCAN",
+      "title": "Scanner Windows Update",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scanner Windows Update",
+      "tags": []
+    },
+    {
+      "id": "WINDOWS_UPDATE_INSTALL",
+      "title": "Installer Windows Update",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [
+        "RESTORE_POINT_OPTIONAL"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Installer Windows Update",
+      "tags": []
+    },
+    {
+      "id": "APPS_UPDATE_WINGET_ALL",
+      "title": "Mettre à jour apps via winget",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "includeUnknown": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "MACHINE",
+              "AUTO"
+            ]
+          }
+        }
+      },
+      "description": "Mettre à jour apps via winget",
+      "tags": []
+    },
+    {
+      "id": "DRIVERS_SCAN",
+      "title": "Scanner drivers obsolètes",
+      "level": "CORE",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scanner drivers obsolètes",
+      "tags": []
+    },
+    {
+      "id": "DRIVERS_UPDATE_GPU",
+      "title": "Mettre à jour driver GPU (via sources approuvées)",
+      "level": "ADVANCED",
+      "domain": "UPDATES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "DRIVER_BACKUP"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mettre à jour driver GPU (via sources approuvées)",
+      "tags": []
+    }
+  ]
+}

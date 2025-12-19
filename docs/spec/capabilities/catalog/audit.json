@@ -1,1 +1,69 @@
-{"name":"audit","version":"1.0","generatedAt":"2025-12-16T00:00:00Z","capabilitySchemaVersion":"1.0","domain":"AUDIT","description":"Pack de capabilities pour audit (stubs)","capabilities":[]} 
+{
+  "name": "audit",
+  "version": "1.0",
+  "generatedAt": "2025-12-19T13:58:54.193147Z",
+  "capabilitySchemaVersion": "1.0",
+  "domain": "AUDIT",
+  "description": "Pack de capabilities pour audit (stubs)",
+  "capabilities": [
+    {
+      "id": "AUDIT_FULL_SYSTEM_REPORT",
+      "title": "Mode audit: rapport système complet (lecture seule)",
+      "level": "CORE",
+      "domain": "AUDIT",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mode audit: rapport système complet (lecture seule)",
+      "tags": []
+    },
+    {
+      "id": "AUDIT_EXPORT_REPORT_JSON",
+      "title": "Exporter rapport audit (JSON)",
+      "level": "CORE",
+      "domain": "AUDIT",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Exporter rapport audit (JSON)",
+      "tags": []
+    },
+    {
+      "id": "AUDIT_EXPORT_REPORT_PDF",
+      "title": "Exporter rapport audit (PDF)",
+      "level": "ADVANCED",
+      "domain": "AUDIT",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Exporter rapport audit (PDF)",
+      "tags": []
+    }
+  ]
+}

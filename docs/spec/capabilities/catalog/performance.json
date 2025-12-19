@@ -1,1 +1,145 @@
-{"name":"performance","version":"1.0","generatedAt":"2025-12-16T00:00:00Z","capabilitySchemaVersion":"1.0","domain":"PERFORMANCE","description":"Pack de capabilities pour performance (stubs)","capabilities":[]} 
+{
+  "name": "performance",
+  "version": "1.0",
+  "generatedAt": "2025-12-19T13:58:54.194394Z",
+  "capabilitySchemaVersion": "1.0",
+  "domain": "PERFORMANCE",
+  "description": "Pack de capabilities pour performance et surveillance (PERFORMANCE, MONITORING)",
+  "capabilities": [
+    {
+      "id": "MONITOR_START",
+      "title": "Démarrer la surveillance",
+      "level": "CORE",
+      "domain": "MONITORING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "refreshSeconds": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 10
+          }
+        }
+      },
+      "description": "Démarrer la surveillance",
+      "tags": []
+    },
+    {
+      "id": "MONITOR_STOP",
+      "title": "Arrêter la surveillance",
+      "level": "CORE",
+      "domain": "MONITORING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Arrêter la surveillance",
+      "tags": []
+    },
+    {
+      "id": "ALERTS_CONFIGURE",
+      "title": "Configurer seuils d'alerte",
+      "level": "CORE",
+      "domain": "MONITORING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cpuTempWarn": {
+            "type": "number"
+          },
+          "cpuTempAlert": {
+            "type": "number"
+          },
+          "gpuTempWarn": {
+            "type": "number"
+          },
+          "gpuTempAlert": {
+            "type": "number"
+          },
+          "diskFreeWarnGB": {
+            "type": "number"
+          },
+          "diskFreeAlertGB": {
+            "type": "number"
+          },
+          "ramWarnPct": {
+            "type": "number"
+          },
+          "ramAlertPct": {
+            "type": "number"
+          }
+        }
+      },
+      "description": "Configurer seuils d'alerte",
+      "tags": []
+    },
+    {
+      "id": "GAMING_MODE_SNAPSHOT",
+      "title": "Snapshot état pre-gaming (interne)",
+      "level": "CORE",
+      "domain": "PERFORMANCE",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Snapshot état pre-gaming (interne)",
+      "tags": []
+    },
+    {
+      "id": "GAMING_MODE_ENTER",
+      "title": "Activer mode gaming",
+      "level": "EXPERT",
+      "domain": "PERFORMANCE",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "GAMING_MODE_SNAPSHOT"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Activer mode gaming",
+      "tags": []
+    },
+    {
+      "id": "GAMING_MODE_EXIT",
+      "title": "Désactiver mode gaming",
+      "level": "ADVANCED",
+      "domain": "PERFORMANCE",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Désactiver mode gaming",
+      "tags": []
+    }
+  ]
+}
