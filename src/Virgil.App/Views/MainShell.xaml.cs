@@ -1,4 +1,7 @@
 using System.Windows;
+using System;
+using System.Windows.Threading;
+
 using Virgil.App.Chat;
 using Virgil.App.Services;
 using Virgil.App.ViewModels;
@@ -51,7 +54,18 @@ namespace Virgil.App.Views
 
             // Create and set the main ViewModel as DataContext
             DataContext = new MainViewModel(chat, monitoringVm, actionsVm);
+                        // Initialize real-time clock
+            var clockTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            clockTimer.Tick += (s, e) =>
+            {
+                ClockTextBlock.Text = DateTime.Now.ToString("HH:mm:ss");
+            };
+            clockTimer.Start();
         }
+
 
         /// <summary>
         /// Placeholder handler for the settings button declared in MainShell.xaml.
