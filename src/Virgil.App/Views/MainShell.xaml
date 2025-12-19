@@ -23,7 +23,11 @@
                 <Button Content="Paramètres" Click="OnOpenSettings" Margin="4,0"/>
             <TextBlock x:Name="ClockTextBlock" Margin="0,0,16,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="14" Text="--:--:--" />
           <Button Content="Mini HUD" Click="OnHudToggled" Margin="4,0"/>
+        <Button x:Name="MonitoringToggleButton" Content="Désactiver la surveillance" Click="OnMonitoringToggled" Margin="4,0"/>
+
             </StackPanel>
+ 
+
         </DockPanel>
         <!-- Actions Panel -->
         <views:ActionsPanel Grid.Row="1" Grid.Column="0" DataContext="{Binding Actions}"/>
