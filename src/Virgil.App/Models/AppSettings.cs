@@ -7,7 +7,8 @@ namespace Virgil.App.Models
         public MoodThreshold Mood { get; set; } = new();
         public bool ShowMiniHud { get; set; } = true;
         public bool CompanionTalkative { get; set; } = false;
-        public bool EnableBeatPulse { get; set; } = true;
+              public bool MonitoringEnabled { get; set; } = true;
+  public bool EnableBeatPulse { get; set; } = true;
     }
 
     public class MoodThreshold
