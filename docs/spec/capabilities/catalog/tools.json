@@ -1,1 +1,415 @@
-{"name":"tools","version":"1.0","generatedAt":"2025-12-16T00:00:00Z","capabilitySchemaVersion":"1.0","domain":"TOOLS","description":"Pack de capabilities pour tools (stubs)","capabilities":[]} 
+{
+  "name": "tools",
+  "version": "1.0",
+  "generatedAt": "2025-12-19T13:58:54.195566Z",
+  "capabilitySchemaVersion": "1.0",
+  "domain": "TOOLS",
+  "description": "Pack de capabilities pour tools (stubs)",
+  "capabilities": [
+    {
+      "id": "USERPROFILES_ENUMERATE",
+      "title": "Lister profils utilisateurs (SID)",
+      "level": "ADVANCED",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Lister profils utilisateurs (SID)",
+      "tags": []
+    },
+    {
+      "id": "USERPROFILES_DETECT_ORPHANS",
+      "title": "Détecter profils fantômes/orphelins",
+      "level": "ADVANCED",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Détecter profils fantômes/orphelins",
+      "tags": []
+    },
+    {
+      "id": "USERPROFILES_CLEAN_TARGET_SID",
+      "title": "Nettoyage ciblé par SID",
+      "level": "ADVANCED",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "USERPROFILE_SNAPSHOT"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sid": {
+            "type": "string"
+          },
+          "areas": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "TEMP",
+                "BROWSER",
+                "APP_CACHE",
+                "DOWNLOADS",
+                "RECYCLE_BIN"
+              ]
+            }
+          }
+        }
+      },
+      "description": "Nettoyage ciblé par SID",
+      "tags": []
+    },
+    {
+      "id": "USERPROFILES_REPAIR_BASIC",
+      "title": "Réparation basique profil utilisateur",
+      "level": "EXPERT",
+      "domain": "USERPROFILES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "ACL_BACKUP",
+        "REGISTRY_BACKUP_TARGETED"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sid": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Réparation basique profil utilisateur",
+      "tags": []
+    },
+    {
+      "id": "HW_HEALTH_SMART_READ",
+      "title": "Lire SMART disques",
+      "level": "ADVANCED",
+      "domain": "HARDWARE",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Lire SMART disques",
+      "tags": []
+    },
+    {
+      "id": "HW_HEALTH_BATTERY_REPORT",
+      "title": "Rapport batterie (cycles/santé)",
+      "level": "ADVANCED",
+      "domain": "HARDWARE",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Rapport batterie (cycles/santé)",
+      "tags": []
+    },
+    {
+      "id": "HW_HEALTH_DEVICE_MANAGER_ERRORS",
+      "title": "Lister périphériques en erreur",
+      "level": "ADVANCED",
+      "domain": "HARDWARE",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Lister périphériques en erreur",
+      "tags": []
+    },
+    {
+      "id": "LOG_EXPORT_BUNDLE",
+      "title": "Exporter bundle logs/support",
+      "level": "CORE",
+      "domain": "LOGGING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "includeAudit": {
+            "type": "boolean"
+          },
+          "includeSystemInfo": {
+            "type": "boolean"
+          }
+        }
+      },
+      "description": "Exporter bundle logs/support",
+      "tags": []
+    },
+    {
+      "id": "LOG_IMMUTABLE_APPEND",
+      "title": "Journal append-only (tamper-evident)",
+      "level": "ADVANCED",
+      "domain": "LOGGING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Journal append-only (tamper-evident)",
+      "tags": []
+    },
+    {
+      "id": "PROOF_AI_NO_EXECUTION",
+      "title": "Preuve: exécution déterministe (pas d'IA)",
+      "level": "CORE",
+      "domain": "LOGGING",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Preuve: exécution déterministe (pas d'IA)",
+      "tags": []
+    },
+    {
+      "id": "STARTUP_SNAPSHOT",
+      "title": "Snapshot startup entries (interne)",
+      "level": "CORE",
+      "domain": "STARTUP",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Snapshot startup entries (interne)",
+      "tags": []
+    },
+    {
+      "id": "STARTUP_DISABLE_ENTRY",
+      "title": "Désactiver entrée de démarrage",
+      "level": "ADVANCED",
+      "domain": "STARTUP",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "STARTUP_SNAPSHOT"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Désactiver entrée de démarrage",
+      "tags": []
+    },
+    {
+      "id": "SERVICES_SNAPSHOT",
+      "title": "Snapshot services (interne)",
+      "level": "CORE",
+      "domain": "SERVICES",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Snapshot services (interne)",
+      "tags": []
+    },
+    {
+      "id": "SERVICE_SET_STARTUP_TYPE",
+      "title": "Changer type de démarrage service",
+      "level": "EXPERT",
+      "domain": "SERVICES",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "SERVICES_SNAPSHOT",
+        "RESTORE_POINT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "serviceName": {
+            "type": "string"
+          },
+          "startupType": {
+            "type": "string",
+            "enum": [
+              "AUTOMATIC",
+              "AUTOMATIC_DELAYED",
+              "MANUAL",
+              "DISABLED"
+            ]
+          }
+        }
+      },
+      "description": "Changer type de démarrage service",
+      "tags": []
+    },
+    {
+      "id": "TASKSCHED_EXPORT_TASK",
+      "title": "Exporter tâche planifiée (interne)",
+      "level": "CORE",
+      "domain": "TASKSCHED",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Exporter tâche planifiée (interne)",
+      "tags": []
+    },
+    {
+      "id": "TASKSCHED_DISABLE_TASK",
+      "title": "Désactiver tâche planifiée",
+      "level": "ADVANCED",
+      "domain": "TASKSCHED",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "TASKSCHED_EXPORT_TASK"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "taskPath": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Désactiver tâche planifiée",
+      "tags": []
+    },
+    {
+      "id": "TOOLS_PROCESS_MANAGER",
+      "title": "Outil: gestionnaire de processus avancé",
+      "level": "ADVANCED",
+      "domain": "TOOLS",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Outil: gestionnaire de processus avancé",
+      "tags": []
+    },
+    {
+      "id": "TOOLS_EVENT_VIEWER",
+      "title": "Outil: Event Viewer intégré",
+      "level": "ADVANCED",
+      "domain": "TOOLS",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Outil: Event Viewer intégré",
+      "tags": []
+    },
+    {
+      "id": "META_CLI_ENABLE",
+      "title": "Activer interface CLI",
+      "level": "BONUS",
+      "domain": "META",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Activer interface CLI",
+      "tags": []
+    },
+    {
+      "id": "META_PORTABLE_MODE",
+      "title": "Mode portable",
+      "level": "BONUS",
+      "domain": "META",
+      "requiresAdmin": false,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Mode portable",
+      "tags": []
+    }
+  ]
+}

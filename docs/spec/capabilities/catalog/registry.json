@@ -1,1 +1,55 @@
-{"name":"registry","version":"1.0","generatedAt":"2025-12-16T00:00:00Z","capabilitySchemaVersion":"1.0","domain":"REGISTRY","description":"Pack de capabilities pour registry (stubs)","capabilities":[]} 
+{
+  "name": "registry",
+  "version": "1.0",
+  "generatedAt": "2025-12-19T13:58:54.194733Z",
+  "capabilitySchemaVersion": "1.0",
+  "domain": "REGISTRY",
+  "description": "Pack de capabilities pour registry (stubs)",
+  "capabilities": [
+    {
+      "id": "REGISTRY_BACKUP_TARGETED",
+      "title": "Sauvegarde registre ciblée (interne)",
+      "level": "CORE",
+      "domain": "REGISTRY",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Sauvegarde registre ciblée (interne)",
+      "tags": []
+    },
+    {
+      "id": "REGISTRY_CLEAN_ORPHAN_KEYS",
+      "title": "Nettoyage registre: clés orphelines (allowlist)",
+      "level": "EXPERT",
+      "domain": "REGISTRY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "REGISTRY_BACKUP_TARGETED",
+        "RESTORE_POINT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "aggressiveness": {
+            "type": "string",
+            "enum": [
+              "SAFE",
+              "AGGRESSIVE"
+            ]
+          }
+        }
+      },
+      "description": "Nettoyage registre: clés orphelines (allowlist)",
+      "tags": []
+    }
+  ]
+}

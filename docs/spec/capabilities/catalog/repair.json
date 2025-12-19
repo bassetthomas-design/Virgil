@@ -1,1 +1,213 @@
-{"name":"repair","version":"1.0","generatedAt":"2025-12-16T00:00:00Z","capabilitySchemaVersion":"1.0","domain":"REPAIR","description":"Pack de capabilities pour repair (stubs)","capabilities":[]} 
+{
+  "name": "repair",
+  "version": "1.0",
+  "generatedAt": "2025-12-19T13:58:54.194952Z",
+  "capabilitySchemaVersion": "1.0",
+  "domain": "REPAIR",
+  "description": "Pack de capabilities pour repair (stubs)",
+  "capabilities": [
+    {
+      "id": "CONSISTENCY_SCAN",
+      "title": "Scanner incohérences système (startup/services/drivers)",
+      "level": "ADVANCED",
+      "domain": "CONSISTENCY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Scanner incohérences système (startup/services/drivers)",
+      "tags": []
+    },
+    {
+      "id": "CONSISTENCY_FIX_STARTUP_BROKEN_LINKS",
+      "title": "Corriger entrées startup cassées",
+      "level": "EXPERT",
+      "domain": "CONSISTENCY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "STARTUP_SNAPSHOT"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Corriger entrées startup cassées",
+      "tags": []
+    },
+    {
+      "id": "CONSISTENCY_FIX_SERVICE_DEPENDENCIES",
+      "title": "Corriger dépendances services incohérentes",
+      "level": "EXPERT",
+      "domain": "CONSISTENCY",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "SERVICES_SNAPSHOT",
+        "RESTORE_POINT"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Corriger dépendances services incohérentes",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_WU_LOOP",
+      "title": "Playbook: Windows Update en boucle",
+      "level": "ADVANCED",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT_OPTIONAL"
+      ],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: Windows Update en boucle",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_STORE_INSTALL_FAIL",
+      "title": "Playbook: Store install fail",
+      "level": "ADVANCED",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: Store install fail",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_DEFENDER_DISABLED_BY_POLICY",
+      "title": "Playbook: Defender désactivé par policy",
+      "level": "EXPERT",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "REGISTRY_BACKUP_TARGETED"
+      ],
+      "risk": "HIGH",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: Defender désactivé par policy",
+      "tags": []
+    },
+    {
+      "id": "TROUBLESHOOT_PROFILE_TEMPORARY",
+      "title": "Playbook: profil temporaire",
+      "level": "EXPERT",
+      "domain": "TROUBLESHOOT",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "ACL_BACKUP"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Playbook: profil temporaire",
+      "tags": []
+    },
+    {
+      "id": "RESET_WINDOWS_UPDATE_HARD",
+      "title": "Reset Windows Update (hard)",
+      "level": "EXPERT",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [
+        "RESTORE_POINT",
+        "WU_COMPONENT_BACKUP"
+      ],
+      "risk": "CRITICAL",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Reset Windows Update (hard)",
+      "tags": []
+    },
+    {
+      "id": "RESET_MICROSOFT_STORE",
+      "title": "Reset Microsoft Store",
+      "level": "ADVANCED",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Reset Microsoft Store",
+      "tags": []
+    },
+    {
+      "id": "REPAIR_SFC",
+      "title": "Réparation SFC",
+      "level": "ADVANCED",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Réparation SFC",
+      "tags": []
+    },
+    {
+      "id": "REPAIR_DISM_RESTOREHEALTH",
+      "title": "Réparation DISM RestoreHealth",
+      "level": "ADVANCED",
+      "domain": "REPAIR",
+      "requiresAdmin": true,
+      "supportsDryRun": false,
+      "rollback": [],
+      "risk": "MEDIUM",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "description": "Réparation DISM RestoreHealth",
+      "tags": []
+    }
+  ]
+}
