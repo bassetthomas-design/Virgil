@@ -1,6 +1,6 @@
 # Virgil - État du Projet
 
-Date de révision : 19 décembre 2024
+Date de révision : 19 décembre 2025
 
 ## 📊 Vue d'ensemble
 
@@ -71,7 +71,7 @@ Date de révision : 19 décembre 2024
    - Target: >80% de couverture de code
 
 2. **TODOs à Adresser**
-   - **13 TODOs identifiés** dans le code source (19 décembre 2024)
+   - **13 TODOs identifiés** dans le code source (19 décembre 2025)
    - Documentation complète créée:
      - `docs/TODO_TRACKING.md` - Analyse détaillée de tous les TODOs avec contexte
      - `docs/ISSUES_TO_CREATE.md` - Guide pour créer les issues GitHub
