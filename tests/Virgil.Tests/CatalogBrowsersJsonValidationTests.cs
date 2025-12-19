@@ -10,6 +10,10 @@ namespace Virgil.Tests;
 public class CatalogBrowsersJsonValidationTests
 {
     private const string BrowsersJsonPath = "../../../../../docs/spec/capabilities/catalog/browsers.json";
+    
+    private static readonly HashSet<string?> ValidLevels = new() { "CORE", "ADVANCED", "EXPERT", "BONUS" };
+    private static readonly HashSet<string?> ValidRisks = new() { "LOW", "MEDIUM", "HIGH", "CRITICAL" };
+    private static readonly string[] RequiredCapabilityFields = { "id", "title", "description", "level", "risk", "dry_run", "rollback", "inputs", "example", "tags" };
 
     [Fact]
     public void BrowsersJson_ShouldExist()
@@ -98,7 +102,11 @@ public class CatalogBrowsersJsonValidationTests
         {
             if (capability.TryGetProperty("id", out var idElement))
             {
-                actualIds.Add(idElement.GetString()!);
+                var id = idElement.GetString();
+                if (!string.IsNullOrEmpty(id))
+                {
+                    actualIds.Add(id);
+                }
             }
         }
 
@@ -120,14 +128,12 @@ public class CatalogBrowsersJsonValidationTests
         var root = doc.RootElement;
         var capabilities = root.GetProperty("capabilities");
 
-        var requiredFields = new[] { "id", "title", "description", "level", "risk", "dry_run", "rollback", "inputs", "example", "tags" };
-
         // Act & Assert
         foreach (var capability in capabilities.EnumerateArray())
         {
             var id = capability.TryGetProperty("id", out var idElement) ? idElement.GetString() : "unknown";
 
-            foreach (var field in requiredFields)
+            foreach (var field in RequiredCapabilityFields)
             {
                 Assert.True(
                     capability.TryGetProperty(field, out _),
@@ -180,7 +186,11 @@ public class CatalogBrowsersJsonValidationTests
         {
             if (capability.TryGetProperty("id", out var idElement))
             {
-                ids.Add(idElement.GetString()!);
+                var id = idElement.GetString();
+                if (!string.IsNullOrEmpty(id))
+                {
+                    ids.Add(id);
+                }
             }
         }
 
@@ -199,8 +209,6 @@ public class CatalogBrowsersJsonValidationTests
         var root = doc.RootElement;
         var capabilities = root.GetProperty("capabilities");
 
-        var validLevels = new HashSet<string?> { "CORE", "ADVANCED", "EXPERT", "BONUS" };
-
         // Act & Assert
         foreach (var capability in capabilities.EnumerateArray())
         {
@@ -212,7 +220,7 @@ public class CatalogBrowsersJsonValidationTests
             );
 
             var level = levelElement.GetString();
-            Assert.Contains(level, validLevels);
+            Assert.Contains(level, ValidLevels);
         }
     }
 
@@ -226,8 +234,6 @@ public class CatalogBrowsersJsonValidationTests
         var root = doc.RootElement;
         var capabilities = root.GetProperty("capabilities");
 
-        var validRisks = new HashSet<string?> { "LOW", "MEDIUM", "HIGH", "CRITICAL" };
-
         // Act & Assert
         foreach (var capability in capabilities.EnumerateArray())
         {
@@ -239,7 +245,7 @@ public class CatalogBrowsersJsonValidationTests
             );
 
             var risk = riskElement.GetString();
-            Assert.Contains(risk, validRisks);
+            Assert.Contains(risk, ValidRisks);
         }
     }
 
