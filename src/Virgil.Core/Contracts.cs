@@ -1,5 +1,9 @@
 namespace Virgil.Core
 {
+    /// <summary>
+    /// Enumeration of moods supported by the application. Additional moods have
+    /// been added to enrich the emotional range of Virgil. See issue #150.
+    /// </summary>
     public enum Mood
     {
         Neutral,
@@ -11,6 +15,8 @@ namespace Virgil.Core
         Tired,
         Happy,
         Vigilant,
-        Resting
+        Resting,
+        Excited,
+        Anxious
     }
 }
