@@ -1,5 +1,5 @@
 #nullable enable
-using System;
+using System
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -80,6 +80,7 @@ namespace Virgil.Core.Services
                             break;
 
                         // Firefox
+
                         case BrowserKind.Firefox:
                             CleanFirefoxProfile(p.Path, ref found, ref deleted, opt);
                             break;
@@ -115,8 +116,13 @@ namespace Virgil.Core.Services
             DiscoverChromium(list, BrowserKind.OperaGX, Path.Combine(roaming, "Opera Software", "Opera GX Stable"), "opera");
             DiscoverChromium(list, BrowserKind.Vivaldi, Path.Combine(local, "Vivaldi", "User Data"), "vivaldi");
 
+            
+          
             // Firefox
+            
             DiscoverFirefox(list, roaming);
+            
+            
 
             return list;
         }
@@ -182,8 +188,10 @@ namespace Virgil.Core.Services
                                 dst.Add(new BrowserProfile
                                 {
                                     Kind = BrowserKind.Firefox,
+             
                                     Name = currName ?? new DirectoryInfo(profPath).Name,
                                     Path = profPath,
+             
                                     IsActive = isActive
                                 });
                             }
@@ -216,9 +224,12 @@ namespace Virgil.Core.Services
                             Path = profPath,
                             IsActive = isActive
                         });
+                        
                     }
                 }
             }
+            
+        
             catch { /* best-effort */ }
         }
 
@@ -291,6 +302,7 @@ namespace Virgil.Core.Services
                 catch
                 {
                     if (opt.Force)
+             
                     {
                         try { File.Delete(f); } catch { /* ignore */ }
                     }
