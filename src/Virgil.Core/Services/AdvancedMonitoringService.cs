@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using LibreHardwareMonitor.Hardware;
 using System.Text;
 
 namespace Virgil.Core.Services
@@ -21,7 +22,7 @@ namespace Virgil.Core.Services
             {
                 CpuTempC = TryReadCpuTempC(),
                 GpuTempC = TryReadGpuTempC(),
-                DiskTempC = null // TODO: intégrer smartctl/LibreHardwareMonitor plus tard
+                DiskTempC = TryReadDiskTempC() // lecture via LibreHardwareMonitor; null si indisponible
             };
             return snap;
         }
@@ -72,6 +73,46 @@ namespace Virgil.Core.Services
                 return null;
             }
             catch { return null; }
+        }
+
+        /// <summary>
+        /// Essaie de lire la température du disque principal via LibreHardwareMonitor.
+        /// Retourne la température maximale trouvée parmi les disques ou null si aucune n'est disponible.
+        /// </summary>
+        private float? TryReadDiskTempC()
+        {
+            try
+            {
+                // Crée un objet Computer avec uniquement le stockage activé pour minimiser l'overhead.
+                using var pc = new Computer { IsStorageEnabled = true };
+                pc.Open();
+
+                float? max = null;
+                foreach (var hw in pc.Hardware)
+                {
+                    if (hw.HardwareType != HardwareType.Storage) continue;
+                    hw.Update();
+                    foreach (var s in hw.Sensors)
+                    {
+                        if (s.SensorType == SensorType.Temperature)
+                        {
+                            // s.Value est un float? ; ignorer les valeurs nulles et absurdes
+                            var val = s.Value;
+                            if (val.HasValue && val.Value > -50 && val.Value < 150)
+                            {
+                                if (!max.HasValue || val.Value > max.Value)
+                                    max = val.Value;
+                            }
+                        }
+                    }
+                }
+                return max;
+            }
+            catch
+            {
+                // Retourne null en cas d'erreur (par exemple bibliothèque non disponible ou pas de disque SMART)
+                return null;
+            }
         }
 
         private static string RunProcessCapture(string fileName, string args)
