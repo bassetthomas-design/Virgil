@@ -19,38 +19,102 @@ namespace Virgil.Core.Services
         public async Task<string> CleanTempAsync()
         {
             var sb = new StringBuilder();
-            long total = 0; int files = 0; int deleted = 0;
-            foreach (var p in TempPaths) sb.AppendLine("[PATH] " + p);
+            long totalBytes = 0;
+            int files = 0;
+            int deletedFiles = 0;
+            int deletedDirs = 0;
+
+            // list the paths being cleaned
+            foreach (var p in TempPaths)
+                sb.AppendLine("[PATH] " + p);
 
             await Task.Run(() =>
             {
                 foreach (var root in TempPaths)
                 {
-                    if (!Directory.Exists(root)) continue;
+                    if (!Directory.Exists(root))
+                        continue;
 
-                    // stats
+                    // accumulate sizes and file count
                     foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-                    { try { var fi = new FileInfo(f); total += fi.Length; files++; } catch { } }
+                    {
+                        try
+                        {
+                            var fi = new FileInfo(f);
+                            totalBytes += fi.Length;
+                            files++;
+                        }
+                        catch
+                        {
+                            // ignore errors reading file info
+                        }
+                    }
 
                     // delete files
                     foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-                    { try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); deleted++; } catch { } }
+                    {
+                        try
+                        {
+                            File.SetAttributes(f, FileAttributes.Normal);
+                            File.Delete(f);
+                            deletedFiles++;
+                        }
+                        catch
+                        {
+                            // ignore deletion failures
+                        }
+                    }
 
-                    // remove empty dirs
+                    // remove empty directories and count them
                     foreach (var d in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).OrderByDescending(s => s.Length))
-                    { try { if (Directory.Exists(d) && !Directory.EnumerateFileSystemEntries(d).Any()) Directory.Delete(d); } catch { } }
+                    {
+                        try
+                        {
+                            if (Directory.Exists(d) && !Directory.EnumerateFileSystemEntries(d).Any())
+                            {
+                                Directory.Delete(d);
+                                deletedDirs++;
+                            }
+                        }
+                        catch
+                        {
+                            // ignore deletion failures
+                        }
+                    }
                 }
             });
 
-            sb.AppendLine($"Files: {files}, Deleted: {deleted}, Size(before): {FormatBytes(total)}");
+            // approximate freed bytes equal to totalBytes since all enumerated files are slated for deletion
+            string freed = FormatBytes(totalBytes);
+            sb.AppendLine($"Files found: {files}, files deleted: {deletedFiles}, directories deleted: {deletedDirs}, space freed: {freed}");
+
+            // Log the summary for historical tracking
+            try
+            {
+                LoggingService.SafeInfo(
+                    "Temp cleaning completed: {FilesDeleted} files, {DirsDeleted} directories, freed {FreedBytes}",
+                    deletedFiles,
+                    deletedDirs,
+                    freed);
+            }
+            catch
+            {
+                // ignore logging failures
+            }
+
             return sb.ToString();
         }
 
         private static string FormatBytes(long bytes)
         {
             string[] sizes = { "B", "KB", "MB", "GB", "TB" };
-            double len = bytes; int order = 0;
-            while (len >= 1024 && order < sizes.Length - 1) { order++; len /= 1024; }
+            double len = bytes;
+            int order = 0;
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len /= 1024;
+            }
             return $"{len:0.##} {sizes[order]}";
         }
     }
