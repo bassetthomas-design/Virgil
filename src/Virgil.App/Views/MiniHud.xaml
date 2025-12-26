@@ -4,22 +4,22 @@
   <StackPanel Orientation="Vertical" Margin="0,0,0,8">
     <StackPanel Orientation="Horizontal" Margin="0,2">
       <TextBlock Text="CPU" Width="36"/>
-      <ProgressBar Width="140" Height="8" Value="{Binding CpuUsage}" Maximum="100"/>
+      <ProgressBar Width="140" Height="8" Value="{Binding CpuUsage, Mode=OneWay}" Maximum="100"/>
       <TextBlock Text="{Binding CpuTemp, StringFormat={}{0:F0}°C}" Margin="8,0,0,0" Width="52"/>
     </StackPanel>
     <StackPanel Orientation="Horizontal" Margin="0,2">
       <TextBlock Text="GPU" Width="36"/>
-      <ProgressBar Width="140" Height="8" Value="{Binding GpuUsage}" Maximum="100"/>
+      <ProgressBar Width="140" Height="8" Value="{Binding GpuUsage, Mode=OneWay}" Maximum="100"/>
       <TextBlock Text="{Binding GpuTemp, StringFormat={}{0:F0}°C}" Margin="8,0,0,0" Width="52"/>
     </StackPanel>
     <StackPanel Orientation="Horizontal" Margin="0,2">
       <TextBlock Text="RAM" Width="36"/>
-      <ProgressBar Width="140" Height="8" Value="{Binding RamUsage}" Maximum="100"/>
+      <ProgressBar Width="140" Height="8" Value="{Binding RamUsage, Mode=OneWay}" Maximum="100"/>
       <TextBlock Text="{Binding RamUsage, StringFormat={}{0:F0}%}" Margin="8,0,0,0" Width="52"/>
     </StackPanel>
     <StackPanel Orientation="Horizontal" Margin="0,2">
       <TextBlock Text="Disk" Width="36"/>
-      <ProgressBar Width="140" Height="8" Value="{Binding DiskUsage}" Maximum="100"/>
+      <ProgressBar Width="140" Height="8" Value="{Binding DiskUsage, Mode=OneWay}" Maximum="100"/>
       <TextBlock Text="{Binding DiskUsage, StringFormat={}{0:F0}%}" Margin="8,0,0,0" Width="52"/>
     </StackPanel>
   </StackPanel>
