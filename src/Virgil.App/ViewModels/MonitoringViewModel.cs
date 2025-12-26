@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Virgil.App.Models;
+using Virgil.App.Services;
 using Virgil.Core;
 using Virgil.Domain;
 using MonitoringService = Virgil.App.Services.MonitoringService;
