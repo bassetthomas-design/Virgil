@@ -36,7 +36,7 @@ Le projet Virgil est **100% conforme** au mémo de reprise et même **en avance*
 - IA locale 100% textuelle, propose seulement
 
 **État actuel** : ✅ **CONFORME**
-- `capabilities.v3.json` : 67 capabilities avec structure complète
+- `capabilities.v3.json` : 77 capabilities avec structure complète
 - Tous les champs requis présents (ID, niveau, risque, dry-run, rollback)
 - Schémas JSON pour l'IA (`ai_request.schema.json`, `ai_response.schema.json`)
 - Aucun code d'exécution libre ou de commandes générées
@@ -147,7 +147,7 @@ docs/spec/capabilities/catalog/
 | Fichier | Capabilities | Domaines | Statut |
 |---------|--------------|----------|--------|
 | audit.json | 3 | AUDIT | ✅ |
-| browsers.json | 0 | (vide) | ⚠️ stub |
+| browsers.json | 10 | CLEANING | ✅ |
 | cleaning.json | 13 | CLEANING, DISK | ✅ |
 | network.json | 2 | NETWORK | ✅ |
 | performance.json | 6 | PERFORMANCE, MONITORING | ✅ |
@@ -158,7 +158,7 @@ docs/spec/capabilities/catalog/
 | uninstall.json | 2 | UNINSTALL, APPX | ✅ |
 | updates.json | 5 | UPDATES | ✅ |
 
-**Total** : 67 capabilities distribuées (100% de l'existant)
+**Total** : 77 capabilities distribuées (100% de l'existant)
 
 ---
 
@@ -191,7 +191,7 @@ Le projet va **au-delà** du mémo sur ces points :
 
 ### 1. Distribution immédiate des capabilities
 **Mémo** : Suggère de créer la structure catalog/  
-**Virgil** : Structure créée ET 67 capabilities déjà distribuées
+**Virgil** : Structure créée ET 77 capabilities déjà distribuées
 
 **Justification** : Gain de temps, structure validée, distribution réversible si besoin
 
@@ -216,10 +216,10 @@ Le projet va **au-delà** du mémo sur ces points :
 
 ## ⚠️ POINTS D'ATTENTION
 
-### 1. browsers.json vide
-**État** : Fichier stub sans capabilities  
-**Raison** : Aucune capability BROWSERS dans capabilities.v3.json  
-**Action** : Normal, en attente de l'enrichissement du catalogue
+### 1. browsers.json complété
+**État** : 10 capabilities CLEAN_BROWSER_* ajoutées dans catalog/ et capabilities.v3.json
+**Raison** : Priorité haute traitée pour couvrir les actions navigateurs essentielles
+**Action** : Surveiller les besoins futurs (IndexedDB avancé, nouvelles plateformes) mais le pack est opérationnel
 
 ### 2. Packs multi-domaines
 **État** : Certains packs contiennent plusieurs domaines (ex: tools.json)  
@@ -235,7 +235,7 @@ Le projet va **au-delà** du mémo sur ces points :
 - [x] Vision produit alignée
 - [x] Architecture V3 respectée
 - [x] Structure docs/spec/capabilities/ complète
-- [x] capabilities.v3.json avec 67 capabilities
+- [x] capabilities.v3.json avec 77 capabilities
 - [x] Schémas JSON (ai_request, ai_response)
 - [x] README.md avec règles fondamentales
 - [x] COVERAGE.md créé et structuré
@@ -261,20 +261,16 @@ Selon le mémo et l'état actuel, la **prochaine action** est :
 
 ### Option A : Enrichir le catalogue (Étape 2 suite)
 
-**Commencer par** : Pack browsers.json (priorité HAUTE selon COVERAGE.md)
+**Commencer par** : Packs cleaning, security, performance selon priorités restantes
 
-**Capabilities à ajouter** :
-1. BROWSERS_COOKIE_CLEAN_SELECTIVE
-2. BROWSERS_HISTORY_CLEAN
-3. BROWSERS_STORAGE_CLEAN (IndexedDB/LocalStorage)
-4. BROWSERS_SESSIONS_MANAGE
-5. BROWSERS_EXTENSIONS_ORPHAN_CLEAN
-
-**Ensuite** : Packs cleaning, security, performance selon priorités
+**Exemples de next steps** :
+- CLEAN_WINDOWS_OLD / CLEAN_MIGRATION_LEFTOVERS
+- DEFENDER_SCAN_FULL / SECURITY_PERMISSIONS_AUDIT
+- PERF_SET_PROCESS_PRIORITY / PERF_SET_CPU_AFFINITY
 
 ### Option B : Passer au code C# (Étape 3)
 
-**Si** le catalogue actuel (67 capabilities) est jugé suffisant pour démarrer.
+**Si** le catalogue actuel (77 capabilities) est jugé suffisant pour démarrer.
 
 **Créer** : CapabilityLoader.cs dans Virgil.Core pour :
 - Charger capabilities.v3.json
@@ -315,7 +311,7 @@ Je travaille sur Virgil (https://github.com/bassetthomas-design/Virgil).
 - Étape 1 (Coverage) : ✅ TERMINÉE
 - Étape 2 (Structure catalog) : ✅ TERMINÉE  
 - Étape 2 (Enrichissement) : 🔄 EN COURS
-- 67 capabilities existantes distribuées dans 11 packs
+- 77 capabilities existantes distribuées dans 11 packs
 - COVERAGE.md identifie ~60 capabilities manquantes
 
 Le projet suit le mémo de reprise V3 avec :
@@ -330,7 +326,7 @@ Consulter :
 - docs/spec/capabilities/ALIGNEMENT_MEMO.md (validation mémo)
 
 Objectif : [CHOISIR]
-A) Enrichir le catalogue (browsers.json en priorité)
+A) Enrichir le catalogue (cleaning/security/performance en priorité)
 B) Passer au code C# (CapabilityLoader)
 ```
 

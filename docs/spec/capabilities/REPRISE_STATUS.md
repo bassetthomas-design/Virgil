@@ -9,7 +9,7 @@
 
 Le projet Virgil a franchi les **Étapes 1 et 2** du plan de reprise :
 - ✅ **Étape 1 (Coverage)** : COVERAGE.md créé et structuré
-- ✅ **Étape 2 (Structure catalog)** : 11 packs créés et 67 capabilities distribuées
+- ✅ **Étape 2 (Structure catalog)** : 11 packs créés et 77 capabilities distribuées
 - 🔄 **Étape 2 (Contenu)** : Catalogue à enrichir avec les capabilities manquantes
 - ⏳ **Étape 3+** : Code C# en attente
 
@@ -22,14 +22,14 @@ Le projet Virgil a franchi les **Étapes 1 et 2** du plan de reprise :
 ```
 docs/spec/capabilities/
 ├── README.md                    ✅ Règles fondamentales
-├── capabilities.v3.json         ✅ 67 capabilities existantes
+├── capabilities.v3.json         ✅ 77 capabilities existantes
 ├── ai_request.schema.json       ✅ Contrat requête IA
 ├── ai_response.schema.json      ✅ Contrat réponse IA
 ├── COVERAGE.md                  ✅ Mapping cahier des charges → capabilities
 ├── REPRISE_STATUS.md            ✅ Ce fichier
 └── catalog/                     ✅ Packs de capabilities
     ├── audit.json               ✅ 3 capabilities (AUDIT)
-    ├── browsers.json            ⚠️  0 capabilities (stub, en attente)
+    ├── browsers.json            ✅ 10 capabilities (CLEANING)
     ├── cleaning.json            ✅ 13 capabilities (CLEANING, DISK)
     ├── network.json             ✅ 2 capabilities (NETWORK)
     ├── performance.json         ✅ 6 capabilities (PERFORMANCE, MONITORING)
@@ -41,7 +41,7 @@ docs/spec/capabilities/
     └── updates.json             ✅ 5 capabilities (UPDATES)
 ```
 
-**Total distribué** : 67 capabilities (100% des capabilities existantes)
+**Total distribué** : 77 capabilities (catalogue enrichi avec le pack navigateurs)
 
 ---
 
@@ -74,7 +74,7 @@ docs/spec/capabilities/
 
 **Réalisations** :
 - 11 fichiers de packs créés dans `catalog/`
-- 67 capabilities distribuées par domaine
+- 77 capabilities distribuées par domaine
 - Structure JSON validée pour tous les fichiers
 - Descriptions mises à jour pour clarifier les packs multi-domaines
 
@@ -83,7 +83,7 @@ docs/spec/capabilities/
 | Pack | Domaines | Capabilities | Statut |
 |------|----------|--------------|--------|
 | `audit.json` | AUDIT | 3 | ✅ |
-| `browsers.json` | (à définir) | 0 | ⚠️ stub |
+| `browsers.json` | CLEANING | 10 | ✅ |
 | `cleaning.json` | CLEANING, DISK | 13 | ✅ |
 | `network.json` | NETWORK | 2 | ✅ |
 | `performance.json` | PERFORMANCE, MONITORING | 6 | ✅ |
@@ -104,12 +104,8 @@ docs/spec/capabilities/
 
 #### Priorité HAUTE
 1. **Pack browsers** (browsers.json)
-   - BROWSERS_CACHE_GLOBAL → existe déjà (CLEAN_BROWSER_CACHE_ALL)
-   - BROWSERS_COOKIE_CLEAN_SELECTIVE ❌
-   - BROWSERS_HISTORY_CLEAN ❌
-   - BROWSERS_STORAGE_CLEAN (IndexedDB/LocalStorage) ❌
-   - BROWSERS_SESSIONS_MANAGE ❌
-   - BROWSERS_EXTENSIONS_ORPHAN_CLEAN ❌
+   - ✅ 10 capabilities ajoutées (cookies, historique, stockage, sessions, extensions)
+   - Continuer l'enrichissement si de nouvelles actions navigateur sont identifiées
 
 2. **Pack cleaning** (cleaning.json)
    - CLEAN_WINDOWS_OLD ❌
@@ -232,12 +228,12 @@ Je travaille sur Virgil.
 Repo : https://github.com/bassetthomas-design/Virgil
 
 État actuel :
-- 67 capabilities existantes distribuées dans 11 packs
-- COVERAGE.md identifie ~60 capabilities manquantes
+- 77 capabilities existantes distribuées dans 11 packs
+- COVERAGE.md identifie encore des capabilities manquantes
 - Structure catalog/ prête
 
 Objectif : ajouter les capabilities manquantes dans les packs appropriés.
-Commencer par le pack browsers.json (priorité haute).
+Commencer par les priorités hautes restantes (cleaning/security/performance).
 ```
 
 ### Si vous voulez passer au code C# :
@@ -248,7 +244,7 @@ Repo : https://github.com/bassetthomas-design/Virgil
 
 État actuel :
 - Catalogue V3 complet (docs/spec/capabilities/)
-- 67 capabilities existantes + structure pour enrichissement
+- 77 capabilities existantes + structure pour enrichissement
 - Aucun code C# d'intégration encore
 
 Objectif : créer le CapabilityLoader (Étape 3) pour charger
@@ -270,10 +266,10 @@ Avant de passer à l'étape suivante, vérifier :
 - [x] Dossier catalog/ existe
 - [x] 11 packs JSON créés
 - [x] Tous les JSON sont valides
-- [x] 67 capabilities distribuées (100%)
+- [x] 77 capabilities distribuées (100%)
 
 ### Étape 2 (Contenu) 🔄
-- [ ] Pack browsers complété
+- [x] Pack browsers complété
 - [ ] Capabilities de nettoyage avancé ajoutées
 - [ ] Capabilities de sécurité complètes
 - [ ] Capabilities de performance ajoutées
@@ -312,5 +308,5 @@ Avant de passer à l'étape suivante, vérifier :
 
 ---
 
-**Dernière mise à jour** : 2025-12-19  
-**Prochaine action recommandée** : Enrichir le pack browsers.json avec les capabilities navigateur manquantes
+**Dernière mise à jour** : 2025-12-19
+**Prochaine action recommandée** : Poursuivre l'enrichissement des packs cleaning/security/performance après l'ajout du pack navigateurs
