@@ -6,6 +6,8 @@ using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Core;
 using Virgil.Domain;
+using MonitoringService = Virgil.App.Services.MonitoringService;
+using Mood = Virgil.Domain.Mood;
 
 namespace Virgil.App.ViewModels
 {
