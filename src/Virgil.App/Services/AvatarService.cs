@@ -10,24 +10,41 @@ public static class AvatarService
     {
         var name = mood switch
         {
-            Mood.Happy => "happy.png",
-            Mood.Focused => "focused.png",
-            Mood.Warn => "warn.png",
-            Mood.Alert => "alert.png",
-            Mood.Sleepy => "sleepy.png",
-            Mood.Tired => "tired.png",
-            Mood.Proud => "proud.png",
-            Mood.Angry => "angry.png",
-            Mood.Playful => "playful.png",
-            _ => "neutral.png"
+            Mood.Neutral => "virgil_normal.png",
+            Mood.Happy => "virgil_normal.png",
+            Mood.Focused => "virgil_normal.png",
+            Mood.Warn => "virgil_stress.png",
+            Mood.Alert => "virgil_critical.png",
+            _ => "virgil_normal.png"
         };
 
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        var candidate = Path.Combine(baseDir, "assets", "avatar", name);
-        if (File.Exists(candidate)) return candidate;
 
-        // Fallback sur neutral si l’asset demandé est manquant
-        var fallback = Path.Combine(baseDir, "assets", "avatar", "neutral.png");
-        return File.Exists(fallback) ? fallback : string.Empty;
+        var candidates = new[]
+        {
+            Path.Combine(baseDir, "assets", "virgil", "static", "256", name),
+            Path.Combine(baseDir, "assets", "virgil", "static", "64", name),
+            Path.Combine(baseDir, "assets", "virgil", "static", "1024", name),
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        // Fallback sur la version normale si l’asset demandé est manquant
+        var fallbackCandidates = new[]
+        {
+            Path.Combine(baseDir, "assets", "virgil", "static", "256", "virgil_normal.png"),
+            Path.Combine(baseDir, "assets", "virgil", "static", "64", "virgil_normal.png"),
+            Path.Combine(baseDir, "assets", "virgil", "static", "1024", "virgil_normal.png"),
+        };
+
+        foreach (var fallback in fallbackCandidates)
+        {
+            if (File.Exists(fallback)) return fallback;
+        }
+
+        return string.Empty;
     }
 }

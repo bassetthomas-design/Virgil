@@ -1,0 +1,2 @@
+# Track large/binary assets (e.g., Virgil PNGs) with Git LFS
+*.png filter=lfs diff=lfs merge=lfs -text
