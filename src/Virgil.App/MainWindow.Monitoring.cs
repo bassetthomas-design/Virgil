@@ -1,26 +1,19 @@
 using System;
-using System.Windows.Threading;
+using System.Threading;
 
 namespace Virgil.App
 {
     public partial class MainWindow
     {
-        private readonly DispatcherTimer _monitorTimer = new();
-
         private void StartMonitoring()
         {
-            _monitorTimer.Interval = TimeSpan.FromSeconds(2);
-            _monitorTimer.Tick += (s, e) =>
-            {
-                // TODO : lecture CPU/GPU/RAM/Températures
-                // Actualise les jauges + émotions dans le ViewModel
-            };
-            _monitorTimer.Start();
+            // Démarre le service de monitoring bas niveau (compteurs Windows + LHM).
+            _ = _systemMonitorService.StartAsync(CancellationToken.None);
         }
 
         private void StopMonitoring()
         {
-            _monitorTimer.Stop();
+            _ = _systemMonitorService.StopAsync(CancellationToken.None);
         }
     }
 }
