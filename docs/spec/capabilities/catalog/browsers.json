@@ -7,6 +7,40 @@
   "description": "Pack de capabilities pour navigateurs - nettoyage avancé et gestion des données de navigation",
   "capabilities": [
     {
+      "id": "CLEAN_BROWSER_CACHE_ALL",
+      "title": "Nettoyer cache navigateurs (tous détectés)",
+      "level": "CORE",
+      "domain": "CLEANING",
+      "requiresAdmin": false,
+      "supportsDryRun": true,
+      "rollback": [],
+      "risk": "LOW",
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "CACHE_ONLY",
+              "SMART",
+              "DEEP",
+              "NUCLEAR"
+            ]
+          },
+          "keepPasswords": {
+            "type": "boolean"
+          }
+        }
+      },
+      "description": "Nettoie le cache de tous les navigateurs détectés avec plusieurs niveaux d'intensité",
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
+    },
+    {
       "id": "CLEAN_BROWSER_COOKIES_SELECTIVE",
       "title": "Nettoyer cookies navigateurs (sélectif)",
       "level": "CORE",

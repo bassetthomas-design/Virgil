@@ -371,6 +371,7 @@ public class CatalogBrowserJsonSchemaTests
         
         var expectedIds = new[]
         {
+            "CLEAN_BROWSER_CACHE_ALL",
             "CLEAN_BROWSER_COOKIES_SELECTIVE",
             "CLEAN_BROWSER_HISTORY",
             "CLEAN_BROWSER_STORAGE_LOCAL",
