@@ -34,7 +34,7 @@ namespace Virgil.App.Services
     /// </summary>
     public sealed class SystemMonitorService : ISystemMonitorService, IDisposable
     {
-        private Timer? _timer;
+        private System.Threading.Timer? _timer;
         private volatile bool _isRunning;
         private readonly object _gate = new();
 
