@@ -29,8 +29,8 @@ docs/spec/capabilities/
 ├── REPRISE_STATUS.md            ✅ Ce fichier
 └── catalog/                     ✅ Packs de capabilities
     ├── audit.json               ✅ 3 capabilities (AUDIT)
-    ├── browsers.json            ✅ 10 capabilities (CLEANING)
-    ├── cleaning.json            ✅ 13 capabilities (CLEANING, DISK)
+    ├── browsers.json            ✅ 11 capabilities (CLEANING)
+    ├── cleaning.json            ✅ 12 capabilities (CLEANING, DISK)
     ├── network.json             ✅ 2 capabilities (NETWORK)
     ├── performance.json         ✅ 6 capabilities (PERFORMANCE, MONITORING)
     ├── registry.json            ✅ 2 capabilities (REGISTRY)
@@ -104,7 +104,7 @@ docs/spec/capabilities/
 
 #### Priorité HAUTE
 1. **Pack browsers** (browsers.json)
-   - ✅ 10 capabilities ajoutées (cookies, historique, stockage, sessions, extensions)
+   - ✅ 11 capabilities ajoutées (cache global, cookies, historique, stockage, sessions, extensions)
    - Continuer l'enrichissement si de nouvelles actions navigateur sont identifiées
 
 2. **Pack cleaning** (cleaning.json)

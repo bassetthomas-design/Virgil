@@ -181,36 +181,6 @@
       "tags": []
     },
     {
-      "id": "CLEAN_BROWSER_CACHE_ALL",
-      "title": "Nettoyer cache navigateurs (tous détectés)",
-      "level": "CORE",
-      "domain": "CLEANING",
-      "requiresAdmin": false,
-      "supportsDryRun": true,
-      "rollback": [],
-      "risk": "LOW",
-      "paramsSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "mode": {
-            "type": "string",
-            "enum": [
-              "CACHE_ONLY",
-              "SMART",
-              "DEEP",
-              "NUCLEAR"
-            ]
-          },
-          "keepPasswords": {
-            "type": "boolean"
-          }
-        }
-      },
-      "description": "Nettoyer cache navigateurs (tous détectés)",
-      "tags": []
-    },
-    {
       "id": "CLEAN_APP_CACHE",
       "title": "Nettoyer cache applicatif (par profile d'app)",
       "level": "CORE",
