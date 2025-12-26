@@ -39,10 +39,9 @@ namespace Virgil.App.Views
     {
 
         // Fields to store services for monitoring toggle
-
         private readonly MonitoringService _monitoringService;
-
         private readonly SettingsService _settingsService;
+        private Window? _miniHudWindow;
 
 
 
@@ -81,8 +80,7 @@ namespace Virgil.App.Views
             var networkActionsService = new NetworkActionsService();
 
             var performanceActionsService = new PerformanceActionsService();
-
-            var specialActionsService = new SpecialActionsService();
+            var specialActionsService = new SpecialActionsService(chat, settingsService, monitoringService);
 
             var phraseService = new VirgilPhraseService();
 
@@ -153,27 +151,23 @@ namespace Virgil.App.Views
             // Initialize monitoring toggle button state based on settings
 
             if (_settingsService.Settings.MonitoringEnabled)
-
             {
-
                 // Ensure monitoring is started and update button content
-
                 _monitoringService.Start();
-
-                MonitoringTogglButton.Content = "Désactiver la surveillance";
-
+                MonitoringToggleButton.Content = "Désactiver la surveillance";
+            }
+            else
+            {
+                // Ensure monitoring is stopped and update button content
+                _monitoringService.Stop();
+                MonitoringToggleButton.Content = "Activer la surveillance";
             }
 
-            else
+            UpdateHudToggleUi();
 
+            if (_settingsService.Settings.ShowMiniHud)
             {
-
-                // Ensure monitoring is stopped and update button content
-
-                _monitoringService.Stop();
-
-                MonitoringTogglButton.Content = "Activer la surveillance";
-
+                OnHudToggled(this, new RoutedEventArgs());
             }
 
         }
@@ -191,11 +185,16 @@ namespace Virgil.App.Views
         /// </summary>
 
         private void OnOpenSettings(object sender, RoutedEventArgs e)
-
         {
+            var settingsWindow = new SettingsWindow
+            {
+                Owner = this
+            };
 
-            // TODO: wire to settings window when the UX flow is finalized again.
+            settingsWindow.ShowDialog();
 
+            _settingsService.Reload();
+            UpdateHudToggleUi();
         }
 
 
@@ -208,11 +207,50 @@ namespace Virgil.App.Views
         /// </summary>
 
         private void OnHudToggled(object sender, RoutedEventArgs e)
-
         {
+            if (_miniHudWindow is { IsVisible: true })
+            {
+                _miniHudWindow.Close();
+                _miniHudWindow = null;
+                _settingsService.Settings.ShowMiniHud = false;
+            }
+            else
+            {
+                var vm = DataContext as MainViewModel;
+                _miniHudWindow = new Window
+                {
+                    Owner = this,
+                    Title = "Virgil — Mini HUD",
+                    Width = 240,
+                    Height = 180,
+                    Content = new MiniHud { DataContext = vm?.Monitoring },
+                    WindowStyle = WindowStyle.ToolWindow,
+                    ResizeMode = ResizeMode.NoResize,
+                    Topmost = true,
+                    ShowInTaskbar = false
+                };
 
-            // TODO: implement HUD toggle logic (show/hide mini HUD) if required.
+                _miniHudWindow.Closed += (_, _) => _miniHudWindow = null;
+                _miniHudWindow.Show();
+                _settingsService.Settings.ShowMiniHud = true;
+            }
 
+            _settingsService.Save();
+            UpdateHudToggleUi();
+        }
+
+        private void UpdateHudToggleUi()
+        {
+            if (_settingsService.Settings.ShowMiniHud)
+            {
+                HudToggleButton.Content = "Masquer HUD";
+                HudToggleButton.ToolTip = "Fermer le mini HUD";
+            }
+            else
+            {
+                HudToggleButton.Content = "Mini HUD";
+                HudToggleButton.ToolTip = "Afficher le mini HUD";
+            }
         }
 
 
@@ -242,7 +280,7 @@ namespace Virgil.App.Views
 
                 _settingsService.Settings.MonitoringEnabled = false;
 
-                MonitoringTogglButton.Content = "Activer la surveillance";
+                MonitoringToggleButton.Content = "Activer la surveillance";
 
             }
 
@@ -256,7 +294,7 @@ namespace Virgil.App.Views
 
                 _settingsService.Settings.MonitoringEnabled = true;
 
-                MonitoringTogglButton.Content = "Désactiver la surveillance";
+                MonitoringToggleButton.Content = "Désactiver la surveillance";
 
             }
 

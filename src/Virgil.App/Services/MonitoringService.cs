@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Timers;
 
 using LibreHardwareMonitor.Hardware;
@@ -31,6 +32,14 @@ namespace Virgil.App.Services
 
         public void Start() => _timer.Start();
         public void Stop() => _timer.Stop();
+
+        /// <summary>
+        /// Effectue immédiatement un nouveau prélèvement des métriques.
+        /// </summary>
+        public Task RescanAsync()
+        {
+            return Task.Run(Sample);
+        }
 
         private void Sample()
         {
