@@ -11,7 +11,8 @@ namespace Virgil.App
 {
     public partial class MainWindow : Window
     {
-        private readonly ISystemMonitorService _systemMonitorService;
+        private readonly ISystemMonitorService? _systemMonitorService;
+        private readonly MonitoringService? _legacyMonitoringService;
         private readonly MonitoringViewModel _monitoringVm;
 
         public MainWindow()
@@ -22,8 +23,20 @@ namespace Virgil.App
             var settingsService = new SettingsService();
             var networkInsightService = new NetworkInsightService();
 
-            _systemMonitorService = new SystemMonitorService();
-            _monitoringVm = new MonitoringViewModel(_systemMonitorService, settingsService, networkInsightService);
+            try
+            {
+                _systemMonitorService = new SystemMonitorService();
+                _monitoringVm = new MonitoringViewModel(_systemMonitorService, settingsService, networkInsightService);
+                _legacyMonitoringService = null;
+            }
+            catch
+            {
+                // En cas d'échec (ex: compteurs/perfs indisponibles),
+                // on repasse sur l'ancien service pour éviter un crash au lancement.
+                _systemMonitorService = null;
+                _legacyMonitoringService = new MonitoringService();
+                _monitoringVm = new MonitoringViewModel(_legacyMonitoringService, settingsService, networkInsightService);
+            }
 
             // Services d'actions
             var systemActionsService = new SystemActionsService();
