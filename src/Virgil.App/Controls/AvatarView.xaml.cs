@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Virgil.Core.Services;
 
 namespace Virgil.App.Controls;
 
@@ -56,12 +57,21 @@ public partial class AvatarView : UserControl
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             return;
 
-        var bmp = new BitmapImage();
-        bmp.BeginInit();
-        bmp.CacheOption = BitmapCacheOption.OnLoad;
-        bmp.UriSource = new Uri(path, UriKind.Absolute);
-        bmp.EndInit();
-        bmp.Freeze();
+        BitmapImage bmp;
+        try
+        {
+            bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+        }
+        catch (Exception ex)
+        {
+            LoggingService.SafeError(ex, "Avatar image load failed for {Path}", path);
+            return;
+        }
 
         // Charge la nouvelle image sur la couche front, puis fondu croisé
         ImgFront.Source = bmp;
