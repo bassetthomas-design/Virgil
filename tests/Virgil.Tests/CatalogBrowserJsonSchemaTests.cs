@@ -179,6 +179,52 @@ public class CatalogBrowserJsonSchemaTests
     }
 
     [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldDeclareNonAdminExecution()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+
+            Assert.True(capability.TryGetProperty("requiresAdmin", out var adminProp),
+                $"Capability '{id}' missing 'requiresAdmin' field");
+            Assert.Equal(JsonValueKind.False, adminProp.ValueKind);
+        }
+    }
+
+    [Fact]
+    public void BrowsersCatalog_AllCapabilities_ShouldUseCleaningDomainAndTags()
+    {
+        // Arrange
+        using var doc = LoadBrowsersCatalog();
+        var root = doc.RootElement;
+        var capabilities = root.GetProperty("capabilities");
+
+        // Act & Assert
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            var id = capability.TryGetProperty("id", out var idProp) ? idProp.GetString() : "unknown";
+
+            Assert.True(capability.TryGetProperty("domain", out var domainProp),
+                $"Capability '{id}' missing 'domain' field");
+            Assert.Equal("CLEANING", domainProp.GetString());
+
+            Assert.True(capability.TryGetProperty("tags", out var tagsProp),
+                $"Capability '{id}' missing 'tags' field");
+            Assert.Equal(JsonValueKind.Array, tagsProp.ValueKind);
+            Assert.True(tagsProp.GetArrayLength() > 0, $"Capability '{id}' should declare at least one tag");
+
+            var tagValues = tagsProp.EnumerateArray().Select(t => t.GetString()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+            Assert.Contains("browsers", tagValues);
+        }
+    }
+
+    [Fact]
     public void BrowsersCatalog_AllCapabilities_ShouldNotHaveUnexpectedFields()
     {
         // Arrange
