@@ -2,7 +2,7 @@ using System;
 using System.Timers;
 using Virgil.App.Chat;
 using Virgil.App.ViewModels;
-using Virgil.App.Core;
+using Virgil.Domain;
 
 namespace Virgil.App.Services
 {
@@ -23,7 +23,7 @@ namespace Virgil.App.Services
         private void OnMessage(object sender, string text, ChatKind kind, int? ttlMs)
         {
             _recovery.Stop();
-            // Safe fallback to neutral until Core.Mood canonical set is finalized
+            // Safe fallback to neutral while chat-driven moods are simple
             _monitoring.CurrentMood = default;
             _recovery.Interval = ttlMs.GetValueOrDefault(1500);
             _recovery.Start();

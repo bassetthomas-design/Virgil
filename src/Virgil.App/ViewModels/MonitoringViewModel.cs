@@ -2,9 +2,10 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Virgil.App.Core;
 using Virgil.App.Models;
 using Virgil.App.Services;
+using Virgil.Core;
+using Virgil.Domain;
 
 namespace Virgil.App.ViewModels
 {
@@ -26,6 +27,7 @@ namespace Virgil.App.ViewModels
             _uiContext = SynchronizationContext.Current;
 
             _systemMonitoring.SnapshotUpdated += OnSystemMetricsUpdated;
+            AvatarSource = AvatarService.GetAvatarPath(_currentMood);
         }
 
         public MonitoringViewModel(
@@ -50,6 +52,7 @@ namespace Virgil.App.ViewModels
 
             _legacyMonitoring.Updated += OnLegacyMetricsUpdated;
             _legacyMonitoring.Start();
+            AvatarSource = AvatarService.GetAvatarPath(_currentMood);
         }
 
         // Ctor sans paramètres pour le design-time ou certains usages XAML / legacy.
@@ -58,7 +61,7 @@ namespace Virgil.App.ViewModels
         {
         }
 
-        private Mood _currentMood;
+        private Mood _currentMood = Mood.Neutral;
         public Mood CurrentMood
         {
             get => _currentMood;
@@ -66,6 +69,20 @@ namespace Virgil.App.ViewModels
             {
                 if (Equals(_currentMood, value)) return;
                 _currentMood = value;
+                OnPropertyChanged();
+                AvatarSource = AvatarService.GetAvatarPath(value);
+            }
+        }
+
+        private string _avatarSource = string.Empty;
+
+        public string AvatarSource
+        {
+            get => _avatarSource;
+            private set
+            {
+                if (_avatarSource == value) return;
+                _avatarSource = value;
                 OnPropertyChanged();
             }
         }
@@ -182,6 +199,9 @@ namespace Virgil.App.ViewModels
             CpuTemp = snapshot.CpuTemperature;
             GpuTemp = snapshot.GpuTemperature;
             DiskTemp = snapshot.DiskTemperature;
+
+            UpdateMood(snapshot.CpuUsage, snapshot.GpuUsage, snapshot.RamUsage, snapshot.DiskUsage,
+                snapshot.CpuTemperature, snapshot.GpuTemperature, snapshot.DiskTemperature);
         }
 
         private void ApplySnapshot(MetricsEventArgs metrics)
@@ -193,6 +213,15 @@ namespace Virgil.App.ViewModels
             CpuTemp = metrics.CpuTemp;
             GpuTemp = metrics.GpuTemp;
             DiskTemp = metrics.DiskTemp;
+
+            UpdateMood(metrics.CpuUsage, metrics.GpuUsage, metrics.RamUsage, metrics.DiskUsage,
+                metrics.CpuTemp, metrics.GpuTemp, metrics.DiskTemp);
+        }
+
+        private void UpdateMood(double cpu, double gpu, double ram, double disk, double cpuTemp, double gpuTemp, double diskTemp)
+        {
+            var stats = new SystemStats(cpu, gpu, ram, disk, cpuTemp, gpuTemp, diskTemp);
+            CurrentMood = MoodEngine.FromStats(stats);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

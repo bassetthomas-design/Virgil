@@ -1,4 +1,4 @@
-using Virgil.App.Core;
+using Virgil.Domain;
 
 namespace Virgil.App.ViewModels
 {
