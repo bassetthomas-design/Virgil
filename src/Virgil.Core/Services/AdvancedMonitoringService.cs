@@ -84,29 +84,36 @@ namespace Virgil.Core.Services
             try
             {
                 // Crée un objet Computer avec uniquement le stockage activé pour minimiser l'overhead.
-                using var pc = new Computer { IsStorageEnabled = true };
-                pc.Open();
-
-                float? max = null;
-                foreach (var hw in pc.Hardware)
+                var pc = new Computer { IsStorageEnabled = true };
+                try
                 {
-                    if (hw.HardwareType != HardwareType.Storage) continue;
-                    hw.Update();
-                    foreach (var s in hw.Sensors)
+                    pc.Open();
+
+                    float? max = null;
+                    foreach (var hw in pc.Hardware)
                     {
-                        if (s.SensorType == SensorType.Temperature)
+                        if (hw.HardwareType != HardwareType.Storage) continue;
+                        hw.Update();
+                        foreach (var s in hw.Sensors)
                         {
-                            // s.Value est un float? ; ignorer les valeurs nulles et absurdes
-                            var val = s.Value;
-                            if (val.HasValue && val.Value > -50 && val.Value < 150)
+                            if (s.SensorType == SensorType.Temperature)
                             {
-                                if (!max.HasValue || val.Value > max.Value)
-                                    max = val.Value;
+                                // s.Value est un float? ; ignorer les valeurs nulles et absurdes
+                                var val = s.Value;
+                                if (val.HasValue && val.Value > -50 && val.Value < 150)
+                                {
+                                    if (!max.HasValue || val.Value > max.Value)
+                                        max = val.Value;
+                                }
                             }
                         }
                     }
+                    return max;
                 }
-                return max;
+                finally
+                {
+                    pc.Close();
+                }
             }
             catch
             {

@@ -14,9 +14,9 @@ namespace Virgil.Core.Services
     ///
     /// This implementation uses best ‑effort heuristics to gauge system
     /// utilisation. It relies on <see cref="DriveInfo"/> to measure free disk
-    /// space and Microsoft.VisualBasic.Devices.ComputerInfo to approximate
-    /// memory usage. If those APIs fail, it falls back to conservative
-    /// defaults. The thresholds can be adjusted if needed.
+    /// space and runtime GC memory information to approximate memory usage.
+    /// If those APIs fail, it falls back to conservative defaults. The
+    /// thresholds can be adjusted if needed.
     /// </summary>
     public sealed class SmartCleaningService
     {
@@ -62,13 +62,20 @@ namespace Virgil.Core.Services
             double memUsage = 0.0;
             try
             {
-                // Microsoft.VisualBasic.Devices.ComputerInfo is used to query
-                // physical memory. This assembly is available on Windows.
-                var ci = new Microsoft.VisualBasic.Devices.ComputerInfo();
-                ulong totalMem = ci.TotalPhysicalMemory;
-                ulong availMem = ci.AvailablePhysicalMemory;
-                if (totalMem > 0)
-                    memUsage = 1.0 - (double)availMem / totalMem;
+                // GC memory info provides a cross-platform view of memory pressure.
+                var info = GC.GetGCMemoryInfo();
+                var totalMem = info.TotalAvailableMemoryBytes;
+                var usedMem = Math.Max(info.HeapSizeBytes, info.TotalCommittedBytes);
+
+                if (totalMem > 0 && usedMem >= 0)
+                {
+                    memUsage = Math.Min(1.0, usedMem / (double)totalMem);
+                }
+                else
+                {
+                    // Fallback to the process working set if total memory is unavailable.
+                    memUsage = ComputeWorkingSetRatio();
+                }
             }
             catch
             {
@@ -78,7 +85,10 @@ namespace Virgil.Core.Services
                     long total = GC.GetTotalMemory(forceFullCollection: false);
                     memUsage = Math.Min(1.0, total / (double)(1024L * 1024L * 1024L));
                 }
-                catch { }
+                catch
+                {
+                    memUsage = ComputeWorkingSetRatio();
+                }
             }
 
             // Decide the cleaning level based on heuristics
@@ -96,8 +106,8 @@ namespace Virgil.Core.Services
                 level = "deep";
             }
 
-           progress?.Report($"Mode de nettoyage automatique choisi: {level}");
-        progress?.Report($"Espace disque libre: {freeRatio * 100:F1}%, utilisation mémoire: {memUsage * 100:F1}%");
+            progress?.Report($"Mode de nettoyage automatique choisi: {level}");
+            progress?.Report($"Espace disque libre: {freeRatio * 100:F1}%, utilisation mémoire: {memUsage * 100:F1}%");
 
             // Execute the selected cleaning routine
             switch (level)
@@ -131,6 +141,27 @@ namespace Virgil.Core.Services
                     progress?.Report(brDeep.ToString());
                     return $"[Approfondi] Nettoyage terminé\n{t}\n{ext}\n{brDeep}";
             }
+        }
+
+        private static double ComputeWorkingSetRatio()
+        {
+            try
+            {
+                // Environment.WorkingSet returns the current process physical memory usage in bytes.
+                // We approximate total physical memory with TotalAvailableMemoryBytes when possible.
+                var info = GC.GetGCMemoryInfo();
+                var totalMem = info.TotalAvailableMemoryBytes;
+                if (totalMem > 0)
+                {
+                    return Math.Min(1.0, Environment.WorkingSet / (double)totalMem);
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            return 0.0;
         }
     }
 }
