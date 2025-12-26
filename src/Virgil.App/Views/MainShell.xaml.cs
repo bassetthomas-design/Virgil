@@ -179,22 +179,27 @@ namespace Virgil.App.Views
         /// <summary>
 
         /// Handler for the settings button declared in MainShell.xaml.
-
         /// Opens the configuration window when implemented.
-
         /// </summary>
-
         private void OnOpenSettings(object sender, RoutedEventArgs e)
         {
-            var settingsWindow = new SettingsWindow
+            var dlg = new SettingsWindow(_settingsService)
             {
                 Owner = this
             };
 
-            settingsWindow.ShowDialog();
+            var result = dlg.ShowDialog();
 
-            _settingsService.Reload();
-            UpdateHudToggleUi();
+            if (result == true && _settingsService.Settings.MonitoringEnabled)
+            {
+                _monitoringService.Start();
+                MonitoringTogglButton.Content = "Désactiver la surveillance";
+            }
+            else
+            {
+                _monitoringService.Stop();
+                MonitoringTogglButton.Content = "Activer la surveillance";
+            }
         }
 
 
