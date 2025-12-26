@@ -193,12 +193,12 @@ namespace Virgil.App.Views
             if (result == true && _settingsService.Settings.MonitoringEnabled)
             {
                 _monitoringService.Start();
-                MonitoringTogglButton.Content = "Désactiver la surveillance";
+                MonitoringToggleButton.Content = "Désactiver la surveillance";
             }
             else
             {
                 _monitoringService.Stop();
-                MonitoringTogglButton.Content = "Activer la surveillance";
+                MonitoringToggleButton.Content = "Activer la surveillance";
             }
         }
 
