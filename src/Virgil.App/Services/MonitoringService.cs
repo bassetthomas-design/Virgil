@@ -13,12 +13,33 @@ namespace Virgil.App.Services
         public event Action<double,double,double,double>? Metrics;
 
         private readonly Computer _pc;
+        private readonly bool _isHardwareAvailable;
         private Timer _timer = new(2000) { AutoReset = true };
 
         public MonitoringService()
         {
-            _pc = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMemoryEnabled = true, IsStorageEnabled = true, IsMotherboardEnabled = true };
-            _pc.Open();
+            try
+            {
+                _pc = new Computer
+                {
+                    IsCpuEnabled = true,
+                    IsGpuEnabled = true,
+                    IsMemoryEnabled = true,
+                    IsStorageEnabled = true,
+                    IsMotherboardEnabled = true
+                };
+                _pc.Open();
+                _isHardwareAvailable = true;
+            }
+            catch
+            {
+                // Sur certaines configurations (VM, droits insuffisants…),
+                // l'initialisation de LibreHardwareMonitor peut échouer et
+                // planter l'application au démarrage. On garde un stub pour
+                // éviter le crash et on désactive simplement la collecte.
+                _pc = new Computer();
+                _isHardwareAvailable = false;
+            }
             _timer.Elapsed += (_, __) => Sample();
         }
 
@@ -45,6 +66,15 @@ namespace Virgil.App.Services
         {
             double cpuUsage = 0, gpuUsage = 0, ramUsage = 0;
             double cpuTemp = 0, gpuTemp = 0, diskUsage = 0, diskTemp = 0;
+            if (!_isHardwareAvailable)
+            {
+                // Matériel non accessible : on publie des valeurs neutres
+                // afin de ne pas faire planter le binding côté UI.
+                Metrics?.Invoke(cpuUsage, gpuUsage, ramUsage, cpuTemp);
+                Updated?.Invoke(this, new MetricsEventArgs(cpuUsage, gpuUsage, ramUsage, cpuTemp, diskUsage, gpuTemp, diskTemp));
+                return;
+            }
+
             try
             {
                 foreach (var hw in _pc.Hardware)
