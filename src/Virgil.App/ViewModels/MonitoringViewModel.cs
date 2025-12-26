@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Virgil.App.Core;
 using Virgil.App.Models;
 using Virgil.App.Services;
@@ -13,21 +14,42 @@ namespace Virgil.App.ViewModels
     /// </summary>
     public class MonitoringViewModel : INotifyPropertyChanged
     {
-        private readonly MonitoringService _monitoring;
-        private readonly SettingsService _settings;
-        private readonly NetworkInsightService _network;
+        private readonly ISystemMonitorService? _systemMonitoring = null!;
+        private readonly MonitoringService? _legacyMonitoring = null!;
+        private readonly SettingsService? _settings = null!;
+        private readonly NetworkInsightService? _network = null!;
+        private readonly SynchronizationContext? _uiContext;
+
+        public MonitoringViewModel(ISystemMonitorService monitoring)
+        {
+            _systemMonitoring = monitoring ?? throw new ArgumentNullException(nameof(monitoring));
+            _uiContext = SynchronizationContext.Current;
+
+            _systemMonitoring.SnapshotUpdated += OnSystemMetricsUpdated;
+        }
+
+        public MonitoringViewModel(
+            ISystemMonitorService monitoring,
+            SettingsService settings,
+            NetworkInsightService network)
+            : this(monitoring)
+        {
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _network = network ?? throw new ArgumentNullException(nameof(network));
+        }
 
         public MonitoringViewModel(
             MonitoringService monitoring,
             SettingsService settings,
             NetworkInsightService network)
         {
-            _monitoring = monitoring ?? throw new ArgumentNullException(nameof(monitoring));
+            _legacyMonitoring = monitoring ?? throw new ArgumentNullException(nameof(monitoring));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _network = network ?? throw new ArgumentNullException(nameof(network));
+            _uiContext = SynchronizationContext.Current;
 
-            _monitoring.Updated += OnMetricsUpdated;
-            _monitoring.Start();
+            _legacyMonitoring.Updated += OnLegacyMetricsUpdated;
+            _legacyMonitoring.Start();
         }
 
         // Ctor sans paramètres pour le design-time ou certains usages XAML / legacy.
@@ -132,15 +154,45 @@ namespace Virgil.App.ViewModels
             }
         }
 
-        private void OnMetricsUpdated(object? sender, MetricsEventArgs e)
+        private void OnSystemMetricsUpdated(object? sender, SystemMonitorSnapshot snapshot)
+            => DispatchMetrics(() => ApplySnapshot(snapshot));
+
+        private void OnLegacyMetricsUpdated(object? sender, MetricsEventArgs e)
+            => DispatchMetrics(() => ApplySnapshot(e));
+
+        private void DispatchMetrics(Action apply)
         {
-            CpuUsage = e.CpuUsage;
-            GpuUsage = e.GpuUsage;
-            RamUsage = e.RamUsage;
-            DiskUsage = e.DiskUsage;
-            CpuTemp = e.CpuTemp;
-            GpuTemp = e.GpuTemp;
-            DiskTemp = e.DiskTemp;
+            // Garantit que les notifications PropertyChanged partent du thread UI.
+            if (_uiContext is { } ctx)
+            {
+                ctx.Post(_ => apply(), null);
+            }
+            else
+            {
+                apply();
+            }
+        }
+
+        private void ApplySnapshot(SystemMonitorSnapshot snapshot)
+        {
+            CpuUsage = snapshot.CpuUsage;
+            GpuUsage = snapshot.GpuUsage;
+            RamUsage = snapshot.RamUsage;
+            DiskUsage = snapshot.DiskUsage;
+            CpuTemp = snapshot.CpuTemperature;
+            GpuTemp = snapshot.GpuTemperature;
+            DiskTemp = snapshot.DiskTemperature;
+        }
+
+        private void ApplySnapshot(MetricsEventArgs metrics)
+        {
+            CpuUsage = metrics.CpuUsage;
+            GpuUsage = metrics.GpuUsage;
+            RamUsage = metrics.RamUsage;
+            DiskUsage = metrics.DiskUsage;
+            CpuTemp = metrics.CpuTemp;
+            GpuTemp = metrics.GpuTemp;
+            DiskTemp = metrics.DiskTemp;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
