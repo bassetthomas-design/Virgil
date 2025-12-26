@@ -167,7 +167,8 @@ namespace Virgil.App.Views
 
             if (_settingsService.Settings.ShowMiniHud)
             {
-                OnHudToggled(this, new RoutedEventArgs());
+                // Defer HUD creation until the main window is shown to avoid owner errors at startup
+                Dispatcher.BeginInvoke(new Action(() => OnHudToggled(this, new RoutedEventArgs())), DispatcherPriority.Loaded);
             }
 
         }
