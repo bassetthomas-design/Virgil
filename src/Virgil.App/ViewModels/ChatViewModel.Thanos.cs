@@ -2,6 +2,9 @@ namespace Virgil.App.ViewModels
 {
     public partial class ChatViewModel
     {
-        public void SnapAll(){ /* TODO: call chatService.ClearAll() once exposed here */ }
+        public async void SnapAll()
+        {
+            await _chat.ClearHistoryAsync(applyThanosEffect: true).ConfigureAwait(false);
+        }
     }
 }

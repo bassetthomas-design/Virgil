@@ -26,7 +26,7 @@ namespace Virgil.App
             var systemActionsService = new SystemActionsService();
             var networkActionsService = new NetworkActionsService();
             var performanceActionsService = new PerformanceActionsService();
-            var specialActionsService = new SpecialActionsService();
+            var specialActionsService = new SpecialActionsService(chat, new SettingsService(), new MonitoringService());
             var phraseService = new VirgilPhraseService();
             var narrationService = new VirgilNarrationService(chat, phraseService);
 
