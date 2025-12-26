@@ -10,6 +10,20 @@ namespace Virgil.App.Services
     /// </summary>
     public class SpecialActionsService : ISpecialActionsService
     {
+        private readonly Chat.ChatService _chatService;
+        private readonly SettingsService _settingsService;
+        private readonly MonitoringService _monitoringService;
+
+        public SpecialActionsService(
+            Chat.ChatService chatService,
+            SettingsService settingsService,
+            MonitoringService monitoringService)
+        {
+            _chatService = chatService ?? throw new ArgumentNullException(nameof(chatService));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _monitoringService = monitoringService ?? throw new ArgumentNullException(nameof(monitoringService));
+        }
+
         /// <summary>
         /// Mode "RAMBO" : tentative de réparation rapide de l'environnement shell.
         /// Ici, on redémarre simplement explorer.exe.
@@ -27,8 +41,7 @@ namespace Virgil.App.Services
         /// </summary>
         public Task PurgeChatHistoryAsync()
         {
-            // TODO: brancher ici un service de persistance de l'historique (si existant).
-            return Task.CompletedTask;
+            return _chatService.ClearHistoryAsync(applyThanosEffect: true, effectDurationMs: 1800);
         }
 
         /// <summary>
@@ -37,7 +50,7 @@ namespace Virgil.App.Services
         /// </summary>
         public Task ReloadSettingsAsync()
         {
-            // TODO: injecter et appeler un service de configuration si/ quand il sera disponible.
+            _settingsService.Reload();
             return Task.CompletedTask;
         }
 
@@ -47,8 +60,7 @@ namespace Virgil.App.Services
         /// </summary>
         public Task RescanMonitoringAsync()
         {
-            // TODO: brancher ici MonitoringService.RescanAsync() quand il sera exposé.
-            return Task.CompletedTask;
+            return _monitoringService.RescanAsync();
         }
 
         private static Task StartProcessAsync(string fileName, string arguments)

@@ -1,9 +1,10 @@
+using System.ComponentModel;
 using Virgil.App.Chat;
 using Virgil.App.Services;
 
 namespace Virgil.App.ViewModels
 {
-    public partial class MainViewModel
+    public partial class MainViewModel : INotifyPropertyChanged
     {
         private readonly PulseController _pulse;
 
@@ -19,5 +20,7 @@ namespace Virgil.App.ViewModels
             Actions = actions;
             _pulse = new PulseController(chat, monitoring);
         }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }
