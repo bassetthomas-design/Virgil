@@ -9,7 +9,7 @@ namespace Virgil.App.Services
     {
         private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "settings.json");
 
-        public AppSettings Settings { get; private set; }
+        public AppSettings Settings { get; private set; } = new AppSettings();
 
         public SettingsService()
         {

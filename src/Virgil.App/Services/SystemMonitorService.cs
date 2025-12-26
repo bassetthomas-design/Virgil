@@ -76,7 +76,7 @@ namespace Virgil.App.Services
                 try { _cpuCounter?.NextValue(); } catch { }
                 try { _ramCounter?.NextValue(); } catch { }
 
-                _timer = new Timer(OnTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+                _timer = new System.Threading.Timer(OnTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
             }
 
             return Task.CompletedTask;

@@ -65,7 +65,7 @@ namespace Virgil.App.Services
             var messages = UseHumor ? GetHumorous(evt) : GetSerious(evt);
             if (messages.Length == 0) return;
             var msg = messages[_rnd.Next(messages.Length)];
-            _chat.PostSystemMessage(msg, ChatKind.Info, ChatKind.Info);
+            _chat.PostSystemMessage(msg, MessageType.Info, ChatKind.Info);
         }
 
         private static string[] GetHumorous(string evt)
