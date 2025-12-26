@@ -217,7 +217,7 @@ Le projet va **au-delà** du mémo sur ces points :
 ## ⚠️ POINTS D'ATTENTION
 
 ### 1. browsers.json complété
-**État** : 10 capabilities CLEAN_BROWSER_* ajoutées dans catalog/ et capabilities.v3.json
+**État** : 11 capabilities CLEAN_BROWSER_* ajoutées dans catalog/ et capabilities.v3.json (CLEAN_BROWSER_CACHE_ALL déplacée depuis cleaning.json pour éviter les doublons)
 **Raison** : Priorité haute traitée pour couvrir les actions navigateurs essentielles
 **Action** : Surveiller les besoins futurs (IndexedDB avancé, nouvelles plateformes) mais le pack est opérationnel
 
