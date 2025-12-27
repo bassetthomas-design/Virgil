@@ -15,13 +15,17 @@ namespace Virgil.App.ViewModels
     {
         public ObservableCollection<MessageItem> Messages { get; } = new();
         private readonly ChatService _chat;
+        private readonly Virgil.Services.Chat.ChatActionBridge? _actionBridge;
+        private readonly Virgil.Services.Chat.IChatEngine? _chatEngine;
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
         private string _inputText = string.Empty;
         private bool _isBusy;
 
-        public ChatViewModel(ChatService chat)
+        public ChatViewModel(ChatService chat, Virgil.Services.Chat.ChatActionBridge? bridge = null, Virgil.Services.Chat.IChatEngine? engine = null)
         {
             _chat = chat;
+            _actionBridge = bridge;
+            _chatEngine = engine;
             _chat.MessagePosted += OnMessagePosted;
             SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
         }
@@ -121,7 +125,19 @@ namespace Virgil.App.ViewModels
             IsBusy = true;
             try
             {
-                await _chat.Post(message, ChatKind.Info, pinned: true);
+                if (_chatEngine is null || _actionBridge is null)
+                {
+                    _chat.PostSystemMessage("Aucun moteur de chat configuré", MessageType.Warning, ChatKind.Warning);
+                    return;
+                }
+
+                var context = new Virgil.Services.Chat.ChatContext(_chat.Messages, "virgil");
+                var result = await _chatEngine.GenerateAsync(message, context).ConfigureAwait(false);
+                await _actionBridge.RouteAsync(result).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _chat.PostSystemMessage($"Erreur chat: {ex.Message}", MessageType.Error, ChatKind.Error);
             }
             finally
             {

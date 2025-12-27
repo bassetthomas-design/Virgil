@@ -10,6 +10,7 @@ using Virgil.App.Services;
 using Virgil.App.ViewModels;
 using Virgil.Services;
 using Virgil.Services.Abstractions;
+using Virgil.Services.Chat;
 using ChatUiService = Virgil.App.Chat.ChatService;
 
 namespace Virgil.App.Views
@@ -53,6 +54,8 @@ namespace Virgil.App.Views
                 uiChat);
 
             _confirmationService = new ConfirmationService();
+            var chatEngine = new RuleBasedChatEngine();
+            var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));
 
             var mainVm = new MainViewModel(
                 _chatService,
@@ -61,7 +64,9 @@ namespace Virgil.App.Views
                 _monitoringService,
                 _settingsService,
                 this,
-                _confirmationService);
+                _confirmationService,
+                chatBridge,
+                chatEngine);
 
             DataContext = mainVm;
 

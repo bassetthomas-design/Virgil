@@ -1,5 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Virgil.Domain.Actions;
 using Virgil.Services.Abstractions;
+using Virgil.Services;
 
 namespace Virgil.Services.Chat;
 
@@ -10,19 +15,6 @@ public interface IConfirmationProvider
 
 public sealed class ChatActionBridge
 {
-    private static readonly HashSet<string> _whitelist = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "status",
-        "monitor_toggle",
-        "monitor_rescan",
-        "clean_quick",
-        "clean_browsers",
-        "maintenance_full",
-        "open_settings",
-        "show_hud",
-        "hide_hud",
-    };
-
     private readonly IActionOrchestrator _actions;
     private readonly IChatService _chat;
     private readonly IConfirmationProvider _confirmation;
@@ -44,13 +36,13 @@ public sealed class ChatActionBridge
         }
 
         var actionId = result.Command.Action.Trim();
-        if (!_whitelist.Contains(actionId))
+        if (!ActionCatalog.TryGet(actionId, out var descriptor))
         {
-            await _chat.WarnAsync($"Commande refusée (hors whitelist): {actionId}.", ct);
+            await _chat.WarnAsync($"Commande inconnue: {actionId}.", ct);
             return;
         }
 
-        if (RequiresConfirmation(actionId))
+        if (descriptor.IsDestructive)
         {
             var confirmed = await _confirmation.ConfirmAsync(actionId, ct);
             if (!confirmed)
@@ -60,57 +52,21 @@ public sealed class ChatActionBridge
             }
         }
 
-        if (!TryMapAction(actionId, out var virgilAction))
-        {
-            await _chat.WarnAsync($"Commande reconnue mais non mappée: {actionId}.", ct);
-            return;
-        }
-
         try
         {
-            await _actions.RunAsync(virgilAction, ct);
-            await _chat.InfoAsync($"Action {actionId} exécutée.", ct);
+            if (!descriptor.IsImplemented)
+            {
+                await _chat.WarnAsync($"Action {actionId} non disponible ({descriptor.Service}).", ct);
+                return;
+            }
+
+            var resultExec = await _actions.RunAsync(descriptor.VirgilActionId, ct);
+            var status = resultExec.Success ? "exécutée" : "échouée";
+            await _chat.InfoAsync($"Action {actionId} {status}: {resultExec.Message}", ct);
         }
         catch (Exception ex)
         {
             await _chat.ErrorAsync($"Echec de l'action {actionId}: {ex.Message}", ct);
-        }
-    }
-
-    private static bool RequiresConfirmation(string actionId)
-    {
-        return actionId.StartsWith("clean_", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(actionId, "maintenance_full", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryMapAction(string actionId, out VirgilActionId mapped)
-    {
-        switch (actionId.ToLowerInvariant())
-        {
-            case "clean_quick":
-                mapped = VirgilActionId.QuickClean;
-                return true;
-            case "clean_browsers":
-                mapped = VirgilActionId.LightBrowserClean;
-                return true;
-            case "maintenance_full":
-                mapped = VirgilActionId.AdvancedDiskClean;
-                return true;
-            case "status":
-                mapped = VirgilActionId.ScanSystemExpress;
-                return true;
-            case "monitor_rescan":
-                mapped = VirgilActionId.RescanSystem;
-                return true;
-            case "monitor_toggle":
-                mapped = VirgilActionId.RamboMode;
-                return true;
-            case "open_settings":
-                mapped = VirgilActionId.ReloadConfiguration;
-                return true;
-            default:
-                mapped = default;
-                return false;
         }
     }
 

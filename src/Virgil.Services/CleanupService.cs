@@ -13,7 +13,7 @@ namespace Virgil.Services;
 /// </summary>
 public sealed class CleanupService : ICleanupService
 {
-    public async Task RunSimpleAsync(CancellationToken ct = default)
+    public async Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default)
     {
         try
         {
@@ -24,7 +24,7 @@ public sealed class CleanupService : ICleanupService
                 foreach (var file in Directory.EnumerateFiles(tempPath, "*", SearchOption.AllDirectories))
                 {
                     if (ct.IsCancellationRequested)
-                        return;
+                        return ActionExecutionResult.Failure("Nettoyage annulé");
 
                     try
                     {
@@ -43,12 +43,15 @@ public sealed class CleanupService : ICleanupService
             // On ignore les erreurs globales : objectif = ne jamais faire échouer l’action.
         }
 
-        await Task.CompletedTask;
+        return ActionExecutionResult.Ok("Nettoyage rapide effectué (best effort)");
     }
 
-    public Task RunAdvancedAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage disque avancé non implémenté"));
 
-    public Task RunBrowserLightAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage navigateur léger non implémenté"));
 
-    public Task RunBrowserDeepAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage navigateur profond non implémenté"));
 }

@@ -36,6 +36,22 @@ Date de révision : 5 janvier 2026
 | Re-scanner le système | `monitoring_rescan` / `monitor_rescan` | `ActionOrchestrator.RunAsync(RescanSystem)` |
 | Tester le câblage des actions | `actions_selftest` | Validation `ActionRegistry` (presence des ExecuteAsync) |
 
+### 📌 Statut des actions (UI & chat)
+
+| ActionKey | VirgilActionId | Statut implémentation | Service |
+| --- | --- | --- | --- |
+| `status` | `ScanSystemExpress` | Stub (message uniquement) | `DiagnosticService` |
+| `quick_clean` | `QuickClean` | ✅ Best-effort (suppression TEMP) | `CleanupService` |
+| `apps_update_all` | `UpdateSoftwares` | ✅ Winget via `ApplicationUpdateService` | `UpdateService` |
+| `windows_update` | `RunWindowsUpdate` | ✅ `WindowsUpdateService` (scan/download/install) | `UpdateService` |
+| `chat_thanos` | `ThanosChatWipe` | ✅ Effacement chat | `IChatService` |
+| `browser_soft_clean`, `browser_deep_clean`, `deep_disk_clean`, `network_*`, `perf_*`, `startup_analyze`, `gaming_kill_session`, `gpu_driver_check`, `rambo_repair`, `app_reload_settings`, `monitor*_rescan`, `maintenance_full`, `ram_soft_free` | Divers | ⚠️ Non disponible (retour explicite + log) | Services stubs |
+
+**Comment tester rapidement**
+- Boutons UI / panneau Actions : utilisent `ActionRegistry` et vérifient la confirmation pour les actions destructives.
+- Chat : message utilisateur → `RuleBasedChatEngine` → `ChatActionBridge` → `ActionOrchestrator`; les actions inconnues ou non disponibles sont annoncées dans le chat.
+- Bouton `Tester le câblage des actions` (`actions_selftest`) : poste dans le chat la liste des actions + statut impl/stub.
+
 ## 🔎 Constats immédiats (phase 0)
 - **Chat UI limitée** : `ChatView` ne propose qu'un ScrollViewer read‑only avec bulles sombres hardcodées (#111) et sans zone de saisie ni commandes utilisateur; le service actuel poste uniquement des messages système (`ChatService` ne consomme pas d'entrée utilisateur).【F:src/Virgil.App/Views/ChatView.xaml†L1-L30】【F:src/Virgil.App/Chat/ChatService.cs†L8-L60】
 - **Layout principal** : `MainShell.xaml` réserve seulement 300 px au chat et priorise le monitoring; l'apparence dépend déjà de brosses App.* mais reste très sombre, sans thème clair dédié.【F:src/Virgil.App/Views/MainShell.xaml†L1-L35】
