@@ -15,6 +15,11 @@ namespace Virgil.Core.Logging
 
         private static string TodayFile => Path.Combine(LogDir, $"{DateTime.Now:yyyy-MM-dd}.log");
 
+        /// <summary>
+        /// Gets the path of the log file currently used by the simple file logger.
+        /// </summary>
+        public static string CurrentLogFile => TodayFile;
+
         private static void Write(string level, string message)
         {
             var line = $"{DateTime.Now:HH:mm:ss} [{level}] {message}";
