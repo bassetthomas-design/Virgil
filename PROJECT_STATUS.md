@@ -1,10 +1,20 @@
 # Virgil - État du Projet
 
-Date de révision : 19 décembre 2025
+Date de révision : 5 janvier 2026
 
 ## 📊 Vue d'ensemble
 
 **Virgil** est une application de bureau Windows tout‑en‑un pour surveiller, nettoyer, optimiser et assister l'utilisateur. Le projet est bien structuré et utilise des technologies modernes.
+
+## 🔎 Constats immédiats (phase 0)
+- **Chat UI limitée** : `ChatView` ne propose qu'un ScrollViewer read‑only avec bulles sombres hardcodées (#111) et sans zone de saisie ni commandes utilisateur; le service actuel poste uniquement des messages système (`ChatService` ne consomme pas d'entrée utilisateur).【F:src/Virgil.App/Views/ChatView.xaml†L1-L30】【F:src/Virgil.App/Chat/ChatService.cs†L8-L60】
+- **Layout principal** : `MainShell.xaml` réserve seulement 300 px au chat et priorise le monitoring; l'apparence dépend déjà de brosses App.* mais reste très sombre, sans thème clair dédié.【F:src/Virgil.App/Views/MainShell.xaml†L1-L35】
+- **Palette actuelle** : `App.xaml` définit directement les couleurs sombres dans la ResourceDictionary sans Theme.xaml distinct, ce qui complique un éclaircissement global.【F:src/Virgil.App/App.xaml†L1-L34】
+- **Pipeline assets incomplet** : `Virgil.App.csproj` ne copie que `assets/virgil/**/*.png` et les scripts PowerShell ; les modèles/prompt ou avatars alternatifs (`assets/avatar`, `assets/voice`, etc.) ne sont pas embarqués par défaut.【F:src/Virgil.App/Virgil.App.csproj†L1-L23】【f98442†L1-L50】
+- **Startup/monitoring** : le shell instancie services et démarre/stops la surveillance directement dans le constructeur, avec un HUD potentiellement créé lors du chargement si `ShowMiniHud` est vrai (retardé via Dispatcher). Les exceptions globales sont loguées dans `%APPDATA%/Virgil/logs`, mais il reste à durcir les initialisations assets pour éviter tout crash silent.【F:src/Virgil.App/Views/MainShell.xaml.cs†L34-L120】【F:src/Virgil.App/App.xaml.cs†L9-L35】
+
+## 🧭 Backlog prioritaire (issues à ouvrir)
+Le backlog détaillé des issues à créer (P0/P1/P2) se trouve dans `docs/ISSUES_BACKLOG.md` avec les checklists associées (stabilité démarrage, UI chat, thème clair, IA offline, bridge actions, packaging et polish avatar).【F:docs/ISSUES_BACKLOG.md†L1-L60】
 
 ### Statistiques du Projet
 - **Langage principal**: C# avec .NET 8
