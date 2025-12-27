@@ -1,6 +1,4 @@
 using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Virgil.App.Chat;
 
@@ -58,7 +56,5 @@ namespace Virgil.App.ViewModels
         }
         public void Progress(string text, int percent) => Progress(percent, text);
 
-        private void OnPropertyChanged([CallerMemberName] string? name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

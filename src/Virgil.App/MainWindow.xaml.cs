@@ -1,63 +1,146 @@
-// AUTO-PATCH: pass ChatService into MainViewModel ctor
+using System;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using Virgil.App.Chat;
+using Virgil.App.Interfaces;
+using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.App.ViewModels;
-using Virgil.Domain;
-using Virgil.Services.Narration;
+using Virgil.Services;
+using Virgil.Services.Abstractions;
+using ChatUiService = Virgil.App.Chat.ChatService;
 
 namespace Virgil.App
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, IUiInteractionService
     {
-        private readonly ISystemMonitorService? _systemMonitorService;
-        private readonly MonitoringService? _legacyMonitoringService;
-        private readonly MonitoringViewModel _monitoringVm;
+        private readonly MonitoringService _monitoringService;
+        private readonly SettingsService _settingsService;
+        private readonly ChatUiService _chatService;
+        private readonly IActionOrchestrator _orchestrator;
+        private readonly IConfirmationService _confirmationService;
+        private readonly DispatcherTimer _clockTimer;
+        private Window? _miniHudWindow;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            var chat = new ChatService();
-            var settingsService = new SettingsService();
+            _chatService = new ChatUiService();
+            _settingsService = new SettingsService();
+            _monitoringService = new MonitoringService();
             var networkInsightService = new NetworkInsightService();
 
-            try
+            var monitoringVm = new MonitoringViewModel(
+                _monitoringService,
+                _settingsService,
+                networkInsightService);
+
+            var uiChat = new UiChatServiceAdapter(_chatService);
+            _orchestrator = new ActionOrchestrator(
+                new CleanupService(),
+                new UpdateService(),
+                new NetworkService(),
+                new PerformanceService(),
+                new DiagnosticService(),
+                new SpecialService(),
+                uiChat);
+
+            _confirmationService = new ConfirmationService();
+
+            var mainVm = new MainViewModel(
+                _chatService,
+                monitoringVm,
+                _orchestrator,
+                _monitoringService,
+                _settingsService,
+                this,
+                _confirmationService);
+
+            DataContext = mainVm;
+
+            _clockTimer = new DispatcherTimer
             {
-                _systemMonitorService = new SystemMonitorService();
-                _monitoringVm = new MonitoringViewModel(_systemMonitorService, settingsService, networkInsightService);
-                _legacyMonitoringService = null;
-            }
-            catch
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _clockTimer.Tick += (_, _) => TopClock.Text = DateTime.Now.ToString("HH:mm:ss");
+            _clockTimer.Start();
+
+            Loaded += async (_, _) => await mainVm.InitializeAsync();
+            Closed += (_, _) => _clockTimer.Stop();
+        }
+
+        public Task<ActionResult> OpenSettingsAsync(CancellationToken ct)
+        {
+            return Dispatcher.InvokeAsync(() =>
             {
-                // En cas d'échec (ex: compteurs/perfs indisponibles),
-                // on repasse sur l'ancien service pour éviter un crash au lancement.
-                _systemMonitorService = null;
-                _legacyMonitoringService = new MonitoringService();
-                _monitoringVm = new MonitoringViewModel(_legacyMonitoringService, settingsService, networkInsightService);
-            }
+                var dlg = new Views.SettingsWindow(_settingsService)
+                {
+                    Owner = this
+                };
 
-            // Services d'actions
-            var systemActionsService = new SystemActionsService();
-            var networkActionsService = new NetworkActionsService();
-            var performanceActionsService = new PerformanceActionsService();
-            var specialActionsService = new SpecialActionsService(chat, settingsService, new MonitoringService());
-            var phraseService = new VirgilPhraseService();
-            var narrationService = new VirgilNarrationService(chat, phraseService);
+                var result = dlg.ShowDialog();
+                if (result == true && _settingsService.Settings.MonitoringEnabled)
+                {
+                    _monitoringService.Start();
+                }
+                else
+                {
+                    _monitoringService.Stop();
+                }
 
-            var actionsVm = new ActionsViewModel(
-                systemActionsService,
-                narrationService,
-                networkActionsService,
-                performanceActionsService,
-                specialActionsService
-            );
+                _settingsService.Save();
+                return ActionResult.Completed("Paramètres mis à jour");
+            }).Task;
+        }
 
-            DataContext = new MainViewModel(chat, _monitoringVm, actionsVm);
+        public Task<ActionResult> ShowHudAsync(CancellationToken ct)
+        {
+            return Dispatcher.InvokeAsync(() =>
+            {
+                if (_miniHudWindow is { IsVisible: true })
+                {
+                    return ActionResult.Completed("HUD déjà affiché");
+                }
 
-            Loaded += (_, _) => StartMonitoring();
-            Closed += (_, _) => StopMonitoring();
+                var vm = DataContext as MainViewModel;
+                _miniHudWindow = new Window
+                {
+                    Owner = this,
+                    Title = "Virgil — Mini HUD",
+                    Width = 240,
+                    Height = 180,
+                    Content = new Views.MiniHud { DataContext = vm?.Monitoring },
+                    WindowStyle = WindowStyle.ToolWindow,
+                    ResizeMode = ResizeMode.NoResize,
+                    Topmost = true,
+                    ShowInTaskbar = false
+                };
+
+                _miniHudWindow.Closed += (_, _) => _miniHudWindow = null;
+                _miniHudWindow.Show();
+                _settingsService.Settings.ShowMiniHud = true;
+                _settingsService.Save();
+                return ActionResult.Completed("Mini HUD affiché");
+            }).Task;
+        }
+
+        public Task<ActionResult> HideHudAsync(CancellationToken ct)
+        {
+            return Dispatcher.InvokeAsync(() =>
+            {
+                if (_miniHudWindow is { IsVisible: true })
+                {
+                    _miniHudWindow.Close();
+                    _miniHudWindow = null;
+                }
+
+                _settingsService.Settings.ShowMiniHud = false;
+                _settingsService.Save();
+                return ActionResult.Completed("Mini HUD masqué");
+            }).Task;
         }
     }
 }

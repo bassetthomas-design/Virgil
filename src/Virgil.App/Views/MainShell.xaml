@@ -24,9 +24,9 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
                     <TextBlock x:Name="ClockTextBlock" VerticalAlignment="Center" FontFamily="Consolas" FontSize="14" Text="--:--:--" />
-                    <Button x:Name="HudToggleButton" Content="Mini HUD" Click="OnHudToggled" Margin="8,0,0,0" />
-                    <Button x:Name="MonitoringToggleButton" Content="Désactiver la surveillance" Click="OnMonitoringToggled" Margin="8,0,0,0" />
-                    <Button Content="Paramètres" Click="OnOpenSettings" Margin="8,0,0,0" />
+                    <Button x:Name="HudToggleButton" Content="{Binding HudToggleLabel}" Command="{Binding RunActionCommand}" CommandParameter="hud_toggle" Margin="8,0,0,0" />
+                    <Button x:Name="MonitoringToggleButton" Content="{Binding MonitoringToggleLabel}" Command="{Binding RunActionCommand}" CommandParameter="monitor_toggle" Margin="8,0,0,0" />
+                    <Button Content="Paramètres" Command="{Binding RunActionCommand}" CommandParameter="open_settings" Margin="8,0,0,0" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -51,7 +51,13 @@
 
         <!-- Status bar -->
         <Border Grid.Row="2" Grid.ColumnSpan="3" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="8" Padding="10,6" Margin="0,10,0,0">
-            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" />
+            <Border.Resources>
+                <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+            </Border.Resources>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <ProgressBar Width="120" Height="10" IsIndeterminate="True" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding StatusDisplay}" VerticalAlignment="Center" />
+            </StackPanel>
         </Border>
     </Grid>
 </Window>
