@@ -24,7 +24,7 @@ public sealed class CleanupService : ICleanupService
                 foreach (var file in Directory.EnumerateFiles(tempPath, "*", SearchOption.AllDirectories))
                 {
                     if (ct.IsCancellationRequested)
-                        return;
+                        return ActionExecutionResult.Failure("Nettoyage annulé");
 
                     try
                     {
@@ -43,7 +43,6 @@ public sealed class CleanupService : ICleanupService
             // On ignore les erreurs globales : objectif = ne jamais faire échouer l’action.
         }
 
-        await Task.CompletedTask;
         return ActionExecutionResult.Ok("Nettoyage rapide effectué (best effort)");
     }
 

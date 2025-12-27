@@ -120,8 +120,6 @@ public sealed class ActionOrchestrator : IActionOrchestrator
                 await _chat.ErrorAsync(message, ct);
                 return ActionExecutionResult.Failure(message);
         }
-
-        return ActionExecutionResult.Ok($"Action {actionId} terminée");
     }
 
     private async Task<ActionExecutionResult> ExecuteAsync(string label, Func<Task<ActionExecutionResult>> action, CancellationToken ct)
