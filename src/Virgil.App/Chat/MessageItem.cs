@@ -6,9 +6,11 @@ namespace Virgil.App.Chat
     {
         public string Text { get; set; } = string.Empty;
         public MessageType Type { get; set; } = MessageType.Info;
+        public string Role { get; set; } = "assistant";
         public bool Pinned { get; set; }
         public DateTime Created { get; set; }
         public int TtlMs { get; set; } = 60000;
         public bool IsExpired { get; set; }
+        public bool IsUser => Role.Equals("user", StringComparison.OrdinalIgnoreCase);
     }
 }

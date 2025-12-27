@@ -3,45 +3,55 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:Virgil.App.Views"
         xmlns:controls="clr-namespace:Virgil.App.Controls"
-        Title="Virgil" Height="720" Width="1080">
-<Grid Background="{StaticResource App.BackgroundBrush}">
+        Title="Virgil" Height="760" Width="1200" WindowStartupLocation="CenterScreen">
+    <Grid Background="{DynamicResource AppBackgroundBrush}" Margin="12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="40"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="30"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="300"/>
+            <ColumnDefinition Width="260" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="320" />
         </Grid.ColumnDefinitions>
 
         <!-- Toolbar -->
-        <DockPanel Grid.Row="0" Grid.ColumnSpan="3" Background="{StaticResource App.PanelBrush}">
-            <TextBlock Text="VIRGIL" FontWeight="Bold" FontSize="16" Margin="8,0" VerticalAlignment="Center"/>
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" Margin="0,0,8,0">
-                <Button Content="Paramètres" Click="OnOpenSettings" Margin="4,0"/>
-            <TextBlock x:Name="ClockTextBlock" Margin="0,0,16,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="14" Text="--:--:--" />
-          <Button x:Name="HudToggleButton" Content="Mini HUD" Click="OnHudToggled" Margin="4,0"/>
-        <Button x:Name="MonitoringToggleButton" Content="Désactiver la surveillance" Click="OnMonitoringToggled" Margin="4,0"/>
+        <Border Grid.Row="0" Grid.ColumnSpan="3" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <TextBlock Text="VIRGIL" FontWeight="Bold" FontSize="18" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" Spacing="8">
+                    <TextBlock x:Name="ClockTextBlock" VerticalAlignment="Center" FontFamily="Consolas" FontSize="14" Text="--:--:--" />
+                    <Button x:Name="HudToggleButton" Content="Mini HUD" Click="OnHudToggled" />
+                    <Button x:Name="MonitoringToggleButton" Content="Désactiver la surveillance" Click="OnMonitoringToggled" />
+                    <Button Content="Paramètres" Click="OnOpenSettings" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
 
-            </StackPanel>
- 
-
-        </DockPanel>
         <!-- Actions Panel -->
-        <views:ActionsPanel Grid.Row="1" Grid.Column="0" DataContext="{Binding Actions}"/>
+        <Border Grid.Row="1" Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="10" Padding="8" Margin="0,0,10,10">
+            <views:ActionsPanel DataContext="{Binding Actions}" />
+        </Border>
+
+        <!-- Chat Panel takes the central space -->
+        <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="12" Padding="0" Margin="0,0,10,10" BorderBrush="{DynamicResource PanelBackgroundBrush}" BorderThickness="1">
+            <views:ChatView DataContext="{Binding Chat}" />
+        </Border>
 
         <!-- Avatar and metrics -->
-        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource App.PanelBrush}">
-            <controls:AvatarView Width="192" Height="192" DataContext="{Binding Monitoring}" Source="{Binding AvatarSource}"/>
-            <views:MetricsBar Width="200" Margin="0,8,0,0" DataContext="{Binding Monitoring}"/>
-        </StackPanel>
-
-        <!-- Chat Panel -->
-        <views:ChatView Grid.Row="1" Grid.Column="2" DataContext="{Binding Chat}"/>
+        <Border Grid.Row="1" Grid.Column="2" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="10" Padding="14" Margin="0,0,0,10">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                <controls:AvatarView Width="192" Height="192" DataContext="{Binding Monitoring}" Source="{Binding AvatarSource}" />
+                <views:MetricsBar Width="220" DataContext="{Binding Monitoring}" />
+            </StackPanel>
+        </Border>
 
         <!-- Status bar -->
-        <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding StatusText}" Padding="8,0" VerticalAlignment="Center"/>
+        <Border Grid.Row="2" Grid.ColumnSpan="3" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="8" Padding="10,6" Margin="0,10,0,0">
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" />
+        </Border>
     </Grid>
 </Window>

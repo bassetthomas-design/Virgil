@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using Virgil.App.Views;
+using Virgil.App.Utils;
 
 namespace Virgil.App
 {
@@ -18,9 +19,7 @@ namespace Virgil.App
 
         private static void LogAndShow(Exception? ex){
             try{
-                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "logs");
-                Directory.CreateDirectory(dir);
-                var path = Path.Combine(dir, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+                var path = Path.Combine(StartupLog.LogsDirectory, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.log");
                 File.WriteAllText(path, BuildReport(ex));
                 System.Windows.MessageBox.Show("Virgil a rencontré une erreur.\n\n"+path, "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
             }catch{}

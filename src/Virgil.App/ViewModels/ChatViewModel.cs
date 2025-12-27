@@ -1,23 +1,64 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Timers;
-using System.Windows.Threading;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using System.Timers;
+using System.Windows.Input;
+using System.Windows.Threading;
 using Virgil.App.Chat;
+using Virgil.App.Commands;
 
 namespace Virgil.App.ViewModels
 {
     public partial class ChatViewModel : INotifyPropertyChanged
     {
+        private const int DefaultTtlMs = 60000;
         public ObservableCollection<MessageItem> Messages { get; } = new();
         private readonly ChatService _chat;
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
+        private string _inputText = string.Empty;
+        private bool _isBusy;
 
         public ChatViewModel(ChatService chat)
         {
             _chat = chat;
             _chat.MessagePosted += OnMessagePosted;
+            SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
+        }
+
+        public ICommand SendCommand { get; }
+
+        public string InputText
+        {
+            get => _inputText;
+            set
+            {
+                if (_inputText == value)
+                {
+                    return;
+                }
+
+                _inputText = value;
+                OnPropertyChanged();
+                RaiseCanExecuteChanged();
+            }
+        }
+
+        public bool IsBusy
+        {
+            get => _isBusy;
+            private set
+            {
+                if (_isBusy == value)
+                {
+                    return;
+                }
+
+                _isBusy = value;
+                OnPropertyChanged();
+                RaiseCanExecuteChanged();
+            }
         }
 
         private void OnMessagePosted(string text, MessageType type, bool pinned, int? ttlMs)
@@ -28,7 +69,8 @@ namespace Virgil.App.ViewModels
                 Type = type,
                 Pinned = pinned,
                 Created = DateTime.Now,
-                TtlMs = ttlMs ?? DefaultTtlMs
+                TtlMs = ttlMs ?? DefaultTtlMs,
+                Role = "assistant"
             };
 
             _dispatcher.Invoke(() => Messages.Add(item));
@@ -52,6 +94,49 @@ namespace Virgil.App.ViewModels
                     });
                 };
                 t.Start();
+            }
+        }
+
+        private async Task SendAsync()
+        {
+            var message = InputText?.Trim();
+            if (string.IsNullOrEmpty(message))
+            {
+                return;
+            }
+
+            InputText = string.Empty;
+
+            var userItem = new MessageItem
+            {
+                Text = message,
+                Type = MessageType.User,
+                Created = DateTime.Now,
+                Role = "user",
+                Pinned = true,
+                TtlMs = DefaultTtlMs
+            };
+
+            _dispatcher.Invoke(() => Messages.Add(userItem));
+
+            IsBusy = true;
+            try
+            {
+                await _chat.Post(message, ChatKind.Info, pinned: true);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(InputText);
+
+        private void RaiseCanExecuteChanged()
+        {
+            if (SendCommand is RelayCommand relay)
+            {
+                relay.RaiseCanExecuteChanged();
             }
         }
 
