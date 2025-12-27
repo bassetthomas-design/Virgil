@@ -9,7 +9,9 @@ namespace Virgil.Services;
 /// </summary>
 public sealed class SpecialService : ISpecialService
 {
-    public Task RamboModeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> RamboModeAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Mode RAMBO non implémenté"));
 
-    public Task ReloadConfigurationAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> ReloadConfigurationAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Rechargement configuration non implémenté"));
 }

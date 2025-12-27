@@ -6,52 +6,52 @@ namespace Virgil.Services.Abstractions;
 
 public interface IActionOrchestrator
 {
-    Task RunAsync(VirgilActionId actionId, CancellationToken cancellationToken = default);
+    Task<ActionExecutionResult> RunAsync(VirgilActionId actionId, CancellationToken cancellationToken = default);
 }
 
 public interface ICleanupService
 {
-    Task RunSimpleAsync(CancellationToken ct = default);   // Nettoyage rapide
-    Task RunAdvancedAsync(CancellationToken ct = default); // Nettoyage disque avancé
-    Task RunBrowserLightAsync(CancellationToken ct = default);
-    Task RunBrowserDeepAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default);   // Nettoyage rapide
+    Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default); // Nettoyage disque avancé
+    Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default);
 }
 
 public interface IUpdateService
 {
-    Task UpdateAppsAsync(CancellationToken ct = default);
-    Task RunWindowsUpdateAsync(CancellationToken ct = default);
-    Task CheckGpuDriversAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> UpdateAppsAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunWindowsUpdateAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> CheckGpuDriversAsync(CancellationToken ct = default);
 }
 
 public interface INetworkService
 {
-    Task RunQuickDiagnosticAsync(CancellationToken ct = default);
-    Task SoftResetAsync(CancellationToken ct = default);
-    Task AdvancedResetAsync(CancellationToken ct = default);
-    Task RunLatencyTestAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> SoftResetAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default);
 }
 
 public interface IPerformanceService
 {
-    Task EnableGamingModeAsync(CancellationToken ct = default);
-    Task RestoreNormalModeAsync(CancellationToken ct = default);
-    Task AnalyzeStartupAsync(CancellationToken ct = default);
-    Task CloseGamingSessionAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RestoreNormalModeAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default);
 }
 
 public interface IDiagnosticService
 {
-    Task RunExpressAsync(CancellationToken ct = default);
-    Task DiskCheckAsync(CancellationToken ct = default);
-    Task SystemIntegrityCheckAsync(CancellationToken ct = default);
-    Task RescanSystemAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunExpressAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> DiskCheckAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> SystemIntegrityCheckAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RescanSystemAsync(CancellationToken ct = default);
 }
 
 public interface ISpecialService
 {
-    Task RamboModeAsync(CancellationToken ct = default);
-    Task ReloadConfigurationAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RamboModeAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> ReloadConfigurationAsync(CancellationToken ct = default);
 }
 
 public interface IChatService

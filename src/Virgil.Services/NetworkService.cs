@@ -9,11 +9,15 @@ namespace Virgil.Services;
 /// </summary>
 public sealed class NetworkService : INetworkService
 {
-    public Task RunQuickDiagnosticAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Diagnostic réseau non implémenté"));
 
-    public Task SoftResetAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> SoftResetAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Reset réseau (soft) non implémenté"));
 
-    public Task AdvancedResetAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Reset réseau avancé non implémenté"));
 
-    public Task RunLatencyTestAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default)
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Test de latence non implémenté"));
 }

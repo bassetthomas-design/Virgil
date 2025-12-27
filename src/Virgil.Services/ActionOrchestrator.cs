@@ -34,134 +34,124 @@ public sealed class ActionOrchestrator : IActionOrchestrator
         _chat = chat;
     }
 
-    public async Task RunAsync(VirgilActionId actionId, CancellationToken ct = default)
+    public async Task<ActionExecutionResult> RunAsync(VirgilActionId actionId, CancellationToken ct = default)
     {
         switch (actionId)
         {
             // Maintenance rapide
             case VirgilActionId.ScanSystemExpress:
-                await _chat.InfoAsync("Je lance un scan système express.", ct);
-                await _diagnostic.RunExpressAsync(ct);
-                break;
+                return await ExecuteAsync("Scan système express", () => _diagnostic.RunExpressAsync(ct), ct);
 
             case VirgilActionId.QuickClean:
-                await _chat.InfoAsync("Nettoyage rapide en cours.", ct);
-                await _cleanup.RunSimpleAsync(ct);
-                break;
+                return await ExecuteAsync("Nettoyage rapide", () => _cleanup.RunSimpleAsync(ct), ct);
 
             case VirgilActionId.LightBrowserClean:
-                await _chat.InfoAsync("Nettoyage léger des navigateurs.", ct);
-                await _cleanup.RunBrowserLightAsync(ct);
-                break;
+                return await ExecuteAsync("Nettoyage léger des navigateurs", () => _cleanup.RunBrowserLightAsync(ct), ct);
 
             case VirgilActionId.SoftRamFlush:
-                await _chat.InfoAsync("Libération douce de la RAM.", ct);
-                await _performance.CloseGamingSessionAsync(ct); // ou MemoryService plus tard
-                break;
+                return await ExecuteAsync("Libération douce de la RAM", () => _performance.CloseGamingSessionAsync(ct), ct);
 
             // Maintenance avancée
             case VirgilActionId.AdvancedDiskClean:
-                await _chat.InfoAsync("Nettoyage disque avancé.", ct);
-                await _cleanup.RunAdvancedAsync(ct);
-                break;
+                return await ExecuteAsync("Nettoyage disque avancé", () => _cleanup.RunAdvancedAsync(ct), ct);
 
             case VirgilActionId.DiskCheck:
-                await _chat.InfoAsync("Vérification du disque en cours.", ct);
-                await _diagnostic.DiskCheckAsync(ct);
-                break;
+                return await ExecuteAsync("Vérification du disque", () => _diagnostic.DiskCheckAsync(ct), ct);
 
             case VirgilActionId.SystemIntegrityCheck:
-                await _chat.InfoAsync("Vérification de l’intégrité système.", ct);
-                await _diagnostic.SystemIntegrityCheckAsync(ct);
-                break;
+                return await ExecuteAsync("Vérification de l’intégrité système", () => _diagnostic.SystemIntegrityCheckAsync(ct), ct);
 
             case VirgilActionId.DeepBrowserClean:
-                await _chat.InfoAsync("Nettoyage profond des navigateurs.", ct);
-                await _cleanup.RunBrowserDeepAsync(ct);
-                break;
+                return await ExecuteAsync("Nettoyage profond des navigateurs", () => _cleanup.RunBrowserDeepAsync(ct), ct);
 
             // Réseau & Internet
             case VirgilActionId.NetworkQuickDiag:
-                await _chat.InfoAsync("Diagnostic réseau rapide.", ct);
-                await _network.RunQuickDiagnosticAsync(ct);
-                break;
+                return await ExecuteAsync("Diagnostic réseau rapide", () => _network.RunQuickDiagnosticAsync(ct), ct);
 
             case VirgilActionId.NetworkSoftReset:
-                await _chat.InfoAsync("Réinitialisation réseau (soft).", ct);
-                await _network.SoftResetAsync(ct);
-                break;
+                return await ExecuteAsync("Réinitialisation réseau (soft)", () => _network.SoftResetAsync(ct), ct);
 
             case VirgilActionId.NetworkAdvancedReset:
-                await _chat.InfoAsync("Réinitialisation réseau avancée.", ct);
-                await _network.AdvancedResetAsync(ct);
-                break;
+                return await ExecuteAsync("Réinitialisation réseau avancée", () => _network.AdvancedResetAsync(ct), ct);
 
             case VirgilActionId.LatencyStabilityTest:
-                await _chat.InfoAsync("Test de latence et de stabilité.", ct);
-                await _network.RunLatencyTestAsync(ct);
-                break;
+                return await ExecuteAsync("Test de latence et de stabilité", () => _network.RunLatencyTestAsync(ct), ct);
 
             // Gaming / Performance
             case VirgilActionId.EnableGamingMode:
-                await _chat.InfoAsync("Activation du mode Performance / Gaming.", ct);
-                await _performance.EnableGamingModeAsync(ct);
-                break;
+                return await ExecuteAsync("Activation du mode Performance / Gaming", () => _performance.EnableGamingModeAsync(ct), ct);
 
             case VirgilActionId.RestoreNormalMode:
-                await _chat.InfoAsync("Retour au mode normal.", ct);
-                await _performance.RestoreNormalModeAsync(ct);
-                break;
+                return await ExecuteAsync("Retour au mode normal", () => _performance.RestoreNormalModeAsync(ct), ct);
 
             case VirgilActionId.StartupAnalysis:
-                await _chat.InfoAsync("Analyse du démarrage en cours.", ct);
-                await _performance.AnalyzeStartupAsync(ct);
-                break;
+                return await ExecuteAsync("Analyse du démarrage", () => _performance.AnalyzeStartupAsync(ct), ct);
 
             case VirgilActionId.CloseGamingSession:
-                await _chat.InfoAsync("Fermeture de la session gaming.", ct);
-                await _performance.CloseGamingSessionAsync(ct);
-                break;
+                return await ExecuteAsync("Fermeture de la session gaming", () => _performance.CloseGamingSessionAsync(ct), ct);
 
             // Mises à jour
             case VirgilActionId.UpdateSoftwares:
-                await _chat.InfoAsync("Mise à jour des logiciels.", ct);
-                await _update.UpdateAppsAsync(ct);
-                break;
+                return await ExecuteAsync("Mise à jour des logiciels", () => _update.UpdateAppsAsync(ct), ct);
 
             case VirgilActionId.RunWindowsUpdate:
-                await _chat.InfoAsync("Lancement de Windows Update.", ct);
-                await _update.RunWindowsUpdateAsync(ct);
-                break;
+                return await ExecuteAsync("Lancement de Windows Update", () => _update.RunWindowsUpdateAsync(ct), ct);
 
             case VirgilActionId.CheckGpuDrivers:
-                await _chat.InfoAsync("Vérification des pilotes GPU.", ct);
-                await _update.CheckGpuDriversAsync(ct);
-                break;
+                return await ExecuteAsync("Vérification des pilotes GPU", () => _update.CheckGpuDriversAsync(ct), ct);
 
             // Spéciaux
             case VirgilActionId.RamboMode:
-                await _chat.InfoAsync("Mode RAMBO: réparation de l’explorateur et cie.", ct);
-                await _special.RamboModeAsync(ct);
-                break;
+                return await ExecuteAsync("Mode RAMBO", () => _special.RamboModeAsync(ct), ct);
 
             case VirgilActionId.ThanosChatWipe:
                 await _chat.InfoAsync("Effet Thanos sur le chat.", ct);
                 await _chat.ThanosWipeAsync(preservePinned: true, ct);
-                break;
+                return ActionExecutionResult.Ok("Chat effacé");
 
             case VirgilActionId.ReloadConfiguration:
-                await _chat.InfoAsync("Rechargement de la configuration.", ct);
-                await _special.ReloadConfigurationAsync(ct);
-                break;
+                return await ExecuteAsync("Rechargement de la configuration", () => _special.ReloadConfigurationAsync(ct), ct);
 
             case VirgilActionId.RescanSystem:
-                await _chat.InfoAsync("Re-scan global du système.", ct);
-                await _diagnostic.RescanSystemAsync(ct);
-                break;
+                return await ExecuteAsync("Re-scan global du système", () => _diagnostic.RescanSystemAsync(ct), ct);
 
             default:
-                await _chat.ErrorAsync($"Action non gérée: {actionId}.", ct);
-                break;
+                var message = $"Action non gérée: {actionId}.";
+                await _chat.ErrorAsync(message, ct);
+                return ActionExecutionResult.Failure(message);
+        }
+
+        return ActionExecutionResult.Ok($"Action {actionId} terminée");
+    }
+
+    private async Task<ActionExecutionResult> ExecuteAsync(string label, Func<Task<ActionExecutionResult>> action, CancellationToken ct)
+    {
+        await _chat.InfoAsync($"Exécution : {label}…", ct);
+        try
+        {
+            var result = await action().ConfigureAwait(false);
+            if (result.Success)
+            {
+                var msg = string.IsNullOrWhiteSpace(result.Message) ? label : result.Message;
+                await _chat.InfoAsync($"Terminé : {msg}", ct);
+            }
+            else
+            {
+                await _chat.WarnAsync($"Échec/indispo : {result.Message}", ct);
+            }
+
+            if (result.TryGetDetails(out var details))
+            {
+                await _chat.InfoAsync(details, ct);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            var failure = ActionExecutionResult.Failure($"Erreur pendant {label}: {ex.Message}");
+            await _chat.ErrorAsync(failure.Message, ct);
+            return failure;
         }
     }
 }

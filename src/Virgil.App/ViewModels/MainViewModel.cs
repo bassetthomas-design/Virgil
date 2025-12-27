@@ -10,6 +10,7 @@ using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Domain.Actions;
 using Virgil.Services.Abstractions;
+using Virgil.Services.Chat;
 
 namespace Virgil.App.ViewModels
 {
@@ -100,11 +101,12 @@ namespace Virgil.App.ViewModels
             MonitoringService monitoringService,
             SettingsService settingsService,
             IUiInteractionService uiInteractions,
-            IConfirmationService confirmationService)
+            IConfirmationService confirmationService,
+            ChatActionBridge? chatActionBridge = null,
+            IChatEngine? chatEngine = null)
         {
             _chat = chat ?? throw new ArgumentNullException(nameof(chat));
             Monitoring = monitoring ?? throw new ArgumentNullException(nameof(monitoring));
-            Chat = new ChatViewModel(chat);
             _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
             _monitoringService = monitoringService ?? throw new ArgumentNullException(nameof(monitoringService));
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
@@ -115,6 +117,8 @@ namespace Virgil.App.ViewModels
             _isHudVisible = _settingsService.Settings.ShowMiniHud;
 
             _actionRegistry = BuildRegistry();
+
+            Chat = new ChatViewModel(chat, chatActionBridge, chatEngine);
 
             RunActionCommand = new AsyncRelayCommand(async param =>
             {
@@ -208,40 +212,22 @@ namespace Virgil.App.ViewModels
 
         private ActionRegistry BuildRegistry()
         {
-            var definitions = new List<ActionDefinition>
+            var definitions = new List<ActionDefinition>();
+
+            foreach (var descriptor in ActionCatalog.All.Values)
             {
-                MapAction("status", "Afficher le statut", false, (_, ct) => Task.FromResult(ActionResult.Completed("Statut demandé"))),
-                MapAction("quick_scan", "Scan système express", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.ScanSystemExpress, "Scan système express", ct)),
-                MapAction("quick_clean", "Nettoyage rapide", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.QuickClean, "Nettoyage rapide", ct)),
-                MapAction("browser_soft_clean", "Nettoyage navigateur (léger)", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.LightBrowserClean, "Nettoyage navigateur (léger)", ct)),
-                MapAction("browser_deep_clean", "Nettoyage navigateur (profond)", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.DeepBrowserClean, "Nettoyage navigateur (profond)", ct)),
-                MapAction("ram_soft_free", "Libérer la RAM", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.SoftRamFlush, "Libération RAM", ct)),
-                MapAction("deep_disk_clean", "Nettoyage disque avancé", true, (_, ct) => RunOrchestratorAsync(VirgilActionId.AdvancedDiskClean, "Nettoyage disque avancé", ct)),
-                MapAction("network_diag", "Diagnostic réseau", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.NetworkQuickDiag, "Diagnostic réseau", ct)),
-                MapAction("network_soft_reset", "Reset réseau (soft)", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.NetworkSoftReset, "Reset réseau (soft)", ct)),
-                MapAction("network_hard_reset", "Reset réseau (complet)", true, (_, ct) => RunOrchestratorAsync(VirgilActionId.NetworkAdvancedReset, "Reset réseau (complet)", ct)),
-                MapAction("network_latency_test", "Test de latence", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.LatencyStabilityTest, "Test de latence", ct)),
-                MapAction("perf_mode_on", "Activer le mode performance", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.EnableGamingMode, "Mode performance", ct)),
-                MapAction("perf_mode_off", "Désactiver le mode performance", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.RestoreNormalMode, "Mode normal", ct)),
-                MapAction("startup_analyze", "Analyser le démarrage", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.StartupAnalysis, "Analyse démarrage", ct)),
-                MapAction("gaming_kill_session", "Couper les apps de fond", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.CloseGamingSession, "Arrêt session gaming", ct)),
-                MapAction("apps_update_all", "Mettre à jour les logiciels", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.UpdateSoftwares, "Mise à jour logiciels", ct)),
-                MapAction("windows_update", "Mise à jour Windows", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.RunWindowsUpdate, "Mise à jour Windows", ct)),
-                MapAction("gpu_driver_check", "Vérifier les drivers GPU", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.CheckGpuDrivers, "Vérification drivers GPU", ct)),
-                MapAction("rambo_repair", "Mode RAMBO", true, (_, ct) => RunOrchestratorAsync(VirgilActionId.RamboMode, "Mode RAMBO", ct)),
-                MapAction("chat_thanos", "Effet Thanos", true, (_, ct) => RunOrchestratorAsync(VirgilActionId.ThanosChatWipe, "Effet Thanos", ct)),
-                MapAction("app_reload_settings", "Recharger la configuration", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.ReloadConfiguration, "Rechargement configuration", ct)),
-                MapAction("monitoring_rescan", "Re-scanner le système", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.RescanSystem, "Re-scan système", ct)),
-                MapAction("monitor_rescan", "Re-scanner le système", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.RescanSystem, "Re-scan système", ct)),
-                MapAction("clean_browsers", "Nettoyage navigateurs", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.LightBrowserClean, "Nettoyage navigateurs", ct)),
-                MapAction("maintenance_full", "Maintenance complète", false, (_, ct) => RunOrchestratorAsync(VirgilActionId.AdvancedDiskClean, "Maintenance complète", ct)),
+                definitions.Add(MapAction(descriptor.ActionKey, descriptor.DisplayName, descriptor.IsDestructive, (_, ct) => RunBackendActionAsync(descriptor, ct)));
+            }
+
+            definitions.AddRange(new[]
+            {
                 MapAction("monitor_toggle", "Activer / désactiver la surveillance", false, (_, ct) => ToggleMonitoringAsync(ct)),
                 MapAction("hud_toggle", "Afficher / masquer le HUD", false, (_, ct) => ToggleHudAsync(ct)),
                 MapAction("open_settings", "Ouvrir les paramètres", false, (_, ct) => _uiInteractions.OpenSettingsAsync(ct)),
                 MapAction("show_hud", "Afficher le HUD", false, (_, ct) => EnsureHudVisibleAsync(true, ct)),
                 MapAction("hide_hud", "Masquer le HUD", false, (_, ct) => EnsureHudVisibleAsync(false, ct)),
                 MapAction("actions_selftest", "Test actions", false, (_, ct) => ValidateRegistryAsync(ct)),
-            };
+            });
 
             return new ActionRegistry(definitions);
         }
@@ -249,10 +235,23 @@ namespace Virgil.App.ViewModels
         private ActionDefinition MapAction(string key, string displayName, bool isDestructive, Func<Dictionary<string, string>?, CancellationToken, Task<ActionResult>> callback)
             => new(key, displayName, isDestructive, callback);
 
-        private async Task<ActionResult> RunOrchestratorAsync(VirgilActionId actionId, string displayName, CancellationToken ct)
+        private async Task<ActionResult> RunBackendActionAsync(ActionDescriptor descriptor, CancellationToken ct)
         {
-            await _orchestrator.RunAsync(actionId, ct).ConfigureAwait(false);
-            return ActionResult.Completed($"{displayName} terminé.");
+            if (!descriptor.IsImplemented)
+            {
+                var unavailable = ActionResult.NotImplemented($"{descriptor.DisplayName}: non disponible ({descriptor.Service})");
+                _ = _chat.PostSystemMessage(unavailable.Message, MessageType.Warning, ChatKind.Warning);
+                return unavailable;
+            }
+
+            var result = await _orchestrator.RunAsync(descriptor.VirgilActionId, ct).ConfigureAwait(false);
+            var message = string.IsNullOrWhiteSpace(result.Message) ? descriptor.DisplayName : result.Message;
+            if (result.TryGetDetails(out var details))
+            {
+                message = $"{message}\n{details}";
+            }
+
+            return new ActionResult(result.Success, message);
         }
 
         private Task<ActionResult> ToggleMonitoringAsync(CancellationToken ct)
@@ -317,6 +316,8 @@ namespace Virgil.App.ViewModels
                 }
             }
 
+            var status = ActionCatalog.DescribeStatus();
+            _ = _chat.PostSystemMessage(status, MessageType.Info, ChatKind.Info);
             return await Task.FromResult(ActionResult.Completed($"{_actionRegistry.All.Count} actions câblées."));
         }
     }
