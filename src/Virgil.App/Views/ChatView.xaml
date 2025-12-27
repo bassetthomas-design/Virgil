@@ -4,34 +4,126 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:conv="clr-namespace:Virgil.App.Converters"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             Padding="12">
     <UserControl.Resources>
-        <conv:BoolToOpacityConverter x:Key="BoolToOpacity" TrueOpacity="0" FalseOpacity="1"/>
-        <Style x:Key="ThanosItemStyle" TargetType="ContentPresenter">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsExpired}" Value="True">
-                    <DataTrigger.EnterActions>
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.6"/>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </DataTrigger.EnterActions>
-                </DataTrigger>
-            </Style.Triggers>
+        <conv:BoolToOpacityConverter x:Key="BoolToOpacity" TrueOpacity="0" FalseOpacity="1" />
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="BubbleBorder" TargetType="Border">
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Margin" Value="6" />
+            <Setter Property="CornerRadius" Value="10" />
         </Style>
     </UserControl.Resources>
-    <Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Messages}" ItemContainerStyle="{StaticResource ThanosItemStyle}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Margin="4" Padding="8" Background="#111" CornerRadius="6" Opacity="{Binding IsExpired, Converter={StaticResource BoolToOpacity}}">
-                            <TextBlock Text="{Binding Text}" Foreground="White"/>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+
+    <Grid Background="{DynamicResource AppBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <Ellipse Width="32" Height="32" Fill="{DynamicResource AccentBrush}" Opacity="0.3" />
+                    <StackPanel Margin="8,0,0,0">
+                        <TextBlock Text="Chat" FontWeight="Bold" FontSize="16" />
+                        <TextBlock Text="Discutez avec Virgil" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <TextBlock Text="Virgil réfléchit…" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                    <Viewbox Width="20" Height="20" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" Margin="6,0,0,0">
+                        <Grid>
+                            <Ellipse Width="20" Height="20" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" Opacity="0.4" />
+                            <Ellipse Width="20" Height="20" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeDashArray="3,2">
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" To="360" Duration="0:0:1.4" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform />
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                        </Grid>
+                    </Viewbox>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="10" Padding="8" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0.5">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Messages}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border>
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource BubbleBorder}">
+                                        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+                                        <Setter Property="HorizontalAlignment" Value="Left" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                                <Setter Property="HorizontalAlignment" Value="Right" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <Border Grid.Row="2" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="10" Padding="10" Margin="0,8,0,0" BorderBrush="{DynamicResource PanelBackgroundBrush}" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         x:Name="InputBox"
+                         AcceptsReturn="True"
+                         Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+                         TextWrapping="Wrap"
+                         MinHeight="48"
+                         Background="{DynamicResource PanelBackgroundBrush}"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         BorderBrush="{DynamicResource PanelBackgroundBrush}"
+                         Padding="8"
+                         PreviewKeyDown="OnInputPreviewKeyDown" />
+                <Button Grid.Column="1"
+                        Content="Envoyer"
+                        Command="{Binding SendCommand}"
+                        Margin="8,0,0,0"
+                        Padding="12,8"
+                        VerticalAlignment="Stretch"
+                        HorizontalAlignment="Right" />
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

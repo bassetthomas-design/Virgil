@@ -148,28 +148,7 @@ namespace Virgil.App.Views
 
 
 
-            // Initialize monitoring toggle button state based on settings
-
-            if (_settingsService.Settings.MonitoringEnabled)
-            {
-                // Ensure monitoring is started and update button content
-                _monitoringService.Start();
-                MonitoringToggleButton.Content = "Désactiver la surveillance";
-            }
-            else
-            {
-                // Ensure monitoring is stopped and update button content
-                _monitoringService.Stop();
-                MonitoringToggleButton.Content = "Activer la surveillance";
-            }
-
-            UpdateHudToggleUi();
-
-            if (_settingsService.Settings.ShowMiniHud)
-            {
-                // Defer HUD creation until the main window is shown to avoid owner errors at startup
-                Dispatcher.BeginInvoke(new Action(() => OnHudToggled(this, new RoutedEventArgs())), DispatcherPriority.Loaded);
-            }
+            Loaded += OnShellLoaded;
 
         }
 
@@ -308,6 +287,30 @@ namespace Virgil.App.Views
 
             _settingsService.Save();
 
+        }
+
+        private void OnShellLoaded(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_settingsService.Settings.MonitoringEnabled)
+                {
+                    _monitoringService.Start();
+                    MonitoringToggleButton.Content = "Désactiver la surveillance";
+                }
+                else
+                {
+                    _monitoringService.Stop();
+                    MonitoringToggleButton.Content = "Activer la surveillance";
+                }
+
+                UpdateHudToggleUi();
+
+                if (_settingsService.Settings.ShowMiniHud)
+                {
+                    OnHudToggled(this, new RoutedEventArgs());
+                }
+            }), DispatcherPriority.Loaded);
         }
 
     }

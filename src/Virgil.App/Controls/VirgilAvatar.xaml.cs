@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using System.Windows.Media;
+using Virgil.App.Utils;
 
 namespace Virgil.App.Controls
 {
@@ -81,8 +83,40 @@ namespace Virgil.App.Controls
             }
             catch
             {
-                AvatarImage.Source = null;
+                AvatarImage.Source = CreateFallback();
+                StartupLog.Write($"Avatar load failed for mood {mood}");
             }
+        }
+
+        private static ImageSource CreateFallback()
+        {
+            var drawing = new DrawingGroup();
+            drawing.Children.Add(new GeometryDrawing
+            {
+                Brush = new SolidColorBrush(Color.FromRgb(239, 68, 68)),
+                Geometry = new EllipseGeometry(new Point(32, 32), 32, 32)
+            });
+
+            drawing.Children.Add(new GeometryDrawing
+            {
+                Brush = Brushes.White,
+                Geometry = new GeometryGroup
+                {
+                    Children = new GeometryCollection
+                    {
+                        new RectangleGeometry(new Rect(14, 24, 12, 8)),
+                        new RectangleGeometry(new Rect(38, 24, 12, 8))
+                    }
+                }
+            });
+
+            drawing.Children.Add(new GeometryDrawing
+            {
+                Pen = new Pen(Brushes.White, 3),
+                Geometry = new LineGeometry(new Point(18, 46), new Point(46, 46))
+            });
+
+            return new DrawingImage(drawing);
         }
     }
 }
