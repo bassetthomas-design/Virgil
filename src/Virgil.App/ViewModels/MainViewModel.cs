@@ -240,7 +240,7 @@ namespace Virgil.App.ViewModels
             if (!descriptor.IsImplemented)
             {
                 var unavailable = ActionResult.NotImplemented($"{descriptor.DisplayName}: non disponible ({descriptor.Service})");
-                _ = _chat.PostSystemMessage(unavailable.Message, MessageType.Warning, ChatKind.Warning);
+                _chat.PostSystemMessage(unavailable.Message, MessageType.Warning, ChatKind.Warning);
                 return unavailable;
             }
 
@@ -317,7 +317,7 @@ namespace Virgil.App.ViewModels
             }
 
             var status = ActionCatalog.DescribeStatus();
-            _ = _chat.PostSystemMessage(status, MessageType.Info, ChatKind.Info);
+            _chat.PostSystemMessage(status, MessageType.Info, ChatKind.Info);
             return await Task.FromResult(ActionResult.Completed($"{_actionRegistry.All.Count} actions câblées."));
         }
     }

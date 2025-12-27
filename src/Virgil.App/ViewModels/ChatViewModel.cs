@@ -127,7 +127,7 @@ namespace Virgil.App.ViewModels
             {
                 if (_chatEngine is null || _actionBridge is null)
                 {
-                    await _chat.PostSystemMessage("Aucun moteur de chat configuré", MessageType.Warning, ChatKind.Warning);
+                    _chat.PostSystemMessage("Aucun moteur de chat configuré", MessageType.Warning, ChatKind.Warning);
                     return;
                 }
 
@@ -137,7 +137,7 @@ namespace Virgil.App.ViewModels
             }
             catch (Exception ex)
             {
-                await _chat.PostSystemMessage($"Erreur chat: {ex.Message}", MessageType.Error, ChatKind.Error);
+                _chat.PostSystemMessage($"Erreur chat: {ex.Message}", MessageType.Error, ChatKind.Error);
             }
             finally
             {
