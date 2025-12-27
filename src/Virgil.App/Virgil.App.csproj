@@ -14,10 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="scripts\**\*.ps1">
+    <Content Include="assets\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="assets\virgil\**\*.png">
+    <Content Include="scripts\**\*.ps1">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
