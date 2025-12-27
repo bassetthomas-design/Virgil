@@ -72,17 +72,26 @@
                                     <Style TargetType="Border" BasedOn="{StaticResource BubbleBorder}">
                                         <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
                                         <Setter Property="HorizontalAlignment" Value="Left" />
-                                        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsUser}" Value="True">
                                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                                <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}" />
                                                 <Setter Property="HorizontalAlignment" Value="Right" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Border}}" />
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
