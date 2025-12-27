@@ -13,7 +13,6 @@ namespace Virgil.App.ViewModels
 {
     public partial class ChatViewModel : INotifyPropertyChanged
     {
-        private const int DefaultTtlMs = 60000;
         public ObservableCollection<MessageItem> Messages { get; } = new();
         private readonly ChatService _chat;
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
