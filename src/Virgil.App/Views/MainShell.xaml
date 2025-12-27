@@ -22,11 +22,11 @@
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
                     <TextBlock Text="VIRGIL" FontWeight="Bold" FontSize="18" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" Spacing="8">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
                     <TextBlock x:Name="ClockTextBlock" VerticalAlignment="Center" FontFamily="Consolas" FontSize="14" Text="--:--:--" />
-                    <Button x:Name="HudToggleButton" Content="Mini HUD" Click="OnHudToggled" />
-                    <Button x:Name="MonitoringToggleButton" Content="Désactiver la surveillance" Click="OnMonitoringToggled" />
-                    <Button Content="Paramètres" Click="OnOpenSettings" />
+                    <Button x:Name="HudToggleButton" Content="Mini HUD" Click="OnHudToggled" Margin="8,0,0,0" />
+                    <Button x:Name="MonitoringToggleButton" Content="Désactiver la surveillance" Click="OnMonitoringToggled" Margin="8,0,0,0" />
+                    <Button Content="Paramètres" Click="OnOpenSettings" Margin="8,0,0,0" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -43,9 +43,9 @@
 
         <!-- Avatar and metrics -->
         <Border Grid.Row="1" Grid.Column="2" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="10" Padding="14" Margin="0,0,0,10">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                 <controls:AvatarView Width="192" Height="192" DataContext="{Binding Monitoring}" Source="{Binding AvatarSource}" />
-                <views:MetricsBar Width="220" DataContext="{Binding Monitoring}" />
+                <views:MetricsBar Width="220" DataContext="{Binding Monitoring}" Margin="0,8,0,0" />
             </StackPanel>
         </Border>
 

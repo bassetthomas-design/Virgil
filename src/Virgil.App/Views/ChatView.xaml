@@ -4,7 +4,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:conv="clr-namespace:Virgil.App.Converters"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             Padding="12">
     <UserControl.Resources>
         <conv:BoolToOpacityConverter x:Key="BoolToOpacity" TrueOpacity="0" FalseOpacity="1" />
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
@@ -15,7 +16,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="{DynamicResource AppBackgroundBrush}" Padding="12">
+    <Grid Background="{DynamicResource AppBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -31,9 +32,9 @@
                         <TextBlock Text="Discutez avec Virgil" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" />
                     </StackPanel>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Spacing="6">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
                     <TextBlock Text="Virgil réfléchit…" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
-                    <Viewbox Width="20" Height="20" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+                    <Viewbox Width="20" Height="20" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" Margin="6,0,0,0">
                         <Grid>
                             <Ellipse Width="20" Height="20" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" Opacity="0.4" />
                             <Ellipse Width="20" Height="20" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeDashArray="3,2">
