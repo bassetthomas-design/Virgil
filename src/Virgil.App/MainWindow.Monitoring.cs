@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 
 namespace Virgil.App
 {
@@ -8,26 +7,12 @@ namespace Virgil.App
         private void StartMonitoring()
         {
             // Démarre le service de monitoring bas niveau (compteurs Windows + LHM).
-            if (_systemMonitorService is not null)
-            {
-                _ = _systemMonitorService.StartAsync(CancellationToken.None);
-            }
-            else
-            {
-                _legacyMonitoringService?.Start();
-            }
+            _monitoringService.Start();
         }
 
         private void StopMonitoring()
         {
-            if (_systemMonitorService is not null)
-            {
-                _ = _systemMonitorService.StopAsync(CancellationToken.None);
-            }
-            else
-            {
-                _legacyMonitoringService?.Stop();
-            }
+            _monitoringService.Stop();
         }
     }
 }

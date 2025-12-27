@@ -76,7 +76,7 @@ namespace Virgil.App
         {
             return Dispatcher.InvokeAsync(() =>
             {
-                var dlg = new SettingsWindow(_settingsService)
+                var dlg = new Views.SettingsWindow(_settingsService)
                 {
                     Owner = this
                 };
