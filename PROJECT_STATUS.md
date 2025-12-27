@@ -6,6 +6,36 @@ Date de révision : 5 janvier 2026
 
 **Virgil** est une application de bureau Windows tout‑en‑un pour surveiller, nettoyer, optimiser et assister l'utilisateur. Le projet est bien structuré et utilise des technologies modernes.
 
+### 📌 Câblage des actions UI (boutons -> ActionKey -> implémentation)
+
+| Bouton/Toggle | ActionKey | Implémentation appelée |
+| --- | --- | --- |
+| Mini HUD | `hud_toggle` | `MainViewModel.ToggleHudAsync` → `IUiInteractionService.ShowHudAsync/HideHudAsync` |
+| Activer/Désactiver la surveillance | `monitor_toggle` | `MainViewModel.ToggleMonitoringAsync` → `MonitoringService.Start/Stop` + `SettingsService` |
+| Paramètres | `open_settings` | `IUiInteractionService.OpenSettingsAsync` → `SettingsWindow` + sauvegarde |
+| Scan système express | `quick_scan` | `ActionOrchestrator.RunAsync(ScanSystemExpress)` |
+| Nettoyage rapide | `quick_clean` | `ActionOrchestrator.RunAsync(QuickClean)` |
+| Nettoyage navigateur (léger) | `browser_soft_clean` | `ActionOrchestrator.RunAsync(LightBrowserClean)` |
+| Nettoyage navigateur (profond) | `browser_deep_clean` | `ActionOrchestrator.RunAsync(DeepBrowserClean)` |
+| Libérer la RAM (soft) | `ram_soft_free` | `ActionOrchestrator.RunAsync(SoftRamFlush)` |
+| Nettoyage disque avancé | `deep_disk_clean` | `ActionOrchestrator.RunAsync(AdvancedDiskClean)` |
+| Diagnostic réseau | `network_diag` | `ActionOrchestrator.RunAsync(NetworkQuickDiag)` |
+| Reset réseau (soft) | `network_soft_reset` | `ActionOrchestrator.RunAsync(NetworkSoftReset)` |
+| Reset réseau (complet) | `network_hard_reset` | `ActionOrchestrator.RunAsync(NetworkAdvancedReset)` |
+| Test de latence | `network_latency_test` | `ActionOrchestrator.RunAsync(LatencyStabilityTest)` |
+| Activer le mode performance | `perf_mode_on` | `ActionOrchestrator.RunAsync(EnableGamingMode)` |
+| Désactiver le mode performance | `perf_mode_off` | `ActionOrchestrator.RunAsync(RestoreNormalMode)` |
+| Analyser le démarrage | `startup_analyze` | `ActionOrchestrator.RunAsync(StartupAnalysis)` |
+| Couper les apps de fond (gaming) | `gaming_kill_session` | `ActionOrchestrator.RunAsync(CloseGamingSession)` |
+| Mettre à jour les logiciels | `apps_update_all` | `ActionOrchestrator.RunAsync(UpdateSoftwares)` |
+| Lancer la mise à jour Windows | `windows_update` | `ActionOrchestrator.RunAsync(RunWindowsUpdate)` |
+| Vérifier les drivers GPU | `gpu_driver_check` | `ActionOrchestrator.RunAsync(CheckGpuDrivers)` |
+| Mode RAMBO (réparer Explorer & cache) | `rambo_repair` | `ActionOrchestrator.RunAsync(RamboMode)` |
+| Effet Thanos (effacer le chat) | `chat_thanos` | `ActionOrchestrator.RunAsync(ThanosChatWipe)` |
+| Recharger la configuration | `app_reload_settings` | `ActionOrchestrator.RunAsync(ReloadConfiguration)` |
+| Re-scanner le système | `monitoring_rescan` / `monitor_rescan` | `ActionOrchestrator.RunAsync(RescanSystem)` |
+| Tester le câblage des actions | `actions_selftest` | Validation `ActionRegistry` (presence des ExecuteAsync) |
+
 ## 🔎 Constats immédiats (phase 0)
 - **Chat UI limitée** : `ChatView` ne propose qu'un ScrollViewer read‑only avec bulles sombres hardcodées (#111) et sans zone de saisie ni commandes utilisateur; le service actuel poste uniquement des messages système (`ChatService` ne consomme pas d'entrée utilisateur).【F:src/Virgil.App/Views/ChatView.xaml†L1-L30】【F:src/Virgil.App/Chat/ChatService.cs†L8-L60】
 - **Layout principal** : `MainShell.xaml` réserve seulement 300 px au chat et priorise le monitoring; l'apparence dépend déjà de brosses App.* mais reste très sombre, sans thème clair dédié.【F:src/Virgil.App/Views/MainShell.xaml†L1-L35】

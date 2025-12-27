@@ -1,206 +1,113 @@
-using System.Windows;
-
 using System;
-
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Threading;
-
-
-
 using Virgil.App.Chat;
-
+using Virgil.App.Interfaces;
+using Virgil.App.Models;
 using Virgil.App.Services;
-
 using Virgil.App.ViewModels;
-
-using Virgil.Domain;
-
-using Virgil.Services.Narration;
-
-
+using Virgil.Services;
+using Virgil.Services.Abstractions;
 
 namespace Virgil.App.Views
-
 {
-
     /// <summary>
-
     /// Minimal code-behind for the main shell window.
-
-    /// This version is intentionally simplified on the dev branch so that
-
-    /// the application can compile cleanly while the chat services layer
-
-    /// is being refactored.
-
+    /// Routes UI interactions to the unified action runner.
     /// </summary>
-
-    public partial class MainShell : Window
-
+    public partial class MainShell : Window, IUiInteractionService
     {
-
-        // Fields to store services for monitoring toggle
         private readonly MonitoringService _monitoringService;
         private readonly SettingsService _settingsService;
+        private readonly ChatService _chatService;
+        private readonly IActionOrchestrator _orchestrator;
+        private readonly IConfirmationService _confirmationService;
+        private readonly DispatcherTimer _clockTimer;
         private Window? _miniHudWindow;
 
-
-
         public MainShell()
-
         {
-
             InitializeComponent();
 
-
-
-            // Initialize services
-
-            var chat = new ChatService();
-
-            var monitoringService = new MonitoringService();
-
-            var settingsService = new SettingsService();
-
+            _chatService = new ChatService();
+            _monitoringService = new MonitoringService();
+            _settingsService = new SettingsService();
             var networkInsightService = new NetworkInsightService();
 
-
-
-            // Assign to fields for later use
-
-            _monitoringService = monitoringService;
-
-            _settingsService = settingsService;
-
-
-
-            // Services d'actions
-
-            var systemActionsService = new SystemActionsService();
-
-            var networkActionsService = new NetworkActionsService();
-
-            var performanceActionsService = new PerformanceActionsService();
-            var specialActionsService = new SpecialActionsService(chat, settingsService, monitoringService);
-
-            var phraseService = new VirgilPhraseService();
-
-            var narrationService = new VirgilNarrationService(chat, phraseService);
-
-
-
-            // Create monitoring ViewModel
-
             var monitoringVm = new MonitoringViewModel(
+                _monitoringService,
+                _settingsService,
+                networkInsightService);
 
-                monitoringService,
+            var uiChat = new UiChatServiceAdapter(_chatService);
+            _orchestrator = new ActionOrchestrator(
+                new CleanupService(),
+                new UpdateService(),
+                new NetworkService(),
+                new PerformanceService(),
+                new DiagnosticService(),
+                new SpecialService(),
+                uiChat);
 
-                settingsService,
+            _confirmationService = new ConfirmationService();
 
-                networkInsightService
+            var mainVm = new MainViewModel(
+                _chatService,
+                monitoringVm,
+                _orchestrator,
+                _monitoringService,
+                _settingsService,
+                this,
+                _confirmationService);
 
-            );
+            DataContext = mainVm;
 
-
-
-            // Create actions ViewModel
-
-            var actionsVm = new ActionsViewModel(
-
-                systemActionsService,
-
-                narrationService,
-
-                networkActionsService,
-
-                performanceActionsService,
-
-                specialActionsService
-
-            );
-
-
-
-            // Create and set the main ViewModel as DataContext
-
-            DataContext = new MainViewModel(chat, monitoringVm, actionsVm);
-
-
-
-            // Initialize real-time clock
-
-            var clockTimer = new DispatcherTimer
-
+            _clockTimer = new DispatcherTimer
             {
-
                 Interval = TimeSpan.FromSeconds(1)
-
             };
+            _clockTimer.Tick += (_, _) => ClockTextBlock.Text = DateTime.Now.ToString("HH:mm:ss");
+            _clockTimer.Start();
 
-            clockTimer.Tick += (s, e) =>
-
-            {
-
-                ClockTextBlock.Text = DateTime.Now.ToString("HH:mm:ss");
-
-            };
-
-            clockTimer.Start();
-
-
-
-            Loaded += OnShellLoaded;
-
+            Loaded += async (_, _) => await mainVm.InitializeAsync();
+            Closed += (_, _) => _clockTimer.Stop();
         }
 
-
-
-
-
-        /// <summary>
-
-        /// Handler for the settings button declared in MainShell.xaml.
-        /// Opens the configuration window when implemented.
-        /// </summary>
-        private void OnOpenSettings(object sender, RoutedEventArgs e)
+        public Task<ActionResult> OpenSettingsAsync(CancellationToken ct)
         {
-            var dlg = new SettingsWindow(_settingsService)
+            return Dispatcher.InvokeAsync(() =>
             {
-                Owner = this
-            };
+                var dlg = new SettingsWindow(_settingsService)
+                {
+                    Owner = this
+                };
 
-            var result = dlg.ShowDialog();
+                var result = dlg.ShowDialog();
+                if (result == true && _settingsService.Settings.MonitoringEnabled)
+                {
+                    _monitoringService.Start();
+                }
+                else
+                {
+                    _monitoringService.Stop();
+                }
 
-            if (result == true && _settingsService.Settings.MonitoringEnabled)
-            {
-                _monitoringService.Start();
-                MonitoringToggleButton.Content = "Désactiver la surveillance";
-            }
-            else
-            {
-                _monitoringService.Stop();
-                MonitoringToggleButton.Content = "Activer la surveillance";
-            }
+                _settingsService.Save();
+                return ActionResult.Completed("Paramètres mis à jour");
+            }).Task;
         }
 
-
-
-
-        /// <summary>
-
-        /// Handler for the HUD toggle button declared in MainShell.xaml.
-
-        /// </summary>
-
-        private void OnHudToggled(object sender, RoutedEventArgs e)
+        public Task<ActionResult> ShowHudAsync(CancellationToken ct)
         {
-            if (_miniHudWindow is { IsVisible: true })
+            return Dispatcher.InvokeAsync(() =>
             {
-                _miniHudWindow.Close();
-                _miniHudWindow = null;
-                _settingsService.Settings.ShowMiniHud = false;
-            }
-            else
-            {
+                if (_miniHudWindow is { IsVisible: true })
+                {
+                    return ActionResult.Completed("HUD déjà affiché");
+                }
+
                 var vm = DataContext as MainViewModel;
                 _miniHudWindow = new Window
                 {
@@ -218,101 +125,25 @@ namespace Virgil.App.Views
                 _miniHudWindow.Closed += (_, _) => _miniHudWindow = null;
                 _miniHudWindow.Show();
                 _settingsService.Settings.ShowMiniHud = true;
-            }
-
-            _settingsService.Save();
-            UpdateHudToggleUi();
+                _settingsService.Save();
+                return ActionResult.Completed("Mini HUD affiché");
+            }).Task;
         }
 
-        private void UpdateHudToggleUi()
+        public Task<ActionResult> HideHudAsync(CancellationToken ct)
         {
-            if (_settingsService.Settings.ShowMiniHud)
+            return Dispatcher.InvokeAsync(() =>
             {
-                HudToggleButton.Content = "Masquer HUD";
-                HudToggleButton.ToolTip = "Fermer le mini HUD";
-            }
-            else
-            {
-                HudToggleButton.Content = "Mini HUD";
-                HudToggleButton.ToolTip = "Afficher le mini HUD";
-            }
-        }
-
-
-
-
-        /// <summary>
-
-        /// Handler for the monitoring toggle button declared in MainShell.xaml.
-
-        /// Starts or stops monitoring and updates settings and UI accordingly.
-
-        /// </summary>
-
-        private void OnMonitoringToggled(object sender, RoutedEventArgs e)
-
-        {
-
-            bool enabled = _settingsService.Settings.MonitoringEnabled;
-
-            if (enabled)
-
-            {
-
-                // Disable monitoring
-
-                _monitoringService.Stop();
-
-                _settingsService.Settings.MonitoringEnabled = false;
-
-                MonitoringToggleButton.Content = "Activer la surveillance";
-
-            }
-
-            else
-
-            {
-
-                // Enable monitoring
-
-                _monitoringService.Start();
-
-                _settingsService.Settings.MonitoringEnabled = true;
-
-                MonitoringToggleButton.Content = "Désactiver la surveillance";
-
-            }
-
-            // Persist the updated setting
-
-            _settingsService.Save();
-
-        }
-
-        private void OnShellLoaded(object sender, RoutedEventArgs e)
-        {
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (_settingsService.Settings.MonitoringEnabled)
+                if (_miniHudWindow is { IsVisible: true })
                 {
-                    _monitoringService.Start();
-                    MonitoringToggleButton.Content = "Désactiver la surveillance";
-                }
-                else
-                {
-                    _monitoringService.Stop();
-                    MonitoringToggleButton.Content = "Activer la surveillance";
+                    _miniHudWindow.Close();
+                    _miniHudWindow = null;
                 }
 
-                UpdateHudToggleUi();
-
-                if (_settingsService.Settings.ShowMiniHud)
-                {
-                    OnHudToggled(this, new RoutedEventArgs());
-                }
-            }), DispatcherPriority.Loaded);
+                _settingsService.Settings.ShowMiniHud = false;
+                _settingsService.Save();
+                return ActionResult.Completed("Mini HUD masqué");
+            }).Task;
         }
-
     }
-
 }

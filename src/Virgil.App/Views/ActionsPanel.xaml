@@ -84,6 +84,12 @@
             <Button Content="Re-scanner le système" Tag="monitoring_rescan" Margin="0,0,0,0"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+
+            <!-- Debug / validation -->
+            <TextBlock Text="Debug" Margin="0,8,0,4" FontWeight="Bold"/>
+            <Button Content="Tester le câblage des actions" Tag="actions_selftest" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
