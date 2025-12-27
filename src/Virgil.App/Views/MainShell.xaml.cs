@@ -10,6 +10,7 @@ using Virgil.App.Services;
 using Virgil.App.ViewModels;
 using Virgil.Services;
 using Virgil.Services.Abstractions;
+using ChatUiService = Virgil.App.Chat.ChatService;
 
 namespace Virgil.App.Views
 {
@@ -21,7 +22,7 @@ namespace Virgil.App.Views
     {
         private readonly MonitoringService _monitoringService;
         private readonly SettingsService _settingsService;
-        private readonly ChatService _chatService;
+        private readonly ChatUiService _chatService;
         private readonly IActionOrchestrator _orchestrator;
         private readonly IConfirmationService _confirmationService;
         private readonly DispatcherTimer _clockTimer;
@@ -31,7 +32,7 @@ namespace Virgil.App.Views
         {
             InitializeComponent();
 
-            _chatService = new ChatService();
+            _chatService = new ChatUiService();
             _monitoringService = new MonitoringService();
             _settingsService = new SettingsService();
             var networkInsightService = new NetworkInsightService();

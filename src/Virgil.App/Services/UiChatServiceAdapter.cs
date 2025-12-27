@@ -2,15 +2,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using Virgil.App.Chat;
 using Virgil.App.Utils;
-using Virgil.Services.Abstractions;
+using ChatUiService = Virgil.App.Chat.ChatService;
+using ServiceIChat = Virgil.Services.Abstractions.IChatService;
 
 namespace Virgil.App.Services
 {
-    public sealed class UiChatServiceAdapter : IChatService
+    public sealed class UiChatServiceAdapter : ServiceIChat
     {
-        private readonly ChatService _chatService;
+        private readonly ChatUiService _chatService;
 
-        public UiChatServiceAdapter(ChatService chatService)
+        public UiChatServiceAdapter(ChatUiService chatService)
         {
             _chatService = chatService;
         }
