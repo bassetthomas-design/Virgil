@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -21,6 +22,10 @@ public sealed class CleanupService : ICleanupService
 {
     private readonly Func<CleanupPlan> _planFactory;
     private readonly Func<BrowserCleanPlan> _browserPlanFactory;
+    private readonly Func<IReadOnlyCollection<AdvancedStep>> _advancedPlanFactory;
+    private readonly Func<bool> _isWindows;
+    private readonly Func<bool> _isAdministrator;
+    private readonly Func<string, string, CancellationToken, Task<CommandResult>> _commandRunner;
 
     public CleanupService()
         : this(CleanupPlan.FromEnvironment, BrowserCleanPlan.FromEnvironment)
@@ -32,10 +37,20 @@ public sealed class CleanupService : ICleanupService
     {
     }
 
-    public CleanupService(Func<CleanupPlan> planFactory, Func<BrowserCleanPlan> browserPlanFactory)
+    public CleanupService(
+        Func<CleanupPlan> planFactory,
+        Func<BrowserCleanPlan> browserPlanFactory,
+        Func<IReadOnlyCollection<AdvancedStep>>? advancedPlanFactory = null,
+        Func<bool>? isWindows = null,
+        Func<bool>? isAdministrator = null,
+        Func<string, string, CancellationToken, Task<CommandResult>>? commandRunner = null)
     {
         _planFactory = planFactory ?? throw new ArgumentNullException(nameof(planFactory));
         _browserPlanFactory = browserPlanFactory ?? throw new ArgumentNullException(nameof(browserPlanFactory));
+        _advancedPlanFactory = advancedPlanFactory ?? BuildAdvancedCategories;
+        _isWindows = isWindows ?? OperatingSystem.IsWindows;
+        _isAdministrator = isAdministrator ?? IsRunningAsAdministrator;
+        _commandRunner = commandRunner ?? RunCommandAsync;
     }
 
     public async Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default)
@@ -92,51 +107,92 @@ public sealed class CleanupService : ICleanupService
         Console.WriteLine(logMessage);
         System.Diagnostics.Trace.WriteLine(logMessage);
 
-        if (OperatingSystem.IsWindows() && !IsRunningAsAdministrator())
+        if (_isWindows() && !_isAdministrator())
         {
             const string adminMessage = "Nettoyage disque avancé indisponible : droits administrateur requis";
-            return ActionExecutionResult.NotAvailable(adminMessage, "Exécution bloquée (admin requis)");
+            const string details = "Action avancée, peut prendre du temps — mais sans admin, c’est niet (sécurité + accès système).";
+            return ActionExecutionResult.NotAvailable(adminMessage, details);
         }
 
-        var categories = BuildAdvancedCategories();
+        var categories = _advancedPlanFactory();
         var ignored = new List<string>();
         var cleanedSummaries = new List<string>();
+        var lockedSummaries = new List<string>();
         long totalFreed = 0;
 
         foreach (var category in categories)
         {
             ct.ThrowIfCancellationRequested();
 
+            if (category.WindowsOnly && !_isWindows())
+            {
+                ignored.Add($"{category.Name} (ignoré : plateforme non Windows)");
+                continue;
+            }
+
             var categoryFreed = 0L;
             var categoryFiles = 0;
             var categoryDirectories = 0;
+            var categoryLocked = 0;
+            var categoryExecuted = false;
 
-            var existingPaths = category.Paths.Where(Directory.Exists).ToList();
-            if (existingPaths.Count == 0)
+            if (category.CustomCleanup is not null)
             {
-                ignored.Add($"{category.Name} (aucun chemin trouvé)");
-                continue;
+                var stats = await category.CustomCleanup(ct).ConfigureAwait(false);
+                categoryExecuted = true;
+                categoryFreed += stats.FreedBytes;
+                categoryFiles += stats.FilesDeleted;
+                categoryDirectories += stats.DirectoriesDeleted;
+                categoryLocked += stats.LockedItems;
+
+                if (category.CountExecutionAsCleanup && !stats.HasActivity)
+                {
+                    categoryFiles += 1; // Marqueur : l’étape a été exécutée même sans suppressions mesurables.
+                }
+            }
+            else
+            {
+                var existingPaths = category.Paths.Where(Directory.Exists).ToList();
+                if (existingPaths.Count == 0)
+                {
+                    ignored.Add($"{category.Name} (aucun chemin trouvé)");
+                    continue;
+                }
+
+                foreach (var path in existingPaths)
+                {
+                    var result = await CleanDirectoryAsync(path, ct, fileFilter: category.FileFilter).ConfigureAwait(false);
+                    categoryExecuted |= result.HasActivity;
+                    categoryFreed += result.FreedBytes;
+                    categoryFiles += result.FilesDeleted;
+                    categoryDirectories += result.DirectoriesDeleted;
+                    categoryLocked += result.LockedItems;
+                }
             }
 
-            foreach (var path in existingPaths)
+            if (!categoryExecuted && categoryFiles == 0 && categoryDirectories == 0)
             {
-                var result = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
-                categoryFreed += result.FreedBytes;
-                categoryFiles += result.FilesDeleted;
-                categoryDirectories += result.DirectoriesDeleted;
-            }
+                if (categoryLocked > 0)
+                {
+                    lockedSummaries.Add($"{category.Name}: {categoryLocked} élément(s) verrouillé(s) ignoré(s)");
+                    ignored.Add($"{category.Name} (fichiers verrouillés)");
+                    continue;
+                }
 
-            if (categoryFiles == 0 && categoryDirectories == 0)
-            {
                 ignored.Add($"{category.Name} (rien à supprimer)");
                 continue;
+            }
+
+            if (categoryLocked > 0)
+            {
+                lockedSummaries.Add($"{category.Name}: {categoryLocked} élément(s) verrouillé(s) ignoré(s)");
             }
 
             totalFreed += categoryFreed;
             cleanedSummaries.Add($"{category.Name} — {categoryFiles} fichiers, {categoryDirectories} dossiers supprimés");
         }
 
-        var freedMb = totalFreed / (1024.0 * 1024);
+        var freedText = FormatSize(totalFreed);
         if (cleanedSummaries.Count == 0)
         {
             var message = "Nettoyage disque avancé : Échec — aucune catégorie nettoyée";
@@ -145,7 +201,7 @@ public sealed class CleanupService : ICleanupService
         }
 
         var status = ignored.Count > 0 ? "Partiel" : "OK";
-        var summary = $"Nettoyage disque avancé — Statut : {status}. Espace libéré : {freedMb:F1} MB.";
+        var summary = $"Nettoyage disque avancé — Statut : {status}. Espace libéré : {freedText}. Action avancée, peut prendre du temps (et réclame l’admin).";
 
         var detailsBuilder = new StringBuilder();
         detailsBuilder.AppendLine("Catégories nettoyées :");
@@ -163,7 +219,16 @@ public sealed class CleanupService : ICleanupService
             }
         }
 
-        detailsBuilder.AppendLine("Suggestion : lancer un re-scan système pour valider l'état du disque.");
+        if (lockedSummaries.Count > 0)
+        {
+            detailsBuilder.AppendLine("Éléments verrouillés (ignorés) :");
+            foreach (var locked in lockedSummaries)
+            {
+                detailsBuilder.AppendLine($"- {locked}");
+            }
+        }
+
+        detailsBuilder.AppendLine("Suggestion : lancer un re-scan du système (commande: monitoring_rescan).");
 
         return ActionExecutionResult.Ok(summary, detailsBuilder.ToString().TrimEnd());
     }
@@ -233,6 +298,7 @@ public sealed class CleanupService : ICleanupService
         return await Task.Run(() =>
         {
             var stats = new CleanupStats();
+            var locked = 0;
 
             try
             {
@@ -261,9 +327,13 @@ public sealed class CleanupService : ICleanupService
                         File.SetAttributes(file, FileAttributes.Normal);
                         File.Delete(file);
                     }
+                    catch (IOException)
+                    {
+                        locked++;
+                    }
                     catch
                     {
-                        // Ignoré : certains fichiers peuvent être verrouillés.
+                        locked++;
                     }
                 }
 
@@ -283,9 +353,13 @@ public sealed class CleanupService : ICleanupService
                             stats = stats.Add(0, 0, 1);
                         }
                     }
+                    catch (IOException)
+                    {
+                        locked++;
+                    }
                     catch
                     {
-                        // Ignoré : best effort.
+                        locked++;
                     }
                 }
             }
@@ -298,7 +372,7 @@ public sealed class CleanupService : ICleanupService
                 // Best effort : ne pas interrompre le nettoyage global.
             }
 
-            return stats;
+            return stats.Add(0, 0, 0, locked);
         }, ct).ConfigureAwait(false);
     }
 
@@ -406,11 +480,15 @@ public sealed class CleanupService : ICleanupService
                 .ToList();
     }
 
-    private sealed record CleanupStats(long FreedBytes = 0, int FilesDeleted = 0, int DirectoriesDeleted = 0)
+    public sealed record CleanupStats(long FreedBytes = 0, int FilesDeleted = 0, int DirectoriesDeleted = 0, int LockedItems = 0)
     {
-        public CleanupStats Add(CleanupStats other) => new(FreedBytes + other.FreedBytes, FilesDeleted + other.FilesDeleted, DirectoriesDeleted + other.DirectoriesDeleted);
+        public CleanupStats Add(CleanupStats other)
+            => new(FreedBytes + other.FreedBytes, FilesDeleted + other.FilesDeleted, DirectoriesDeleted + other.DirectoriesDeleted, LockedItems + other.LockedItems);
 
-        public CleanupStats Add(long freedBytes, int filesDeleted, int directoriesDeleted) => new(FreedBytes + freedBytes, FilesDeleted + filesDeleted, DirectoriesDeleted + directoriesDeleted);
+        public CleanupStats Add(long freedBytes, int filesDeleted, int directoriesDeleted, int lockedItems = 0)
+            => new(FreedBytes + freedBytes, FilesDeleted + filesDeleted, DirectoriesDeleted + directoriesDeleted, LockedItems + lockedItems);
+
+        public bool HasActivity => FreedBytes > 0 || FilesDeleted > 0 || DirectoriesDeleted > 0;
     }
 
     [Flags]
@@ -424,7 +502,13 @@ public sealed class CleanupService : ICleanupService
     [DllImport("Shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, RecycleFlags dwFlags);
 
-    private sealed record AdvancedCategory(string Name, IReadOnlyList<string> Paths);
+    public sealed record AdvancedStep(
+        string Name,
+        IReadOnlyList<string> Paths,
+        Func<FileInfo, bool>? FileFilter = null,
+        bool WindowsOnly = true,
+        Func<CancellationToken, Task<CleanupStats>>? CustomCleanup = null,
+        bool CountExecutionAsCleanup = false);
 
     private static async Task<BrowserCleanupResult> CleanBrowserCacheAsync(string root, CancellationToken ct)
     {
@@ -458,6 +542,7 @@ public sealed class CleanupService : ICleanupService
                     catch
                     {
                         hadLockedFiles = true;
+                        stats = stats.Add(0, 0, 0, 1);
                     }
                 }
 
@@ -466,24 +551,25 @@ public sealed class CleanupService : ICleanupService
                     ct.ThrowIfCancellationRequested();
                     try
                     {
-                        if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                            if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                            {
+                                Directory.Delete(dir);
+                                stats = stats.Add(0, 0, 1);
+                            }
+                        }
+                        catch (OperationCanceledException)
                         {
-                            Directory.Delete(dir);
-                            stats = stats.Add(0, 0, 1);
+                            throw;
+                        }
+                        catch
+                        {
+                            hadLockedFiles = true;
+                            stats = stats.Add(0, 0, 0, 1);
                         }
                     }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch
-                    {
-                        hadLockedFiles = true;
-                    }
                 }
-            }
-            catch (OperationCanceledException)
-            {
+                catch (OperationCanceledException)
+                {
                 throw;
             }
             catch
@@ -558,30 +644,49 @@ public sealed class CleanupService : ICleanupService
 
     private sealed record BrowserCleanupResult(CleanupStats Stats, bool HadLockedFiles);
 
-    private static List<AdvancedCategory> BuildAdvancedCategories()
+    private IReadOnlyCollection<AdvancedStep> BuildAdvancedCategories()
     {
         var windowsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var tempPath = Path.GetTempPath();
 
-        return new List<AdvancedCategory>
+        var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+
+        return new List<AdvancedStep>
         {
+            new("Fichiers temporaires système profonds", new List<string>
+            {
+                SafeCombine(windowsFolder, "Temp"),
+                SafeCombine(windowsFolder, "Prefetch"),
+                SafeCombine(programData, "Microsoft", "Windows", "Caches"),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()),
             new("Cache Windows Update", new List<string>
             {
                 SafeCombine(windowsFolder, "SoftwareDistribution", "Download"),
                 SafeCombine(windowsFolder, "SoftwareDistribution", "DataStore", "Logs"),
             }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()),
-            new("Logs système", new List<string>
+            new("Anciennes mises à jour / packages obsolètes (DISM)", Array.Empty<string>(), WindowsOnly: true, CustomCleanup: RunDismComponentCleanupAsync, CountExecutionAsCleanup: true),
+            new("Fichiers de logs système anciens", new List<string>
             {
                 SafeCombine(windowsFolder, "Logs"),
                 SafeCombine(windowsFolder, "System32", "LogFiles"),
                 SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportArchive"),
-            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()),
-            new("Fichiers temporaires profonds", new List<string>
+                SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportQueue"),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(), fileFilter: fi => fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase) && fi.LastWriteTimeUtc < sevenDaysAgo),
+            new("Crash dumps et erreurs Windows", new List<string>
             {
-                SafeCombine(windowsFolder, "Temp"),
-                SafeCombine(programData, "Microsoft", "Windows", "Caches"),
-                Path.GetTempPath(),
-            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList())
+                SafeCombine(windowsFolder, "Minidump"),
+                SafeCombine(windowsFolder, "MEMORY.DMP"),
+                SafeCombine(localAppData, "CrashDumps"),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(), WindowsOnly: true),
+            new("Dossiers temporaires utilisateurs profonds", new List<string>
+            {
+                tempPath,
+                SafeCombine(localAppData, "Temp"),
+                SafeCombine(appData, "Temp"),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(), WindowsOnly: false)
         };
     }
 
@@ -598,4 +703,67 @@ public sealed class CleanupService : ICleanupService
             return false;
         }
     }
+
+    private async Task<CleanupStats> RunDismComponentCleanupAsync(CancellationToken ct)
+    {
+        if (!_isWindows())
+        {
+            return new CleanupStats();
+        }
+
+        try
+        {
+            var result = await _commandRunner("dism.exe", "/Online /Cleanup-Image /StartComponentCleanup /Quiet", ct).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                return new CleanupStats();
+            }
+        }
+        catch
+        {
+            return new CleanupStats();
+        }
+
+        return new CleanupStats();
+    }
+
+    private static Task<CommandResult> RunCommandAsync(string fileName, string arguments, CancellationToken ct)
+    {
+        return Task.Run(async () =>
+        {
+            try
+            {
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = fileName,
+                        Arguments = arguments,
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    }
+                };
+
+                process.Start();
+                await process.WaitForExitAsync(ct).ConfigureAwait(false);
+
+                var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+                output += await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+
+                return new CommandResult(process.ExitCode == 0, output);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return new CommandResult(false, ex.Message);
+            }
+        }, ct);
+    }
+
+    public sealed record CommandResult(bool Success, string? Output);
 }
