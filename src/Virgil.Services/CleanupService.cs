@@ -20,15 +20,22 @@ namespace Virgil.Services;
 public sealed class CleanupService : ICleanupService
 {
     private readonly Func<CleanupPlan> _planFactory;
+    private readonly Func<BrowserCleanPlan> _browserPlanFactory;
 
     public CleanupService()
-        : this(CleanupPlan.FromEnvironment)
+        : this(CleanupPlan.FromEnvironment, BrowserCleanPlan.FromEnvironment)
     {
     }
 
     public CleanupService(Func<CleanupPlan> planFactory)
+        : this(planFactory, BrowserCleanPlan.FromEnvironment)
+    {
+    }
+
+    public CleanupService(Func<CleanupPlan> planFactory, Func<BrowserCleanPlan> browserPlanFactory)
     {
         _planFactory = planFactory ?? throw new ArgumentNullException(nameof(planFactory));
+        _browserPlanFactory = browserPlanFactory ?? throw new ArgumentNullException(nameof(browserPlanFactory));
     }
 
     public async Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default)
@@ -161,8 +168,58 @@ public sealed class CleanupService : ICleanupService
         return ActionExecutionResult.Ok(summary, detailsBuilder.ToString().TrimEnd());
     }
 
-    public Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage navigateur léger non implémenté"));
+    public async Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
+    {
+        var plan = _browserPlanFactory();
+        if (plan.Targets.Count == 0)
+        {
+            return ActionExecutionResult.NotAvailable("Aucun navigateur détecté (rien à nettoyer)");
+        }
+
+        var cleaned = new List<string>();
+        var ignored = new List<string>();
+        var totalStats = new CleanupStats();
+
+        foreach (var target in plan.Targets)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var hadLock = false;
+            var existingPaths = target.Paths.Where(Directory.Exists).ToList();
+            if (existingPaths.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var path in existingPaths)
+            {
+                var result = await CleanBrowserCacheAsync(path, ct).ConfigureAwait(false);
+                hadLock |= result.HadLockedFiles;
+                totalStats = totalStats.Add(result.Stats);
+            }
+
+            if (hadLock)
+            {
+                ignored.Add(target.BrowserName);
+            }
+            else
+            {
+                cleaned.Add(target.BrowserName);
+            }
+        }
+
+        if (cleaned.Count == 0 && ignored.Count == 0)
+        {
+            return ActionExecutionResult.NotAvailable("Aucune donnée de navigation à nettoyer");
+        }
+
+        var freedText = FormatSize(totalStats.FreedBytes);
+        var treated = cleaned.Count == 0 ? "aucun" : string.Join(", ", cleaned);
+        var skipped = ignored.Count == 0 ? "aucun" : string.Join(", ", ignored);
+
+        var summary = $"Navigateurs traités: {treated}. Navigateurs ignorés (ouverts/verrouillés): {skipped}. Quantité libérée: {freedText}. Fichiers supprimés: {totalStats.FilesDeleted}. Les miettes ont disparu. Les onglets n’ont rien remarqué.";
+        return ActionExecutionResult.Ok(summary);
+    }
 
     public Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default)
         => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage navigateur profond non implémenté"));
@@ -368,6 +425,138 @@ public sealed class CleanupService : ICleanupService
     private static extern int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, RecycleFlags dwFlags);
 
     private sealed record AdvancedCategory(string Name, IReadOnlyList<string> Paths);
+
+    private static async Task<BrowserCleanupResult> CleanBrowserCacheAsync(string root, CancellationToken ct)
+    {
+        return await Task.Run(() =>
+        {
+            var stats = new CleanupStats();
+            var hadLockedFiles = false;
+
+            if (!Directory.Exists(root))
+            {
+                return new BrowserCleanupResult(stats, hadLockedFiles);
+            }
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var info = new FileInfo(file);
+                        var size = info.Exists ? info.Length : 0;
+                        File.SetAttributes(file, FileAttributes.Normal);
+                        File.Delete(file);
+                        stats = stats.Add(size, 1, 0);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        hadLockedFiles = true;
+                    }
+                }
+
+                foreach (var dir in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).OrderByDescending(p => p.Length))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                        {
+                            Directory.Delete(dir);
+                            stats = stats.Add(0, 0, 1);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        hadLockedFiles = true;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Best effort: ignore unexpected IO issues.
+            }
+
+            return new BrowserCleanupResult(stats, hadLockedFiles);
+        }, ct).ConfigureAwait(false);
+    }
+
+    public sealed record BrowserCleanPlan(IReadOnlyCollection<BrowserTarget> Targets)
+    {
+        internal static BrowserCleanPlan FromEnvironment()
+        {
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+            var targets = new List<BrowserTarget>();
+
+            void AddChromium(string name, params string?[] profileParts)
+            {
+                var profile = SafeCombine(profileParts);
+                if (string.IsNullOrWhiteSpace(profile) || !Directory.Exists(profile))
+                {
+                    return;
+                }
+
+                var paths = new[]
+                {
+                    SafeCombine(profile, "Cache"),
+                    SafeCombine(profile, "Code Cache"),
+                    SafeCombine(profile, "GPUCache"),
+                    SafeCombine(profile, "ShaderCache")
+                }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+
+                if (paths.Any(Directory.Exists))
+                {
+                    targets.Add(new BrowserTarget(name, paths));
+                }
+            }
+
+            AddChromium("Chrome", local, "Google", "Chrome", "User Data", "Default");
+            AddChromium("Edge", local, "Microsoft", "Edge", "User Data", "Default");
+            AddChromium("Brave", local, "BraveSoftware", "Brave-Browser", "User Data", "Default");
+            AddChromium("Opera", local, "Opera Software", "Opera Stable");
+            AddChromium("Opera GX", local, "Opera Software", "Opera GX Stable");
+            AddChromium("Vivaldi", local, "Vivaldi", "User Data", "Default");
+
+            var firefoxProfiles = SafeCombine(roaming, "Mozilla", "Firefox", "Profiles");
+            if (!string.IsNullOrWhiteSpace(firefoxProfiles) && Directory.Exists(firefoxProfiles))
+            {
+                foreach (var profileDir in Directory.EnumerateDirectories(firefoxProfiles))
+                {
+                    var cache = SafeCombine(profileDir, "cache2");
+                    var shader = SafeCombine(profileDir, "shader-cache");
+                    var existing = new List<string>();
+                    if (Directory.Exists(cache)) existing.Add(cache);
+                    if (Directory.Exists(shader)) existing.Add(shader);
+                    if (existing.Count > 0)
+                    {
+                        targets.Add(new BrowserTarget($"Firefox ({Path.GetFileName(profileDir)})", existing));
+                    }
+                }
+            }
+
+            return new BrowserCleanPlan(targets);
+        }
+    }
+
+    public sealed record BrowserTarget(string BrowserName, IReadOnlyCollection<string> Paths);
+
+    private sealed record BrowserCleanupResult(CleanupStats Stats, bool HadLockedFiles);
 
     private static List<AdvancedCategory> BuildAdvancedCategories()
     {
