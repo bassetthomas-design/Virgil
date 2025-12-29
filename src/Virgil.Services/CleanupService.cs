@@ -22,35 +22,41 @@ public sealed class CleanupService : ICleanupService
 {
     private readonly Func<CleanupPlan> _planFactory;
     private readonly Func<BrowserCleanPlan> _browserPlanFactory;
+    private readonly Func<BrowserDeepCleanPlan> _browserDeepPlanFactory;
     private readonly Func<IReadOnlyCollection<AdvancedStep>> _advancedPlanFactory;
     private readonly Func<bool> _isWindows;
     private readonly Func<bool> _isAdministrator;
     private readonly Func<string, string, CancellationToken, Task<CommandResult>> _commandRunner;
+    private readonly Func<string, bool> _isProcessRunning;
 
     public CleanupService()
-        : this(CleanupPlan.FromEnvironment, BrowserCleanPlan.FromEnvironment)
+        : this(CleanupPlan.FromEnvironment, BrowserCleanPlan.FromEnvironment, BrowserDeepCleanPlan.FromEnvironment)
     {
     }
 
     public CleanupService(Func<CleanupPlan> planFactory)
-        : this(planFactory, BrowserCleanPlan.FromEnvironment)
+        : this(planFactory, BrowserCleanPlan.FromEnvironment, BrowserDeepCleanPlan.FromEnvironment)
     {
     }
 
     public CleanupService(
         Func<CleanupPlan> planFactory,
         Func<BrowserCleanPlan> browserPlanFactory,
+        Func<BrowserDeepCleanPlan>? browserDeepPlanFactory = null,
         Func<IReadOnlyCollection<AdvancedStep>>? advancedPlanFactory = null,
         Func<bool>? isWindows = null,
         Func<bool>? isAdministrator = null,
-        Func<string, string, CancellationToken, Task<CommandResult>>? commandRunner = null)
+        Func<string, string, CancellationToken, Task<CommandResult>>? commandRunner = null,
+        Func<string, bool>? isProcessRunning = null)
     {
         _planFactory = planFactory ?? throw new ArgumentNullException(nameof(planFactory));
         _browserPlanFactory = browserPlanFactory ?? throw new ArgumentNullException(nameof(browserPlanFactory));
+        _browserDeepPlanFactory = browserDeepPlanFactory ?? BrowserDeepCleanPlan.FromEnvironment;
         _advancedPlanFactory = advancedPlanFactory ?? BuildAdvancedCategories;
         _isWindows = isWindows ?? OperatingSystem.IsWindows;
         _isAdministrator = isAdministrator ?? IsRunningAsAdministrator;
         _commandRunner = commandRunner ?? RunCommandAsync;
+        _isProcessRunning = isProcessRunning ?? IsProcessRunning;
     }
 
     public async Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default)
@@ -286,8 +292,62 @@ public sealed class CleanupService : ICleanupService
         return ActionExecutionResult.Ok(summary);
     }
 
-    public Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage navigateur profond non implémenté"));
+    public async Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default)
+    {
+        var plan = _browserDeepPlanFactory();
+        if (plan.Targets.Count == 0)
+        {
+            return ActionExecutionResult.NotAvailable("Aucun navigateur détecté (nettoyage profond)");
+        }
+
+        var running = plan.Targets
+            .Where(t => _isProcessRunning(t.ProcessName))
+            .Select(t => t.BrowserName)
+            .Distinct()
+            .ToList();
+
+        if (running.Count > 0)
+        {
+            var opened = string.Join(", ", running);
+            var message = $"Impossible de lancer le nettoyage profond : navigateur(s) ouvert(s) : {opened}. Ferme-les et on re-tente.";
+            return ActionExecutionResult.Failure(message);
+        }
+
+        var cleanedBrowsers = new List<string>();
+        var dataTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var totalStats = new CleanupStats();
+
+        foreach (var target in plan.Targets)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var targetHadActivity = false;
+            foreach (var profile in target.Profiles)
+            {
+                ct.ThrowIfCancellationRequested();
+                var result = await CleanBrowserProfileDeepAsync(target.BrowserName, profile, dataTypes, ct).ConfigureAwait(false);
+                totalStats = totalStats.Add(result);
+                targetHadActivity |= result.HasActivity;
+            }
+
+            if (targetHadActivity)
+            {
+                cleanedBrowsers.Add(target.BrowserName);
+            }
+        }
+
+        if (cleanedBrowsers.Count == 0)
+        {
+            return ActionExecutionResult.NotAvailable("Nettoyage profond : aucune donnée supprimée");
+        }
+
+        var freedText = FormatSize(totalStats.FreedBytes);
+        var typesText = dataTypes.Count == 0 ? "(inconnu)" : string.Join(", ", dataTypes.OrderBy(x => x));
+        var browsersText = string.Join(", ", cleanedBrowsers.Distinct());
+
+        var summary = $"Navigateurs nettoyés : {browsersText}. Données supprimées : {typesText}. Quantité libérée : {freedText}. Reconnexion requise (cookies vaporisés).";
+        return ActionExecutionResult.Ok(summary);
+    }
 
     private static async Task<CleanupStats> CleanDirectoryAsync(
         string root,
@@ -410,6 +470,27 @@ public sealed class CleanupService : ICleanupService
         }
 
         return $"{megaBytes:F1} Mo";
+    }
+
+    private static CleanupStats DeleteFileSafely(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return new CleanupStats();
+            }
+
+            var info = new FileInfo(path);
+            var size = info.Exists ? info.Length : 0;
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
+            return new CleanupStats(size, 1, 0);
+        }
+        catch
+        {
+            return new CleanupStats(0, 0, 0, 1);
+        }
     }
 
     public sealed record CleanupPlan(
@@ -581,6 +662,162 @@ public sealed class CleanupService : ICleanupService
         }, ct).ConfigureAwait(false);
     }
 
+    private async Task<CleanupStats> CleanBrowserProfileDeepAsync(string browserName, BrowserProfileTarget profile, ISet<string> dataTypes, CancellationToken ct)
+    {
+        return await Task.Run(async () =>
+        {
+            var stats = new CleanupStats();
+            var root = profile.ProfilePath;
+            _ = browserName;
+
+            if (!Directory.Exists(root))
+            {
+                return stats;
+            }
+
+            try
+            {
+                // Cache (classique + GPU + service workers)
+                var cacheTargets = new[]
+                {
+                    Path.Combine(root, "Cache"),
+                    Path.Combine(root, "Code Cache"),
+                    Path.Combine(root, "GPUCache"),
+                    Path.Combine(root, "Service Worker", "CacheStorage"),
+                    Path.Combine(root, "DawnCache"),
+                    Path.Combine(root, "ShaderCache"),
+                    Path.Combine(root, "cache2"), // Firefox
+                    Path.Combine(root, "shader-cache"), // Firefox GPU cache
+                };
+
+                foreach (var path in cacheTargets)
+                {
+                    var result = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
+                    if (result.HasActivity)
+                    {
+                        dataTypes.Add("cache");
+                    }
+
+                    stats = stats.Add(result);
+                }
+
+                // Cookies & sessions
+                var cookieFiles = new[]
+                {
+                    Path.Combine(root, "Cookies"),
+                    Path.Combine(root, "Network", "Cookies"),
+                    Path.Combine(root, "cookies.sqlite"),
+                    Path.Combine(root, "sessionstore.jsonlz4"),
+                };
+
+                foreach (var file in cookieFiles)
+                {
+                    var result = DeleteFileSafely(file);
+                    if (result.HasActivity)
+                    {
+                        dataTypes.Add("cookies");
+                        dataTypes.Add("sessions");
+                    }
+
+                    stats = stats.Add(result);
+                }
+
+                // Historique + téléchargements
+                var historyFiles = new[]
+                {
+                    Path.Combine(root, "History"),
+                    Path.Combine(root, "History-journal"),
+                    Path.Combine(root, "places.sqlite"),
+                    Path.Combine(root, "places.sqlite-wal"),
+                    Path.Combine(root, "places.sqlite-shm"),
+                };
+
+                foreach (var file in historyFiles)
+                {
+                    var result = DeleteFileSafely(file);
+                    if (result.HasActivity)
+                    {
+                        dataTypes.Add("historique");
+                        dataTypes.Add("téléchargements");
+                    }
+
+                    stats = stats.Add(result);
+                }
+
+                // Stockages (IndexedDB / LocalStorage / SessionStorage)
+                var storageTargets = new[]
+                {
+                    Path.Combine(root, "IndexedDB"),
+                    Path.Combine(root, "Local Storage"),
+                    Path.Combine(root, "Session Storage"),
+                    Path.Combine(root, "storage"), // Firefox
+                    Path.Combine(root, "storage", "default"),
+                    Path.Combine(root, "storage", "permanent"),
+                    Path.Combine(root, "storage", "temporary"),
+                };
+
+                foreach (var path in storageTargets)
+                {
+                    var result = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
+                    if (result.HasActivity)
+                    {
+                        dataTypes.Add("indexeddb");
+                        dataTypes.Add("local storage");
+                        dataTypes.Add("session storage");
+                    }
+
+                    stats = stats.Add(result);
+                }
+
+                // Sessions (Chromium + Firefox)
+                var sessionDirectories = new[]
+                {
+                    Path.Combine(root, "Sessions"),
+                    Path.Combine(root, "sessionstore-backups"),
+                };
+
+                foreach (var path in sessionDirectories)
+                {
+                    var result = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
+                    if (result.HasActivity)
+                    {
+                        dataTypes.Add("sessions");
+                    }
+
+                    stats = stats.Add(result);
+                }
+
+                // Auto-remplissage (formulaires)
+                var autofillFiles = new[]
+                {
+                    Path.Combine(root, "Web Data"),
+                    Path.Combine(root, "formhistory.sqlite"),
+                };
+
+                foreach (var file in autofillFiles)
+                {
+                    var result = DeleteFileSafely(file);
+                    if (result.HasActivity)
+                    {
+                        dataTypes.Add("auto-remplissage");
+                    }
+
+                    stats = stats.Add(result);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // best effort
+            }
+
+            return stats;
+        }, ct).ConfigureAwait(false);
+    }
+
     public sealed record BrowserCleanPlan(IReadOnlyCollection<BrowserTarget> Targets)
     {
         internal static BrowserCleanPlan FromEnvironment()
@@ -640,6 +877,84 @@ public sealed class CleanupService : ICleanupService
         }
     }
 
+    public sealed record BrowserDeepCleanPlan(IReadOnlyCollection<BrowserDeepTarget> Targets)
+    {
+        internal static BrowserDeepCleanPlan FromEnvironment()
+        {
+            var targets = new List<BrowserDeepTarget>();
+
+            void AddChromium(string name, string processName, params string?[] parts)
+            {
+                var root = SafeCombine(parts);
+                if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+                {
+                    return;
+                }
+
+                var profiles = new List<BrowserProfileTarget>();
+
+                var defaultProfile = SafeCombine(root, "Default");
+                if (!string.IsNullOrWhiteSpace(defaultProfile) && Directory.Exists(defaultProfile))
+                {
+                    profiles.Add(new BrowserProfileTarget("Default", defaultProfile));
+                }
+
+                foreach (var dir in Directory.EnumerateDirectories(root, "Profile *", SearchOption.TopDirectoryOnly))
+                {
+                    profiles.Add(new BrowserProfileTarget(new DirectoryInfo(dir).Name, dir));
+                }
+
+                if (profiles.Count > 0)
+                {
+                    targets.Add(new BrowserDeepTarget(name, processName, profiles));
+                }
+            }
+
+            void AddOpera(string name, string processName, params string?[] parts)
+            {
+                var root = SafeCombine(parts);
+                if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+                {
+                    return;
+                }
+
+                targets.Add(new BrowserDeepTarget(name, processName, new[] { new BrowserProfileTarget(name, root) }));
+            }
+
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+            AddChromium("Chrome", "chrome", local, "Google", "Chrome", "User Data");
+            AddChromium("Edge", "msedge", local, "Microsoft", "Edge", "User Data");
+            AddChromium("Brave", "brave", local, "BraveSoftware", "Brave-Browser", "User Data");
+            AddOpera("Opera", "opera", roaming, "Opera Software", "Opera Stable");
+            AddOpera("Opera GX", "opera", roaming, "Opera Software", "Opera GX Stable");
+            AddChromium("Vivaldi", "vivaldi", local, "Vivaldi", "User Data");
+
+            var firefoxProfiles = SafeCombine(roaming, "Mozilla", "Firefox", "Profiles");
+            if (!string.IsNullOrWhiteSpace(firefoxProfiles) && Directory.Exists(firefoxProfiles))
+            {
+                var firefoxProcess = "firefox";
+                var profiles = Directory
+                    .EnumerateDirectories(firefoxProfiles)
+                    .Select(dir => new BrowserProfileTarget(new DirectoryInfo(dir).Name, dir))
+                    .Cast<BrowserProfileTarget>()
+                    .ToList();
+
+                if (profiles.Count > 0)
+                {
+                    targets.Add(new BrowserDeepTarget("Firefox", firefoxProcess, profiles));
+                }
+            }
+
+            return new BrowserDeepCleanPlan(targets);
+        }
+    }
+
+    public sealed record BrowserDeepTarget(string BrowserName, string ProcessName, IReadOnlyCollection<BrowserProfileTarget> Profiles);
+
+    public sealed record BrowserProfileTarget(string ProfileName, string ProfilePath);
+
     public sealed record BrowserTarget(string BrowserName, IReadOnlyCollection<string> Paths);
 
     private sealed record BrowserCleanupResult(CleanupStats Stats, bool HadLockedFiles);
@@ -688,6 +1003,18 @@ public sealed class CleanupService : ICleanupService
                 SafeCombine(appData, "Temp"),
             }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(), WindowsOnly: false)
         };
+    }
+
+    private static bool IsProcessRunning(string processName)
+    {
+        try
+        {
+            return Process.GetProcessesByName(processName).Any();
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool IsRunningAsAdministrator()

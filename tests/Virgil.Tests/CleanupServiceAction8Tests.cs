@@ -24,7 +24,7 @@ public class CleanupServiceAction8Tests
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
             () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
-            () => plan,
+            advancedPlanFactory: () => plan,
             isWindows: () => true,
             isAdministrator: () => false);
 
@@ -55,7 +55,7 @@ public class CleanupServiceAction8Tests
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
             () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
-            () => plan,
+            advancedPlanFactory: () => plan,
             isWindows: () => true,
             isAdministrator: () => true);
 
@@ -87,7 +87,7 @@ public class CleanupServiceAction8Tests
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
             () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
-            () => plan,
+            advancedPlanFactory: () => plan,
             isWindows: () => true,
             isAdministrator: () => true);
 
