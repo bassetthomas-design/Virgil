@@ -170,7 +170,11 @@ namespace Virgil.App.ViewModels
 
             if (definition.IsDestructive)
             {
-                var confirmed = _confirmationService.Confirm($"Confirmer l'action \"{definition.DisplayName}\" ?", "Confirmation", System.Windows.MessageBoxImage.Warning);
+                var confirmationMessage = definition.Key.Equals("network_hard_reset", StringComparison.OrdinalIgnoreCase)
+                    ? "Confirmer l'action \"Reset réseau (complet)\" ? Avertissement : connexion perdue temporairement. Droits admin requis."
+                    : $"Confirmer l'action \"{definition.DisplayName}\" ?";
+
+                var confirmed = _confirmationService.Confirm(confirmationMessage, "Confirmation", System.Windows.MessageBoxImage.Warning);
                 if (!confirmed)
                 {
                     var cancelled = ActionResult.Failure("Action annulée par l'utilisateur");
