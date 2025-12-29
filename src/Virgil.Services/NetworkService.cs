@@ -13,18 +13,31 @@ namespace Virgil.Services;
 public sealed class NetworkService : INetworkService
 {
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(20);
+    private const int PingCount = 10; // Aligné avec l'ancienne implémentation UI (10 paquets)
+    private const int PingTimeoutMs = 800;
+    private const int LatencyWarningThresholdMs = 80; // Cf. docs/ARCHITECTURE.md
+    private const int PacketLossWarningThresholdPercent = 5; // Seuil conservateur en l'absence de spec dédiée
+    private const int JitterWarningThresholdMs = 25; // Seuil conservateur documenté en code
+    private const string ExternalStableHost = "1.1.1.1"; // Référence historique du projet (Cloudflare)
+
     private readonly INetworkCommandRunner _runner;
     private readonly IPrivilegeChecker _privilegeChecker;
     private readonly IPlatformInfo _platform;
+    private readonly IPingClient _ping;
+    private readonly INetworkInfoProvider _networkInfo;
 
     public NetworkService(
         INetworkCommandRunner? runner = null,
         IPrivilegeChecker? privilegeChecker = null,
-        IPlatformInfo? platformInfo = null)
+        IPlatformInfo? platformInfo = null,
+        IPingClient? pingClient = null,
+        INetworkInfoProvider? networkInfoProvider = null)
     {
         _runner = runner ?? new NetworkCommandRunner();
         _privilegeChecker = privilegeChecker ?? new WindowsPrivilegeChecker();
         _platform = platformInfo ?? new RuntimePlatformInfo();
+        _ping = pingClient ?? new RuntimePingClient();
+        _networkInfo = networkInfoProvider ?? new RuntimeNetworkInfoProvider();
     }
 
     public Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default)
@@ -59,8 +72,19 @@ public sealed class NetworkService : INetworkService
     public Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default)
         => Task.FromResult(ActionExecutionResult.NotAvailable("Reset réseau avancé non implémenté"));
 
-    public Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Test de latence non implémenté"));
+    public async Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default)
+    {
+        var gateway = _networkInfo.GetDefaultGateway();
+        var gatewayResult = string.IsNullOrWhiteSpace(gateway)
+            ? LatencyProbeResult.MissingGateway()
+            : await ProbeAsync("Passerelle locale", gateway!, ct).ConfigureAwait(false);
+
+        var externalResult = await ProbeAsync($"Serveur externe stable ({ExternalStableHost})", ExternalStableHost, ct).ConfigureAwait(false);
+
+        var summary = BuildLatencySummary(gatewayResult, externalResult);
+
+        return ActionExecutionResult.Ok(summary);
+    }
 
     private async Task<StepResult> RunCommandStepAsync(string label, string fileName, string args, bool requiresAdmin, CancellationToken ct)
     {
@@ -145,75 +169,225 @@ public sealed class NetworkService : INetworkService
 
         if (failures == adapters.Count)
         {
-            return StepResult.Failed(label, "Impossible de relancer les adaptateurs réseau");
+            return StepResult.Failed(label, "Impossible de rafraîchir les adaptateurs actifs");
         }
 
         return failures > 0
-            ? StepResult.Ok(label, $"Réactivation partielle ({failures} adaptateur(s) en échec)")
-            : StepResult.Ok(label, "Adaptateurs relancés en douceur");
+            ? StepResult.Ok(label, $"Rafraîchi avec avertissements sur {failures} adaptateur(s)")
+            : StepResult.Ok(label, "Adaptateurs rafraîchis");
     }
 
     private static IEnumerable<NetworkInterface> EnumerateTargetAdapters()
-        => NetworkInterface.GetAllNetworkInterfaces()
-            .Where(nic => nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-            .Where(nic => nic.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
-            .Where(nic => !nic.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase));
-
-    private static StepStatus ComputeGlobalStatus(IEnumerable<StepResult> results)
     {
-        if (results.Any(r => r.Status == StepStatus.Failed))
+        return NetworkInterface
+            .GetAllNetworkInterfaces()
+            .Where(a => a.NetworkInterfaceType != NetworkInterfaceType.Loopback && a.NetworkInterfaceType != NetworkInterfaceType.Tunnel);
+    }
+
+    private static StepStatus ComputeGlobalStatus(IReadOnlyCollection<StepResult> steps)
+    {
+        var failed = steps.Any(s => s.Status == StepStatus.Failed);
+        if (failed)
         {
             return StepStatus.Failed;
         }
 
-        return results.Any(r => r.Status == StepStatus.Ignored)
-            ? StepStatus.Ignored
-            : StepStatus.Ok;
+        var warnings = steps.Any(s => s.Status == StepStatus.Ignored);
+        return warnings ? StepStatus.Warning : StepStatus.Ok;
     }
 
-    private static string BuildSummary(StepStatus global, IReadOnlyCollection<StepResult> steps, bool isAdmin)
+    private static string BuildSummary(StepStatus globalStatus, IReadOnlyCollection<StepResult> steps, bool isAdmin)
     {
         var sb = new StringBuilder();
-        var globalText = global switch
-        {
-            StepStatus.Ok => "OK",
-            StepStatus.Ignored => "Attention",
-            _ => "Échec"
-        };
-
-        sb.AppendLine($"Reset réseau (soft): Résultat global: {globalText}. On a secoué la pile réseau, presque trop facile.");
+        sb.AppendLine($"Reset réseau (soft): Résultat global: {globalStatus}");
+        sb.AppendLine($"Droits admin: {(isAdmin ? "Oui" : "Non")}");
         foreach (var step in steps)
         {
-            sb.AppendLine($"- {step.Label}: {step.StatusLabel} — {step.Message}");
-        }
-
-        if (!isAdmin && steps.Any(s => s.Status == StepStatus.Ignored))
-        {
-            sb.AppendLine("Certaines étapes ont été ignorées faute de droits élevés. Pas de panique, rien n'a explosé.");
+            sb.AppendLine($"- {step.Label}: {step.Status} ({step.Details})");
         }
 
         sb.Append("Prochaines options: Diagnostic réseau | Reset réseau (complet)");
         return sb.ToString();
     }
 
-    private sealed record StepResult(string Label, StepStatus Status, string Message)
+    private async Task<LatencyProbeResult> ProbeAsync(string label, string target, CancellationToken ct)
     {
-        public string StatusLabel => Status switch
+        var rtts = new List<long>();
+        var failures = 0;
+        var dnsFailures = 0;
+
+        for (var i = 0; i < PingCount; i++)
         {
-            StepStatus.Ok => "OK",
-            StepStatus.Ignored => "Ignoré",
-            _ => "Échec"
-        };
+            ct.ThrowIfCancellationRequested();
 
-        public static StepResult Ok(string label, string message) => new(label, StepStatus.Ok, message);
-        public static StepResult Ignored(string label, string message) => new(label, StepStatus.Ignored, message);
-        public static StepResult Failed(string label, string message) => new(label, StepStatus.Failed, message);
+            var attempt = await _ping.SendAsync(target, PingTimeoutMs, ct).ConfigureAwait(false);
+            switch (attempt.Status)
+            {
+                case PingAttemptStatus.Success:
+                    rtts.Add(attempt.RoundtripTimeMs);
+                    break;
+                case PingAttemptStatus.DnsError:
+                    dnsFailures++;
+                    failures++;
+                    break;
+                default:
+                    failures++;
+                    break;
+            }
+        }
+
+        var packetLossPercent = (double)failures / PingCount * 100;
+        var hasSuccess = rtts.Count > 0;
+        var min = hasSuccess ? rtts.Min() : (long?)null;
+        var max = hasSuccess ? rtts.Max() : (long?)null;
+        var avg = hasSuccess ? rtts.Average() : (double?)null;
+        var jitter = CalculateJitter(rtts);
+
+        var status = DetermineStatus(hasSuccess, dnsFailures, packetLossPercent, avg, jitter);
+        return new LatencyProbeResult(label, target, status, min, avg, max, packetLossPercent, jitter);
     }
 
-    private enum StepStatus
+    private static LatencyStatus DetermineStatus(bool hasSuccess, int dnsFailures, double packetLossPercent, double? avg, double? jitter)
     {
-        Ok,
-        Ignored,
-        Failed
+        if (dnsFailures > 0 && !hasSuccess)
+        {
+            return LatencyStatus.DnsFailure;
+        }
+
+        if (!hasSuccess)
+        {
+            return LatencyStatus.Failure;
+        }
+
+        var warning = false;
+        if (avg.HasValue && avg.Value > LatencyWarningThresholdMs)
+        {
+            warning = true;
+        }
+
+        if (packetLossPercent >= PacketLossWarningThresholdPercent)
+        {
+            warning = true;
+        }
+
+        if (jitter.HasValue && jitter.Value > JitterWarningThresholdMs)
+        {
+            warning = true;
+        }
+
+        return warning ? LatencyStatus.Warning : LatencyStatus.Ok;
     }
+
+    private static double? CalculateJitter(IReadOnlyList<long> rtts)
+    {
+        if (rtts.Count < 2)
+        {
+            return null;
+        }
+
+        var deltas = new List<double>();
+        for (var i = 1; i < rtts.Count; i++)
+        {
+            deltas.Add(Math.Abs(rtts[i] - rtts[i - 1]));
+        }
+
+        // Jitter = moyenne des variations absolues entre RTT consécutifs (définition projet par défaut)
+        return deltas.Average();
+    }
+
+    private string BuildLatencySummary(LatencyProbeResult gateway, LatencyProbeResult external)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Passerelle locale: {FormatProbe(gateway)}");
+        sb.AppendLine($"Serveur externe stable: {FormatProbe(external)}");
+
+        var global = ComputeGlobalStatus(gateway, external);
+        sb.AppendLine($"Résumé global: {global}");
+        sb.Append("Ton réseau respire… parfois.");
+
+        return sb.ToString();
+    }
+
+    private static string ComputeGlobalStatus(LatencyProbeResult gateway, LatencyProbeResult external)
+    {
+        if (gateway.Status is LatencyStatus.DnsFailure or LatencyStatus.MissingGateway || external.Status == LatencyStatus.DnsFailure)
+        {
+            return "Échec";
+        }
+
+        if (gateway.Status == LatencyStatus.Failure || external.Status == LatencyStatus.Failure)
+        {
+            return "Échec";
+        }
+
+        if (gateway.Status == LatencyStatus.Warning || external.Status == LatencyStatus.Warning)
+        {
+            return "Attention";
+        }
+
+        return "OK";
+    }
+
+    private static string FormatProbe(LatencyProbeResult probe)
+    {
+        return probe.Status switch
+        {
+            LatencyStatus.MissingGateway => "Échec (passerelle non détectée)",
+            LatencyStatus.DnsFailure => "Échec (DNS/resolve)",
+            LatencyStatus.Failure => "Échec (aucune réponse)",
+            _ => FormatMetrics(probe)
+        };
+    }
+
+    private static string FormatMetrics(LatencyProbeResult probe)
+    {
+        var jitter = probe.JitterMs.HasValue ? $"{probe.JitterMs.Value:0.0} ms" : "N/A";
+        var min = probe.MinMs?.ToString() ?? "-";
+        var avg = probe.AverageMs.HasValue ? probe.AverageMs.Value.ToString("0.0") : "-";
+        var max = probe.MaxMs?.ToString() ?? "-";
+        var loss = probe.PacketLossPercent.ToString("0.0");
+
+        var prefix = probe.Status == LatencyStatus.Warning ? "Attention" : "OK";
+        return $"{prefix} (min/avg/max {min}/{avg}/{max} ms, perte {loss} %, jitter {jitter})";
+    }
+}
+
+public sealed record StepResult(string Label, StepStatus Status, string Details)
+{
+    public static StepResult Ok(string label, string details) => new(label, StepStatus.Ok, details);
+
+    public static StepResult Failed(string label, string details) => new(label, StepStatus.Failed, details);
+
+    public static StepResult Ignored(string label, string details) => new(label, StepStatus.Ignored, details);
+}
+
+public enum StepStatus
+{
+    Ok,
+    Failed,
+    Ignored,
+    Warning
+}
+
+public sealed record LatencyProbeResult(
+    string Label,
+    string Target,
+    LatencyStatus Status,
+    long? MinMs,
+    double? AverageMs,
+    long? MaxMs,
+    double PacketLossPercent,
+    double? JitterMs)
+{
+    public static LatencyProbeResult MissingGateway()
+        => new("Passerelle locale", string.Empty, LatencyStatus.MissingGateway, null, null, null, 100, null);
+}
+
+public enum LatencyStatus
+{
+    Ok,
+    Warning,
+    Failure,
+    DnsFailure,
+    MissingGateway
 }

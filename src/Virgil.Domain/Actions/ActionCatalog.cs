@@ -27,7 +27,7 @@ public static class ActionCatalog
         ["network_diag"] = new(ActionKey: "network_diag", VirgilActionId.NetworkQuickDiag, "Diagnostic réseau", IsDestructive: false, IsImplemented: false, Service: "NetworkService"),
         ["network_soft_reset"] = new(ActionKey: "network_soft_reset", VirgilActionId.NetworkSoftReset, "Reset réseau (soft)", IsDestructive: false, IsImplemented: true, Service: "NetworkService"),
         ["network_hard_reset"] = new(ActionKey: "network_hard_reset", VirgilActionId.NetworkAdvancedReset, "Reset réseau (complet)", IsDestructive: true, IsImplemented: false, Service: "NetworkService"),
-        ["network_latency_test"] = new(ActionKey: "network_latency_test", VirgilActionId.LatencyStabilityTest, "Test de latence", IsDestructive: false, IsImplemented: false, Service: "NetworkService"),
+        ["network_latency_test"] = new(ActionKey: "network_latency_test", VirgilActionId.LatencyStabilityTest, "Test de latence", IsDestructive: false, IsImplemented: true, Service: "NetworkService"),
 
         // Performance
         ["perf_mode_on"] = new(ActionKey: "perf_mode_on", VirgilActionId.EnableGamingMode, "Activer le mode performance", IsDestructive: false, IsImplemented: false, Service: "PerformanceService"),
