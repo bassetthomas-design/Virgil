@@ -40,7 +40,7 @@ Date de révision : 5 janvier 2026
 
 | ActionKey | VirgilActionId | Statut implémentation | Service |
 | --- | --- | --- | --- |
-| `status` | `ScanSystemExpress` | Stub (message uniquement) | `DiagnosticService` |
+| `status` | `ScanSystemExpress` | ✅ Scan express best-effort (synthèse uptime/CPU/RAM/disque/réseau) | `DiagnosticService` |
 | `quick_clean` | `QuickClean` | ✅ Best-effort (suppression TEMP) | `CleanupService` |
 | `apps_update_all` | `UpdateSoftwares` | ✅ Winget via `ApplicationUpdateService` | `UpdateService` |
 | `windows_update` | `RunWindowsUpdate` | ✅ `WindowsUpdateService` (scan/download/install) | `UpdateService` |

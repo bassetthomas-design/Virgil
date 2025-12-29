@@ -12,9 +12,9 @@ public static class ActionCatalog
 {
     private static readonly Dictionary<string, ActionDescriptor> _actions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["status"] = new(ActionKey: "status", VirgilActionId.ScanSystemExpress, "Afficher le statut", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
+        ["status"] = new(ActionKey: "status", VirgilActionId.ScanSystemExpress, "Afficher le statut", IsDestructive: false, IsImplemented: true, Service: "DiagnosticService"),
         // Maintenance rapide
-        ["quick_scan"] = new(ActionKey: "quick_scan", VirgilActionId.ScanSystemExpress, "Scan système express", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
+        ["quick_scan"] = new(ActionKey: "quick_scan", VirgilActionId.ScanSystemExpress, "Scan système express", IsDestructive: false, IsImplemented: true, Service: "DiagnosticService"),
         ["quick_clean"] = new(ActionKey: "quick_clean", VirgilActionId.QuickClean, "Nettoyage rapide", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
         ["browser_soft_clean"] = new(ActionKey: "browser_soft_clean", VirgilActionId.LightBrowserClean, "Nettoyage navigateur (léger)", IsDestructive: false, IsImplemented: false, Service: "CleanupService"),
         ["ram_soft_free"] = new(ActionKey: "ram_soft_free", VirgilActionId.SoftRamFlush, "Libérer la RAM (soft)", IsDestructive: false, IsImplemented: false, Service: "PerformanceService"),
