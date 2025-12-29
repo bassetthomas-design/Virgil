@@ -69,8 +69,38 @@ public sealed class NetworkService : INetworkService
             : ActionExecutionResult.Ok(summary);
     }
 
-    public Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Reset réseau avancé non implémenté"));
+    public async Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default)
+    {
+        if (!_platform.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Reset réseau (complet) uniquement disponible sur Windows");
+        }
+
+        if (!_privilegeChecker.IsAdministrator())
+        {
+            const string message = "Reset réseau (complet) nécessite les droits administrateur. Aucun changement effectué.";
+            const string details = "Relancez en mode administrateur si vous voulez vraiment tout remettre d'équerre.";
+            return ActionExecutionResult.NotAvailable(message, details);
+        }
+
+        var steps = new List<StepResult>();
+
+        steps.Add(await RunCommandStepAsync("Reset complet Winsock", "netsh", "winsock reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
+        steps.Add(await RunCommandStepAsync("Reset pile TCP/IP", "netsh", "int ip reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
+        steps.Add(await RefreshAdaptersAsync(isAdmin: true, ct, hardReset: true));
+        steps.Add(await ResetCustomIpAsync(ct));
+        steps.Add(await ResetCustomDnsAsync(isAdmin: true, ct));
+        steps.Add(await RemoveWifiProfilesAsync(ct));
+        steps.Add(await RemoveEthernetProfilesAsync(ct));
+        steps.Add(await RestartNetworkServicesAsync(ct));
+
+        var globalStatus = ComputeGlobalStatus(steps);
+        var summary = BuildAdvancedSummary(globalStatus, steps);
+
+        return globalStatus == StepStatus.Failed
+            ? ActionExecutionResult.Failure(summary)
+            : ActionExecutionResult.Ok(summary);
+    }
 
     public async Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default)
     {
@@ -86,7 +116,7 @@ public sealed class NetworkService : INetworkService
         return ActionExecutionResult.Ok(summary);
     }
 
-    private async Task<StepResult> RunCommandStepAsync(string label, string fileName, string args, bool requiresAdmin, CancellationToken ct)
+    private async Task<StepResult> RunCommandStepAsync(string label, string fileName, string args, bool requiresAdmin, CancellationToken ct, Func<NetworkCommandResult, RebootAdvice>? rebootDetector = null)
     {
         if (requiresAdmin && !_privilegeChecker.IsAdministrator())
         {
@@ -96,7 +126,8 @@ public sealed class NetworkService : INetworkService
         var result = await _runner.RunAsync(fileName, args, CommandTimeout, ct).ConfigureAwait(false);
         if (result.Success)
         {
-            return StepResult.Ok(label, "Terminé");
+            var reboot = rebootDetector?.Invoke(result) ?? RebootAdvice.None;
+            return StepResult.Ok(label, "Terminé", reboot);
         }
 
         var error = string.IsNullOrWhiteSpace(result.Error) ? "Erreur inconnue" : result.Error!;
@@ -140,18 +171,61 @@ public sealed class NetworkService : INetworkService
             : StepResult.Ok(label, "DNS remis en automatique");
     }
 
-    private async Task<StepResult> RefreshAdaptersAsync(bool isAdmin, CancellationToken ct)
+    private async Task<StepResult> ResetCustomIpAsync(CancellationToken ct)
     {
-        const string label = "Réinitialiser adaptateurs (soft)";
+        const string label = "Suppression configs IP custom";
+        if (!_privilegeChecker.IsAdministrator())
+        {
+            return StepResult.Ignored(label, "Droits admin requis");
+        }
+
+        var adapters = EnumerateTargetAdapters().ToList();
+        if (adapters.Count == 0)
+        {
+            return StepResult.Ignored(label, "Aucun adaptateur réseau éligible");
+        }
+
+        var failures = 0;
+        foreach (var adapter in adapters)
+        {
+            var name = adapter.Name;
+            var res4 = await _runner.RunAsync("netsh", $"interface ip set address name=\"{name}\" source=dhcp", CommandTimeout, ct).ConfigureAwait(false);
+            var res6 = await _runner.RunAsync("netsh", $"interface ipv6 set address name=\"{name}\" source=dhcp", CommandTimeout, ct).ConfigureAwait(false);
+
+            if (!res4.Success || !res6.Success)
+            {
+                failures++;
+            }
+        }
+
+        if (failures == adapters.Count)
+        {
+            return StepResult.Failed(label, "Impossible de remettre les IP en automatique");
+        }
+
+        return failures > 0
+            ? StepResult.Ok(label, $"Partiel ({failures} adaptateur(s) en échec)")
+            : StepResult.Ok(label, "IP repassées en automatique");
+    }
+
+    private async Task<StepResult> RefreshAdaptersAsync(bool isAdmin, CancellationToken ct, bool hardReset = false)
+    {
+        var label = hardReset ? "Réinitialisation adaptateurs réseau" : "Réinitialiser adaptateurs (soft)";
         if (!isAdmin)
         {
             return StepResult.Ignored(label, "Droits admin requis");
         }
 
-        var adapters = EnumerateTargetAdapters().Where(a => a.OperationalStatus == OperationalStatus.Up).ToList();
+        var adapterQuery = EnumerateTargetAdapters();
+        if (!hardReset)
+        {
+            adapterQuery = adapterQuery.Where(a => a.OperationalStatus == OperationalStatus.Up);
+        }
+
+        var adapters = adapterQuery.ToList();
         if (adapters.Count == 0)
         {
-            return StepResult.Ignored(label, "Aucun adaptateur actif");
+            return StepResult.Ignored(label, hardReset ? "Aucun adaptateur réseau détecté" : "Aucun adaptateur actif");
         }
 
         var failures = 0;
@@ -349,6 +423,13 @@ public sealed class NetworkService : INetworkService
 
         var prefix = probe.Status == LatencyStatus.Warning ? "Attention" : "OK";
         return $"{prefix} (min/avg/max {min}/{avg}/{max} ms, perte {loss} %, jitter {jitter})";
+    }
+
+    private enum RebootAdvice
+    {
+        None,
+        Recommended,
+        Required
     }
 }
 
