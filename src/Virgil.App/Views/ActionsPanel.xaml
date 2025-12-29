@@ -51,7 +51,7 @@
             <Button Content="Désactiver le mode performance" Tag="perf_mode_off" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
-            <Button Content="Analyser le démarrage" Tag="startup_analyze" Margin="0,0,0,4"
+            <Button Content="Optimiser le démarrage (safe)" Tag="startup_analyze" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Couper les apps de fond (gaming)" Tag="gaming_kill_session" Margin="0,0,0,8"

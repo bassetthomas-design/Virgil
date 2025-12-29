@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Services.Abstractions;
+using Virgil.Services.Startup;
 
 namespace Virgil.Services;
 
@@ -45,7 +46,53 @@ public sealed class PerformanceService : IPerformanceService
         => Task.FromResult(ActionExecutionResult.NotAvailable("Retour au mode normal non disponible"));
 
     public Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Analyse démarrage non implémentée"));
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return Task.FromResult(ActionExecutionResult.NotAvailable("Optimisation du démarrage uniquement disponible sur Windows."));
+        }
+
+        try
+        {
+            var optimizer = new StartupOptimizer(AppContext.BaseDirectory);
+            var plan = optimizer.BuildAndApply();
+
+            if (plan.Total == 0)
+            {
+                return Task.FromResult(ActionExecutionResult.NotAvailable("Aucun élément de démarrage détecté."));
+            }
+
+            var disabledApplied = plan.Disabled;
+            var disabledPlanned = plan.DisablePlanned;
+            var optionalCount = plan.Optionals;
+            var keptCount = plan.Critical;
+            var summary = $"Optimisation démarrage (safe) : {plan.Total} éléments scannés – gardés {keptCount}, optionnels {optionalCount}, désactivés {disabledApplied}/{disabledPlanned}.";
+
+            var detailsLines = new List<string>();
+            var impact = disabledApplied > 0
+                ? "Impact attendu : démarrage plus léger (sans toucher aux composants critiques)."
+                : "Impact attendu : diagnostic uniquement, aucun composant critique touché.";
+            detailsLines.Add(impact);
+
+            foreach (var entry in plan.Entries.Where(e => e.Decision == StartupDecision.Disable))
+            {
+                var status = entry.Applied ? "désactivé" : "proposé";
+                var note = string.IsNullOrWhiteSpace(entry.ApplyNote) ? entry.Reason : entry.ApplyNote;
+                detailsLines.Add($"- {entry.Entry.Name} ({entry.Entry.Source}): {status} – {note}");
+            }
+
+            foreach (var entry in plan.Entries.Where(e => e.Decision == StartupDecision.Optional).Take(5))
+            {
+                detailsLines.Add($"- {entry.Entry.Name} marqué optionnel : {entry.Reason}");
+            }
+
+            return Task.FromResult(ActionExecutionResult.Ok(summary, string.Join(Environment.NewLine, detailsLines)));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(ActionExecutionResult.Failure($"Optimisation démarrage impossible : {ex.Message}"));
+        }
+    }
 
     public Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default)
         => Task.FromResult(ActionExecutionResult.NotAvailable("Fermeture session gaming non implémentée"));
