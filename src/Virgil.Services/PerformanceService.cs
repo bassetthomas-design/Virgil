@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Services.Abstractions;
@@ -24,6 +27,10 @@ public sealed class PerformanceService : IPerformanceService
     private readonly IStandbyMemoryReleaser _standbyReleaser;
     private readonly IProcessWhitelistProvider _whitelistProvider;
     private readonly IAppMemoryTrimmer _appMemoryTrimmer;
+    private readonly PerformanceModeStateStore _stateStore = new();
+
+    private const string HighPerformancePlanGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+    private const string BalancedPlanGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
 
     public PerformanceService(
         IProcessProvider? processProvider = null,
@@ -39,11 +46,66 @@ public sealed class PerformanceService : IPerformanceService
         _appMemoryTrimmer = appMemoryTrimmer ?? new AppMemoryTrimmer();
     }
 
-    public Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Mode performance non disponible"));
+    public async Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Mode performance uniquement disponible sur Windows.");
+        }
 
-    public Task<ActionExecutionResult> RestoreNormalModeAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Retour au mode normal non disponible"));
+        var statusLines = new List<string>();
+        var state = await _stateStore.LoadAsync(ct).ConfigureAwait(false);
+        var powerPlan = await ApplyHighPerformancePlanAsync(state, ct).ConfigureAwait(false);
+        statusLines.Add($"- Alimentation: {powerPlan.Status}");
+
+        var systemBoost = BoostForegroundPriority(state);
+        statusLines.Add($"- Système: {systemBoost.Status}");
+
+        var gpuStatus = "- GPU: Proposition seulement (profil perf à activer manuellement si besoin).";
+        statusLines.Add(gpuStatus);
+
+        var overallSuccess = powerPlan.Applied || systemBoost.Applied;
+        state.IsPerformanceModeActive = overallSuccess;
+        await _stateStore.SaveAsync(state, ct).ConfigureAwait(false);
+
+        var message = BuildPerformanceMessage("ACTIVÉ", statusLines, appendDisableCta: true);
+        return overallSuccess
+            ? ActionExecutionResult.Ok(message)
+            : ActionExecutionResult.Failure(message);
+    }
+
+    public async Task<ActionExecutionResult> RestoreNormalModeAsync(CancellationToken ct = default)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Mode performance uniquement disponible sur Windows.");
+        }
+
+        var statusLines = new List<string>();
+        var state = await _stateStore.LoadAsync(ct).ConfigureAwait(false);
+        if (!state.IsPerformanceModeActive)
+        {
+            return ActionExecutionResult.NotAvailable("Mode performance déjà désactivé.");
+        }
+
+        var revertedPower = await RestorePowerPlanAsync(state, ct).ConfigureAwait(false);
+        statusLines.Add($"- Alimentation: {revertedPower.Status}");
+
+        var restoredSystem = RestoreForegroundPriority(state);
+        statusLines.Add($"- Système: {restoredSystem.Status}");
+
+        var gpuStatus = "- GPU: Proposition seulement (rien n'avait été touché).";
+        statusLines.Add(gpuStatus);
+
+        var overallSuccess = revertedPower.Applied || restoredSystem.Applied;
+        state.IsPerformanceModeActive = false;
+        await _stateStore.SaveAsync(state, ct).ConfigureAwait(false);
+
+        var message = BuildPerformanceMessage("DÉSACTIVÉ", statusLines, appendDisableCta: false);
+        return overallSuccess
+            ? ActionExecutionResult.Ok(message)
+            : ActionExecutionResult.Failure(message);
+    }
 
     public Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default)
     {
@@ -198,6 +260,23 @@ public sealed class PerformanceService : IPerformanceService
         }
     }
 
+    private static string BuildPerformanceMessage(string state, IEnumerable<string> statusLines, bool appendDisableCta)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Mode performance: {state}");
+        foreach (var line in statusLines)
+        {
+            sb.AppendLine(line);
+        }
+
+        if (appendDisableCta)
+        {
+            sb.Append("Prochaine étape : Désactiver le mode performance.");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
     private static bool IsBackgroundProcess(IProcessHandle process, int? foregroundPid)
     {
         try
@@ -238,6 +317,234 @@ public sealed class PerformanceService : IPerformanceService
         catch
         {
             return true;
+        }
+    }
+
+    private async Task<StepOutcome> ApplyCpuPerformanceTuningAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        var query = await RunCommandAsync("powercfg", "/q SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN", ct).ConfigureAwait(false);
+        if (query.Success)
+        {
+            state.PreviousMinProcessorAc ??= ExtractPowerIndex(query.StdOut, "Current AC Power Setting Index")
+                                            ?? ExtractPowerIndex(query.StdErr, "Current AC Power Setting Index");
+            state.PreviousMinProcessorDc ??= ExtractPowerIndex(query.StdOut, "Current DC Power Setting Index")
+                                            ?? ExtractPowerIndex(query.StdErr, "Current DC Power Setting Index");
+        }
+
+        var setAc = await RunCommandAsync("powercfg", "/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100", ct).ConfigureAwait(false);
+        var setDc = await RunCommandAsync("powercfg", "/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100", ct).ConfigureAwait(false);
+        var apply = await RunCommandAsync("powercfg", "/S SCHEME_CURRENT", ct).ConfigureAwait(false);
+
+        var applied = setAc.Success && setDc.Success && apply.Success;
+        return applied
+            ? new StepOutcome(true, "CPU réveillé, pas de sieste.")
+            : new StepOutcome(false, "Réglages CPU inchangés (droits ou plan verrouillé).");
+    }
+
+    private async Task<StepOutcome> RestoreCpuSettingsAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        if (state.PreviousMinProcessorAc is null && state.PreviousMinProcessorDc is null)
+        {
+            return new StepOutcome(false, "Réglages CPU laissés par défaut (aucun snapshot).");
+        }
+
+        var acValue = state.PreviousMinProcessorAc ?? 0;
+        var dcValue = state.PreviousMinProcessorDc ?? 0;
+
+        var setAc = await RunCommandAsync("powercfg", $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {acValue}", ct).ConfigureAwait(false);
+        var setDc = await RunCommandAsync("powercfg", $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {dcValue}", ct).ConfigureAwait(false);
+        var apply = await RunCommandAsync("powercfg", "/S SCHEME_CURRENT", ct).ConfigureAwait(false);
+
+        var applied = setAc.Success && setDc.Success && apply.Success;
+        if (applied)
+        {
+            state.PreviousMinProcessorAc = null;
+            state.PreviousMinProcessorDc = null;
+        }
+
+        return applied
+            ? new StepOutcome(true, "Réglages CPU remis comme avant.")
+            : new StepOutcome(false, "Réglages CPU non restaurés (droits ou plan verrouillé).");
+    }
+
+    private async Task<StepOutcome> ApplyHighPerformancePlanAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        var activePlan = await GetActivePowerPlanAsync(ct).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(activePlan) && string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid))
+        {
+            state.PreviousPowerPlanGuid = activePlan;
+        }
+
+        var powerResult = await RunCommandAsync("powercfg", $"/S {HighPerformancePlanGuid}", ct).ConfigureAwait(false);
+        var cpuTuning = await ApplyCpuPerformanceTuningAsync(state, ct).ConfigureAwait(false);
+
+        if (powerResult.Success)
+        {
+            var cpuPart = cpuTuning.Applied
+                ? "CPU réveillé, pas de sieste."
+                : "CPU non modifié (droits/restrictions).";
+            var status = cpuTuning.Applied
+                ? $"OK (plan Hautes performances appliqué, {cpuPart})"
+                : $"Partiel (plan Hautes performances appliqué, {cpuPart})";
+            return new StepOutcome(true, status);
+        }
+
+        var failureDetail = !string.IsNullOrWhiteSpace(powerResult.StdErr)
+            ? powerResult.StdErr.Trim()
+            : "powercfg indisponible";
+        return new StepOutcome(false, $"Ignoré (impossible d'activer le plan perf : {failureDetail})");
+    }
+
+    private async Task<StepOutcome> RestorePowerPlanAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        var targetPlan = string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid)
+            ? BalancedPlanGuid
+            : state.PreviousPowerPlanGuid;
+
+        var powerResult = await RunCommandAsync("powercfg", $"/S {targetPlan}", ct).ConfigureAwait(false);
+        var cpuRestore = await RestoreCpuSettingsAsync(state, ct).ConfigureAwait(false);
+
+        if (powerResult.Success)
+        {
+            var cpuPart = cpuRestore.Applied
+                ? "réglages CPU remis au calme"
+                : "réglages CPU laissés tels quels";
+            var status = cpuRestore.Applied
+                ? $"OK (plan précédent restauré, {cpuPart})"
+                : $"Partiel (plan précédent restauré, {cpuPart})";
+            state.PreviousPowerPlanGuid = null;
+            return new StepOutcome(true, status);
+        }
+
+        var failureDetail = !string.IsNullOrWhiteSpace(powerResult.StdErr)
+            ? powerResult.StdErr.Trim()
+            : "powercfg indisponible";
+        return new StepOutcome(false, $"Ignoré (impossible de restaurer le plan: {failureDetail})");
+    }
+
+    private StepOutcome BoostForegroundPriority(PerformanceModeState state)
+    {
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            if (string.IsNullOrWhiteSpace(state.PreviousPriorityClass))
+            {
+                state.PreviousPriorityClass = process.PriorityClass.ToString();
+            }
+
+            process.PriorityClass = ProcessPriorityClass.High;
+            return new StepOutcome(true, "Partiel (priorité de Virgil boostée; aucune liste de tâches non critiques à geler)");
+        }
+        catch (Exception ex)
+        {
+            return new StepOutcome(false, $"Ignoré (priorité avant-plan inchangée : {ex.Message})");
+        }
+    }
+
+    private StepOutcome RestoreForegroundPriority(PerformanceModeState state)
+    {
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            if (!string.IsNullOrWhiteSpace(state.PreviousPriorityClass)
+                && Enum.TryParse(state.PreviousPriorityClass, out ProcessPriorityClass parsed))
+            {
+                process.PriorityClass = parsed;
+            }
+            else
+            {
+                process.PriorityClass = ProcessPriorityClass.Normal;
+            }
+
+            state.PreviousPriorityClass = null;
+            return new StepOutcome(true, "OK (priorité avant-plan remise à la normale)");
+        }
+        catch (Exception ex)
+        {
+            return new StepOutcome(false, $"Ignoré (priorité avant-plan non restaurée : {ex.Message})");
+        }
+    }
+
+    private static int? ExtractPowerIndex(string source, string label)
+    {
+        var match = Regex.Match(source, $"{Regex.Escape(label)}:\\s*0x([0-9a-fA-F]+)");
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return int.TryParse(match.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
+    }
+
+    private static async Task<string> GetActivePowerPlanAsync(CancellationToken ct)
+    {
+        var result = await RunCommandAsync("powercfg", "/getactivescheme", ct).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            return string.Empty;
+        }
+
+        var match = Regex.Match(result.StdOut, "Power Scheme GUID:\\s*([0-9a-fA-F-]+)", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[1].Value : string.Empty;
+    }
+
+    private static async Task<CommandResult> RunCommandAsync(string fileName, string arguments, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+        var outputBuilder = new StringBuilder();
+        var errorBuilder = new StringBuilder();
+
+        var tcs = new TaskCompletionSource<int>();
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+            {
+                outputBuilder.AppendLine(e.Data);
+            }
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+            {
+                errorBuilder.AppendLine(e.Data);
+            }
+        };
+        process.Exited += (_, _) => tcs.TrySetResult(process.ExitCode);
+
+        try
+        {
+            if (!process.Start())
+            {
+                return CommandResult.Failure("Process start failed");
+            }
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            using var registration = ct.Register(() => tcs.TrySetCanceled(ct));
+            var exitCode = await tcs.Task.ConfigureAwait(false);
+            return CommandResult.From(exitCode, outputBuilder.ToString(), errorBuilder.ToString());
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            return CommandResult.Failure("Commande annulée");
+        }
+        catch (Exception ex)
+        {
+            return CommandResult.Failure(ex.Message);
         }
     }
 
@@ -514,6 +821,67 @@ public sealed class PerformanceService : IPerformanceService
             catch
             {
                 // Best-effort GC trim.
+            }
+        }
+    }
+
+    private sealed record StepOutcome(bool Applied, string Status);
+
+    private sealed record CommandResult(bool Success, int ExitCode, string StdOut, string StdErr)
+    {
+        public static CommandResult From(int exitCode, string stdOut, string stdErr)
+            => new(exitCode == 0, exitCode, stdOut ?? string.Empty, stdErr ?? string.Empty);
+
+        public static CommandResult Failure(string message)
+            => new(false, -1, string.Empty, message);
+    }
+
+    public sealed class PerformanceModeState
+    {
+        public bool IsPerformanceModeActive { get; set; }
+        public string? PreviousPowerPlanGuid { get; set; }
+        public int? PreviousMinProcessorAc { get; set; }
+        public int? PreviousMinProcessorDc { get; set; }
+        public string? PreviousPriorityClass { get; set; }
+    }
+
+    public sealed class PerformanceModeStateStore
+    {
+        private static readonly string StatePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Virgil",
+            "performance-mode.json");
+
+        public async Task<PerformanceModeState> LoadAsync(CancellationToken ct)
+        {
+            try
+            {
+                if (!File.Exists(StatePath))
+                {
+                    return new PerformanceModeState();
+                }
+
+                await using var stream = File.OpenRead(StatePath);
+                var state = await JsonSerializer.DeserializeAsync<PerformanceModeState>(stream, cancellationToken: ct).ConfigureAwait(false);
+                return state ?? new PerformanceModeState();
+            }
+            catch
+            {
+                return new PerformanceModeState();
+            }
+        }
+
+        public async Task SaveAsync(PerformanceModeState state, CancellationToken ct)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
+                await using var stream = File.Create(StatePath);
+                await JsonSerializer.SerializeAsync(stream, state, new JsonSerializerOptions { WriteIndented = true }, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Swallow persistence errors: best-effort only.
             }
         }
     }
