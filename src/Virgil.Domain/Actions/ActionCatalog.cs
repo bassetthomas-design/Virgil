@@ -16,7 +16,7 @@ public static class ActionCatalog
         // Maintenance rapide
         ["quick_scan"] = new(ActionKey: "quick_scan", VirgilActionId.ScanSystemExpress, "Scan système express", IsDestructive: false, IsImplemented: true, Service: "DiagnosticService"),
         ["quick_clean"] = new(ActionKey: "quick_clean", VirgilActionId.QuickClean, "Nettoyage rapide", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
-        ["browser_soft_clean"] = new(ActionKey: "browser_soft_clean", VirgilActionId.LightBrowserClean, "Nettoyage navigateur (léger)", IsDestructive: false, IsImplemented: false, Service: "CleanupService"),
+        ["browser_soft_clean"] = new(ActionKey: "browser_soft_clean", VirgilActionId.LightBrowserClean, "Nettoyage navigateur (léger)", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
         ["ram_soft_free"] = new(ActionKey: "ram_soft_free", VirgilActionId.SoftRamFlush, "Libérer la RAM (soft)", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
 
         // Maintenance avancée
@@ -46,7 +46,7 @@ public static class ActionCatalog
         ["app_reload_settings"] = new(ActionKey: "app_reload_settings", VirgilActionId.ReloadConfiguration, "Recharger la configuration", IsDestructive: false, IsImplemented: false, Service: "SpecialService"),
         ["monitoring_rescan"] = new(ActionKey: "monitoring_rescan", VirgilActionId.RescanSystem, "Re-scanner le système", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
         ["monitor_rescan"] = new(ActionKey: "monitor_rescan", VirgilActionId.RescanSystem, "Re-scanner le système", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
-        ["clean_browsers"] = new(ActionKey: "clean_browsers", VirgilActionId.LightBrowserClean, "Nettoyage navigateurs", IsDestructive: false, IsImplemented: false, Service: "CleanupService"),
+        ["clean_browsers"] = new(ActionKey: "clean_browsers", VirgilActionId.LightBrowserClean, "Nettoyage navigateurs", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
         ["maintenance_full"] = new(ActionKey: "maintenance_full", VirgilActionId.AdvancedDiskClean, "Maintenance complète", IsDestructive: true, IsImplemented: true, Service: "CleanupService"),
     };
 
