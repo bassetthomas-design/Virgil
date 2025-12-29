@@ -49,7 +49,7 @@ public class CleanupServiceAction8Tests
         var plan = new[]
         {
             new CleanupService.AdvancedStep("Cache WU", new[] { wuCache }),
-            new CleanupService.AdvancedStep("Logs système", new[] { logDir }, fileFilter: fi => fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase))
+            new CleanupService.AdvancedStep("Logs système", new[] { logDir }, FileFilter: fi => fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase))
         };
 
         var service = new CleanupService(
