@@ -20,7 +20,7 @@ public static class ActionCatalog
         ["ram_soft_free"] = new(ActionKey: "ram_soft_free", VirgilActionId.SoftRamFlush, "Libérer la RAM (soft)", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
 
         // Maintenance avancée
-        ["deep_disk_clean"] = new(ActionKey: "deep_disk_clean", VirgilActionId.AdvancedDiskClean, "Nettoyage disque avancé", IsDestructive: true, IsImplemented: false, Service: "CleanupService"),
+        ["deep_disk_clean"] = new(ActionKey: "deep_disk_clean", VirgilActionId.AdvancedDiskClean, "Nettoyage disque avancé", IsDestructive: true, IsImplemented: true, Service: "CleanupService"),
         ["browser_deep_clean"] = new(ActionKey: "browser_deep_clean", VirgilActionId.DeepBrowserClean, "Nettoyage navigateur (profond)", IsDestructive: false, IsImplemented: false, Service: "CleanupService"),
 
         // Réseau
@@ -47,7 +47,7 @@ public static class ActionCatalog
         ["monitoring_rescan"] = new(ActionKey: "monitoring_rescan", VirgilActionId.RescanSystem, "Re-scanner le système", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
         ["monitor_rescan"] = new(ActionKey: "monitor_rescan", VirgilActionId.RescanSystem, "Re-scanner le système", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
         ["clean_browsers"] = new(ActionKey: "clean_browsers", VirgilActionId.LightBrowserClean, "Nettoyage navigateurs", IsDestructive: false, IsImplemented: false, Service: "CleanupService"),
-        ["maintenance_full"] = new(ActionKey: "maintenance_full", VirgilActionId.AdvancedDiskClean, "Maintenance complète", IsDestructive: true, IsImplemented: false, Service: "CleanupService"),
+        ["maintenance_full"] = new(ActionKey: "maintenance_full", VirgilActionId.AdvancedDiskClean, "Maintenance complète", IsDestructive: true, IsImplemented: true, Service: "CleanupService"),
     };
 
     public static IReadOnlyDictionary<string, ActionDescriptor> All => _actions;
