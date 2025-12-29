@@ -19,6 +19,7 @@
   <!-- Dialogues JSON, si tu le gardes ici -->
   <ItemGroup>
     <None Include="virgil-dialogues.json" CopyToOutputDirectory="Always" Condition="Exists('virgil-dialogues.json')" />
+    <None Include="..\Virgil.Services\Startup\startup_rules.safe.json" CopyToOutputDirectory="Always" Condition="Exists('..\Virgil.Services\Startup\startup_rules.safe.json')" />
   </ItemGroup>
 
   <!-- Domain + Services (actions, orchestrateur, services métier) -->

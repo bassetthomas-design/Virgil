@@ -1,0 +1,42 @@
+{
+  "allowApply": true,
+  "critical": [
+    { "keyword": "defender", "reason": "Composant sécurité: ne pas toucher" },
+    { "keyword": "security", "reason": "Protection en place" },
+    { "keyword": "antivirus", "reason": "Protection en place" },
+    { "keyword": "nvidia", "reason": "Pilotes GPU" },
+    { "keyword": "amd", "reason": "Pilotes GPU" },
+    { "keyword": "intel", "reason": "Pilotes plateforme" },
+    { "keyword": "realtek", "reason": "Pilotes audio" },
+    { "keyword": "audio", "reason": "Pilotes audio" },
+    { "keyword": "synaptics", "reason": "Pilote input" },
+    { "keyword": "elan", "reason": "Pilote input" },
+    { "keyword": "touchpad", "reason": "Pilote input" },
+    { "keyword": "keyboard", "reason": "Pilote clavier" },
+    { "keyword": "mouse", "reason": "Pilote souris" },
+    { "keyword": "network", "reason": "Pilote réseau" },
+    { "keyword": "wifi", "reason": "Pilote réseau" },
+    { "keyword": "ethernet", "reason": "Pilote réseau" },
+    { "keyword": "bluetooth", "reason": "Pilote réseau" },
+    { "keyword": "windows", "reason": "Composant Windows" },
+    { "keyword": "system32", "reason": "Composant Windows" }
+  ],
+  "autoDisable": [
+    { "keyword": "updater", "reason": "Démarrage inutile: utilitaire de mise à jour" },
+    { "keyword": "update", "reason": "Démarrage inutile: utilitaire de mise à jour" },
+    { "keyword": "helper", "reason": "Helper en arrière-plan facultatif" },
+    { "keyword": "assistant", "reason": "Assistant non essentiel" },
+    { "keyword": "launcher", "reason": "Launcher non critique au boot" },
+    { "keyword": "auto-update", "reason": "Mise à jour silencieuse non critique" }
+  ],
+  "optionalHints": [
+    { "keyword": "cloud", "reason": "Sync cloud peut attendre" },
+    { "keyword": "drive", "reason": "Sync cloud peut attendre" },
+    { "keyword": "teams", "reason": "Messagerie pro optionnelle" },
+    { "keyword": "discord", "reason": "Chat gaming optionnel" },
+    { "keyword": "zoom", "reason": "Visio optionnelle" },
+    { "keyword": "spotify", "reason": "Lecture musique non critique" },
+    { "keyword": "game", "reason": "Composant gaming optionnel" },
+    { "keyword": "overlay", "reason": "Overlay optionnel" }
+  ]
+}
