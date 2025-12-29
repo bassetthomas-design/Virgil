@@ -632,7 +632,7 @@ internal sealed class ExpressScanCollector : IExpressScanCollector
                     .Where(e => e.EntryType == EventLogEntryType.Error && (now - e.TimeGenerated).TotalHours <= 6)
                     .OrderByDescending(e => e.TimeGenerated)
                     .Take(3);
-                errors.AddRange(recent.Select(e => $"{logName}: {e.Source} ({e.EventID})"));
+                errors.AddRange(recent.Select(e => $"{logName}: {e.Source} ({e.InstanceId})"));
             }
         }
         catch
