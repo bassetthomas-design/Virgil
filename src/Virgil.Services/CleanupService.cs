@@ -63,7 +63,7 @@ public sealed class CleanupService : ICleanupService
         return ActionExecutionResult.Ok(summary, details.ToString().TrimEnd());
     }
 
-    public Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default)
+    public async Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default)
     {
         const string logMessage = "Executing ActionId=08 — Nettoyage disque avancé";
         Console.WriteLine(logMessage);
@@ -72,7 +72,7 @@ public sealed class CleanupService : ICleanupService
         if (OperatingSystem.IsWindows() && !IsRunningAsAdministrator())
         {
             const string adminMessage = "Nettoyage disque avancé indisponible : droits administrateur requis";
-            return Task.FromResult(ActionExecutionResult.NotAvailable(adminMessage, "Exécution bloquée (admin requis)"));
+            return ActionExecutionResult.NotAvailable(adminMessage, "Exécution bloquée (admin requis)");
         }
 
         var categories = BuildAdvancedCategories();
@@ -118,7 +118,7 @@ public sealed class CleanupService : ICleanupService
         {
             var message = "Nettoyage disque avancé : Échec — aucune catégorie nettoyée";
             var details = ignored.Count == 0 ? null : string.Join("\n", ignored);
-            return Task.FromResult(ActionExecutionResult.Failure(message, details));
+            return ActionExecutionResult.Failure(message, details);
         }
 
         var status = ignored.Count > 0 ? "Partiel" : "OK";
@@ -142,7 +142,7 @@ public sealed class CleanupService : ICleanupService
 
         detailsBuilder.AppendLine("Suggestion : lancer un re-scan système pour valider l'état du disque.");
 
-        return Task.FromResult(ActionExecutionResult.Ok(summary, detailsBuilder.ToString().TrimEnd()));
+        return ActionExecutionResult.Ok(summary, detailsBuilder.ToString().TrimEnd());
     }
 
     public Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
