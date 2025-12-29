@@ -674,7 +674,7 @@ public sealed class CleanupService : ICleanupService
                 SafeCombine(windowsFolder, "System32", "LogFiles"),
                 SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportArchive"),
                 SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportQueue"),
-            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(), fileFilter: fi => fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase) && fi.LastWriteTimeUtc < sevenDaysAgo),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(), FileFilter: fi => fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase) && fi.LastWriteTimeUtc < sevenDaysAgo),
             new("Crash dumps et erreurs Windows", new List<string>
             {
                 SafeCombine(windowsFolder, "Minidump"),
