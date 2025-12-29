@@ -39,10 +39,10 @@
 
                 <Separator Margin="0,8,0,8"/>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="OpenConfigBtn" Content="Ouvrir le dossier de configuration"
-                            Height="32" Click="OpenConfigBtn_Click"/>
-                    <Button x:Name="CancelBtn" Content="Annuler" Height="32"
+                            Height="32" Click="OpenConfigBtn_Click" Margin="0,0,8,0"/>
+                    <Button x:Name="CancelBtn" Content="Annuler" Height="32" Margin="0,0,8,0"
                             Click="CancelBtn_Click" IsCancel="True"/>
                     <Button x:Name="SaveBtn" Content="Enregistrer" Height="32"
                             Click="SaveBtn_Click" IsDefault="True"/>
