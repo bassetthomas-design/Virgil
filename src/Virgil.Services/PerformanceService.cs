@@ -1,7 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Runtime;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Services.Abstractions;
@@ -9,10 +14,30 @@ using Virgil.Services.Abstractions;
 namespace Virgil.Services;
 
 /// <summary>
-/// Stub de IPerformanceService – gestion des profils de performance / gaming plus tard.
+/// Implémentation du service Performance (action 7 : libérer la RAM en mode "soft").
 /// </summary>
 public sealed class PerformanceService : IPerformanceService
 {
+    private readonly IProcessProvider _processProvider;
+    private readonly IMemoryReader _memoryReader;
+    private readonly IStandbyMemoryReleaser _standbyReleaser;
+    private readonly IProcessWhitelistProvider _whitelistProvider;
+    private readonly IAppMemoryTrimmer _appMemoryTrimmer;
+
+    public PerformanceService(
+        IProcessProvider? processProvider = null,
+        IMemoryReader? memoryReader = null,
+        IStandbyMemoryReleaser? standbyMemoryReleaser = null,
+        IProcessWhitelistProvider? whitelistProvider = null,
+        IAppMemoryTrimmer? appMemoryTrimmer = null)
+    {
+        _processProvider = processProvider ?? new WindowsProcessProvider();
+        _memoryReader = memoryReader ?? new WindowsMemoryReader();
+        _standbyReleaser = standbyMemoryReleaser ?? new NoAdminStandbyReleaser();
+        _whitelistProvider = whitelistProvider ?? new ProcessMapWhitelistProvider();
+        _appMemoryTrimmer = appMemoryTrimmer ?? new AppMemoryTrimmer();
+    }
+
     public Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default)
         => Task.FromResult(ActionExecutionResult.NotAvailable("Mode performance non disponible"));
 
@@ -27,35 +52,49 @@ public sealed class PerformanceService : IPerformanceService
 
     public async Task<ActionExecutionResult> SoftRamFlushAsync(CancellationToken ct = default)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!_memoryReader.IsSupportedPlatform)
         {
             return ActionExecutionResult.NotAvailable("Libération RAM uniquement supportée sur Windows");
         }
 
-        var before = GetMemorySnapshot();
+        var whitelist = _whitelistProvider.GetNormalizedWhitelist();
+        var before = _memoryReader.GetSnapshot();
         var reclaimedBytes = 0L;
         var processed = 0;
+        var skippedByWhitelist = 0;
+        var foregroundPid = _processProvider.TryGetForegroundProcessId();
+        var standbyInfo = "";
 
         try
         {
-            foreach (var process in Process.GetProcesses())
+            foreach (var process in _processProvider.EnumerateProcesses())
             {
                 ct.ThrowIfCancellationRequested();
 
                 try
                 {
-                    if (ShouldSkip(process))
+                    if (process.HasExited)
                         continue;
 
-                    var beforeWorkingSet = process.WorkingSet64;
+                    if (IsSystemProcess(process))
+                        continue;
+
+                    if (!IsBackgroundProcess(process, foregroundPid))
+                        continue;
+
+                    if (!IsWhitelisted(process, whitelist))
+                    {
+                        skippedByWhitelist++;
+                        continue;
+                    }
+
+                    var beforeWorkingSet = process.WorkingSet;
                     if (beforeWorkingSet == 0)
                         continue;
 
-                    if (EmptyWorkingSet(process.Handle))
+                    if (process.TryTrimWorkingSet(out var trimmedBytes))
                     {
-                        process.Refresh();
-                        var afterWorkingSet = process.WorkingSet64;
-                        reclaimedBytes += Math.Max(0, beforeWorkingSet - afterWorkingSet);
+                        reclaimedBytes += Math.Max(0, trimmedBytes);
                         processed++;
                     }
                 }
@@ -69,19 +108,36 @@ public sealed class PerformanceService : IPerformanceService
                 }
             }
 
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            _standbyReleaser.TryRelease(out standbyInfo);
+            _appMemoryTrimmer.Trim();
 
-            var after = GetMemorySnapshot();
-            var deltaMb = Math.Max(0, after.AvailablePhysicalMb - before.AvailablePhysicalMb);
+            var after = _memoryReader.GetSnapshot();
+            var freedMb = Math.Max(0, after.AvailablePhysicalMb - before.AvailablePhysicalMb);
             var reclaimedMb = reclaimedBytes / (1024.0 * 1024);
 
-            var summary = $"RAM disponible : {before.AvailablePhysicalMb:F1} → {after.AvailablePhysicalMb:F1} MB";
-            var details = $"Processus traités : {processed}, libération estimée : {reclaimedMb:F1} MB";
-            if (deltaMb > 0)
+            var summary = $"RAM libérée estimée : {freedMb:F1} Mo — avant {before.AvailablePhysicalMb:F1} Mo / après {after.AvailablePhysicalMb:F1} Mo (effet temporaire).";
+            var details = $"Processus arrière-plan traités (liste blanche) : {processed}, trimming estimé : {reclaimedMb:F1} Mo.";
+
+            if (freedMb <= 0)
             {
-                details += $"\nGain net observé : +{deltaMb:F1} MB (best effort)";
+                details += " Windows reprend vite sa part, résultat net: 0 Mo.";
             }
+
+            if (!string.IsNullOrWhiteSpace(standbyInfo))
+            {
+                details += $"\n{standbyInfo}";
+            }
+
+            if (whitelist.Count == 0)
+            {
+                details += "\nAucune liste blanche trouvée : aucun processus tiers touché, juste un coup de frais interne.";
+            }
+            else if (skippedByWhitelist > 0)
+            {
+                details += $"\nProcessus ignorés car hors liste blanche : {skippedByWhitelist}.";
+            }
+
+            details += "\nWindows reprendra ce qu’il veut. Profite du moment.";
 
             return ActionExecutionResult.Ok(summary, details);
         }
@@ -95,11 +151,32 @@ public sealed class PerformanceService : IPerformanceService
         }
     }
 
-    private static bool ShouldSkip(Process process)
+    private static bool IsBackgroundProcess(IProcessHandle process, int? foregroundPid)
     {
         try
         {
             if (process.HasExited)
+                return false;
+
+            if (foregroundPid.HasValue && process.Id == foregroundPid.Value)
+                return false;
+
+            if (process.HasMainWindow)
+                return false;
+        }
+        catch
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsSystemProcess(IProcessHandle process)
+    {
+        try
+        {
+            if (process.SessionId == 0)
                 return true;
 
             var name = process.ProcessName;
@@ -108,7 +185,8 @@ public sealed class PerformanceService : IPerformanceService
 
             return string.Equals(name, "System", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(name, "Idle", StringComparison.OrdinalIgnoreCase)
-                   || process.SessionId == 0;
+                   || string.Equals(name, "Registry", StringComparison.OrdinalIgnoreCase)
+                   || name.StartsWith("svchost", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
@@ -116,21 +194,24 @@ public sealed class PerformanceService : IPerformanceService
         }
     }
 
-    private static MemorySnapshot GetMemorySnapshot()
+    private static bool IsWhitelisted(IProcessHandle process, IReadOnlySet<string> whitelist)
     {
-        var status = new MEMORYSTATUSEX();
-        if (!GlobalMemoryStatusEx(status))
-        {
-            throw new Win32Exception(Marshal.GetLastWin32Error());
-        }
+        if (whitelist.Count == 0)
+            return false;
 
-        return new MemorySnapshot(
-            TotalPhysicalMb: status.ullTotalPhys / (1024.0 * 1024),
-            AvailablePhysicalMb: status.ullAvailPhys / (1024.0 * 1024));
+        try
+        {
+            var name = ProcessNameHelper.Normalize(process.ProcessName);
+            return whitelist.Contains(name);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     [DllImport("psapi.dll", SetLastError = true)]
-    private static extern bool EmptyWorkingSet(IntPtr hProcess);
+    internal static extern bool EmptyWorkingSet(IntPtr hProcess);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -150,5 +231,257 @@ public sealed class PerformanceService : IPerformanceService
         public ulong ullAvailExtendedVirtual;
     }
 
-    private record MemorySnapshot(double TotalPhysicalMb, double AvailablePhysicalMb);
+    public record MemorySnapshot(double TotalPhysicalMb, double AvailablePhysicalMb);
+
+    public interface IProcessProvider
+    {
+        IEnumerable<IProcessHandle> EnumerateProcesses();
+        int? TryGetForegroundProcessId();
+    }
+
+    public interface IProcessHandle : IDisposable
+    {
+        int Id { get; }
+        string ProcessName { get; }
+        int SessionId { get; }
+        bool HasExited { get; }
+        bool HasMainWindow { get; }
+        long WorkingSet { get; }
+        bool TryTrimWorkingSet(out long reclaimedBytes);
+    }
+
+    public interface IMemoryReader
+    {
+        bool IsSupportedPlatform { get; }
+        MemorySnapshot GetSnapshot();
+    }
+
+    public interface IStandbyMemoryReleaser
+    {
+        bool TryRelease(out string message);
+    }
+
+    public interface IProcessWhitelistProvider
+    {
+        IReadOnlySet<string> GetNormalizedWhitelist();
+    }
+
+    public interface IAppMemoryTrimmer
+    {
+        void Trim();
+    }
+
+    private sealed class WindowsProcessProvider : IProcessProvider
+    {
+        public IEnumerable<IProcessHandle> EnumerateProcesses()
+        {
+            var foregroundPid = TryGetForegroundProcessId();
+            foreach (var process in Process.GetProcesses())
+            {
+                IProcessHandle? adapter = null;
+                try
+                {
+                    adapter = new WindowsProcessHandle(process, isForeground: foregroundPid.HasValue && process.Id == foregroundPid.Value);
+                }
+                catch
+                {
+                    process.Dispose();
+                }
+
+                if (adapter != null)
+                {
+                    yield return adapter;
+                }
+            }
+        }
+
+        public int? TryGetForegroundProcessId()
+        {
+            try
+            {
+                var hwnd = GetForegroundWindow();
+                if (hwnd == IntPtr.Zero)
+                    return null;
+
+                _ = GetWindowThreadProcessId(hwnd, out var pid);
+                return (int)pid;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    }
+
+    private sealed class WindowsProcessHandle : IProcessHandle
+    {
+        private readonly Process _process;
+        private readonly bool _isForeground;
+
+        public WindowsProcessHandle(Process process, bool isForeground)
+        {
+            _process = process;
+            _isForeground = isForeground;
+        }
+
+        public int Id => SafeGet(() => _process.Id, -1);
+        public string ProcessName => SafeGet(() => _process.ProcessName, string.Empty);
+        public int SessionId => SafeGet(() => _process.SessionId, 0);
+        public bool HasExited => SafeGet(() => _process.HasExited, true);
+        public bool HasMainWindow => !_isForeground && SafeGet(() => _process.MainWindowHandle != IntPtr.Zero, false);
+        public long WorkingSet => SafeGet(() => _process.WorkingSet64, 0L);
+
+        public bool TryTrimWorkingSet(out long reclaimedBytes)
+        {
+            reclaimedBytes = 0;
+            var before = WorkingSet;
+            if (before <= 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (EmptyWorkingSet(_process.Handle))
+                {
+                    _process.Refresh();
+                    var after = WorkingSet;
+                    reclaimedBytes = Math.Max(0, before - after);
+                    return true;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            return false;
+        }
+
+        public void Dispose()
+        {
+            try { _process.Dispose(); } catch { }
+        }
+
+        private static T SafeGet<T>(Func<T> getter, T fallback)
+        {
+            try { return getter(); }
+            catch { return fallback; }
+        }
+    }
+
+    private sealed class WindowsMemoryReader : IMemoryReader
+    {
+        public bool IsSupportedPlatform => OperatingSystem.IsWindows();
+
+        public MemorySnapshot GetSnapshot()
+        {
+            var status = new MEMORYSTATUSEX();
+            if (!GlobalMemoryStatusEx(status))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            return new MemorySnapshot(
+                TotalPhysicalMb: status.ullTotalPhys / (1024.0 * 1024),
+                AvailablePhysicalMb: status.ullAvailPhys / (1024.0 * 1024));
+        }
+    }
+
+    private sealed class NoAdminStandbyReleaser : IStandbyMemoryReleaser
+    {
+        public bool TryRelease(out string message)
+        {
+            message = "Libération du cache standby non disponible sans droits admin.";
+            return false;
+        }
+    }
+
+    private sealed class ProcessMapWhitelistProvider : IProcessWhitelistProvider
+    {
+        public IReadOnlySet<string> GetNormalizedWhitelist()
+        {
+            try
+            {
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                var path = Path.Combine(baseDir, "assets", "activity", "process-map.json");
+                if (!File.Exists(path))
+                {
+                    return new HashSet<string>();
+                }
+
+                var json = File.ReadAllText(path);
+                var map = JsonSerializer.Deserialize<ProcessMap>(json);
+                if (map is null)
+                {
+                    return new HashSet<string>();
+                }
+
+                var names = map.AllProcesses()
+                    .Select(ProcessNameHelper.Normalize)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                return names;
+            }
+            catch
+            {
+                return new HashSet<string>();
+            }
+        }
+
+        private sealed class ProcessMap
+        {
+            public string[] Games { get; set; } = Array.Empty<string>();
+            public string[] Browsers { get; set; } = Array.Empty<string>();
+            public string[] IDE { get; set; } = Array.Empty<string>();
+            public string[] Office { get; set; } = Array.Empty<string>();
+            public string[] Media { get; set; } = Array.Empty<string>();
+            public string[] Terminal { get; set; } = Array.Empty<string>();
+
+            public IEnumerable<string> AllProcesses()
+            {
+                foreach (var name in Games.Concat(Browsers).Concat(IDE).Concat(Office).Concat(Media).Concat(Terminal))
+                {
+                    yield return name;
+                }
+            }
+        }
+    }
+
+    private sealed class AppMemoryTrimmer : IAppMemoryTrimmer
+    {
+        public void Trim()
+        {
+            try
+            {
+                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, blocking: false, compacting: true);
+            }
+            catch
+            {
+                // Best-effort GC trim.
+            }
+        }
+    }
+
+    public static class ProcessNameHelper
+    {
+        public static string Normalize(string name)
+        {
+            var cleaned = name?.Trim() ?? string.Empty;
+            if (cleaned.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                cleaned = cleaned[..^4];
+            }
+
+            return cleaned.ToLowerInvariant();
+        }
+    }
 }
