@@ -41,6 +41,10 @@ namespace Virgil.App.Chat
             var assistantMessage = new ChatMessage("assistant", content);
             _messages.Add(assistantMessage);
 
+            // Notify listeners so UI layers can react to new messages even when
+            // using the SendAsync pipeline instead of the Post* helpers.
+            MessagePosted?.Invoke(this, content, ChatKind.Info, null);
+
             await Task.CompletedTask;
             return assistantMessage;
         }
