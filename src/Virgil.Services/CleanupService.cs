@@ -19,48 +19,64 @@ namespace Virgil.Services;
 /// </summary>
 public sealed class CleanupService : ICleanupService
 {
+    private readonly Func<CleanupPlan> _planFactory;
+
+    public CleanupService()
+        : this(CleanupPlan.FromEnvironment)
+    {
+    }
+
+    public CleanupService(Func<CleanupPlan> planFactory)
+    {
+        _planFactory = planFactory ?? throw new ArgumentNullException(nameof(planFactory));
+    }
+
     public async Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default)
     {
-        var targetPaths = BuildTargetPaths();
-        if (targetPaths.Count == 0)
+        var plan = _planFactory();
+        if (plan.TempLocations.Count == 0 && plan.CacheLocations.Count == 0 && plan.LogLocations.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Aucun dossier temporaire détecté");
+            return ActionExecutionResult.NotAvailable("Aucune zone de nettoyage détectée");
         }
 
-        var totalFreed = 0L;
-        var totalFiles = 0;
-        var totalDirectories = 0;
-        var details = new StringBuilder();
+        var stats = new CleanupStats();
 
         try
         {
-            foreach (var path in targetPaths)
+            foreach (var path in plan.TempLocations)
             {
-                var (freedBytes, filesDeleted, directoriesDeleted) = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
-                totalFreed += freedBytes;
-                totalFiles += filesDeleted;
-                totalDirectories += directoriesDeleted;
-                details.AppendLine($"[OK] {path} — {filesDeleted} fichiers, {directoriesDeleted} dossiers supprimés");
+                stats = stats.Add(await CleanDirectoryAsync(path, ct, plan.ShouldExclude).ConfigureAwait(false));
             }
 
-            if (OperatingSystem.IsWindows())
+            foreach (var path in plan.CacheLocations)
             {
-                var recycleDetails = EmptyRecycleBinSafely();
-                details.AppendLine(recycleDetails);
+                stats = stats.Add(await CleanDirectoryAsync(path, ct, plan.ShouldExclude).ConfigureAwait(false));
+            }
+
+            foreach (var path in plan.LogLocations)
+            {
+                stats = stats.Add(await CleanDirectoryAsync(
+                    path,
+                    ct,
+                    plan.ShouldExclude,
+                    fileFilter: fi => fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase)
+                        && fi.LastWriteTimeUtc < DateTime.UtcNow - plan.LogRetention
+                ).ConfigureAwait(false));
+            }
+
+            if (plan.EmptyRecycleBin)
+            {
+                _ = EmptyRecycleBinSafely();
             }
         }
         catch (OperationCanceledException)
         {
             return ActionExecutionResult.Failure("Nettoyage annulé");
         }
-        catch
-        {
-            details.AppendLine("Certaines zones n'ont pas pu être nettoyées (ignoré : best effort)");
-        }
 
-        var freedMb = totalFreed / (1024.0 * 1024);
-        var summary = $"Nettoyage rapide terminé – fichiers supprimés: {totalFiles}, dossiers: {totalDirectories}, espace libéré: {freedMb:F1} MB";
-        return ActionExecutionResult.Ok(summary, details.ToString().TrimEnd());
+        var freedText = FormatSize(stats.FreedBytes);
+        var summary = $"Quantité libérée : {freedText} — Nombre de fichiers supprimés : {stats.FilesDeleted}. Ce n'était pas spectaculaire, mais ton disque respire mieux.";
+        return ActionExecutionResult.Ok(summary);
     }
 
     public async Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default)
@@ -97,10 +113,10 @@ public sealed class CleanupService : ICleanupService
 
             foreach (var path in existingPaths)
             {
-                var (freedBytes, filesDeleted, directoriesDeleted) = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
-                categoryFreed += freedBytes;
-                categoryFiles += filesDeleted;
-                categoryDirectories += directoriesDeleted;
+                var result = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
+                categoryFreed += result.FreedBytes;
+                categoryFiles += result.FilesDeleted;
+                categoryDirectories += result.DirectoriesDeleted;
             }
 
             if (categoryFiles == 0 && categoryDirectories == 0)
@@ -151,56 +167,42 @@ public sealed class CleanupService : ICleanupService
     public Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default)
         => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage navigateur profond non implémenté"));
 
-    private static List<string> BuildTargetPaths()
-    {
-        var paths = new List<string?>
-        {
-            Path.GetTempPath(),
-            Environment.GetEnvironmentVariable("TEMP"),
-            Environment.GetEnvironmentVariable("TMP"),
-            SafeCombine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp"),
-            SafeCombine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
-            SafeCombine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrashDumps"),
-            SafeCombine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "WER", "ReportArchive"),
-            SafeCombine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Microsoft", "Windows", "WER", "ReportArchive"),
-        };
-
-        return paths
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Select(p => Path.GetFullPath(p!))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(Directory.Exists)
-            .ToList();
-    }
-
-    private static string SafeCombine(params string?[] parts)
-    {
-        if (parts.Any(p => string.IsNullOrWhiteSpace(p)))
-            return string.Empty;
-
-        return Path.Combine(parts!.Select(p => p!).ToArray());
-    }
-
-    private static async Task<(long FreedBytes, int FilesDeleted, int DirectoriesDeleted)> CleanDirectoryAsync(string root, CancellationToken ct)
+    private static async Task<CleanupStats> CleanDirectoryAsync(
+        string root,
+        CancellationToken ct,
+        Func<string, bool>? shouldExclude = null,
+        Func<FileInfo, bool>? fileFilter = null)
     {
         return await Task.Run(() =>
         {
-            long freedBytes = 0;
-            int filesDeleted = 0;
-            int directoriesDeleted = 0;
+            var stats = new CleanupStats();
 
             try
             {
+                if (!Directory.Exists(root))
+                {
+                    return stats;
+                }
+
                 foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
                     ct.ThrowIfCancellationRequested();
+                    if (shouldExclude?.Invoke(file) == true)
+                    {
+                        continue;
+                    }
+
                     try
                     {
                         var info = new FileInfo(file);
-                        freedBytes += info.Exists ? info.Length : 0;
+                        if (fileFilter is not null && !fileFilter(info))
+                        {
+                            continue;
+                        }
+
+                        stats = stats.Add(info.Exists ? info.Length : 0, 1, 0);
                         File.SetAttributes(file, FileAttributes.Normal);
                         File.Delete(file);
-                        filesDeleted++;
                     }
                     catch
                     {
@@ -211,12 +213,17 @@ public sealed class CleanupService : ICleanupService
                 foreach (var dir in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).OrderByDescending(p => p.Length))
                 {
                     ct.ThrowIfCancellationRequested();
+                    if (shouldExclude?.Invoke(dir) == true)
+                    {
+                        continue;
+                    }
+
                     try
                     {
                         if (!Directory.EnumerateFileSystemEntries(dir).Any())
                         {
                             Directory.Delete(dir);
-                            directoriesDeleted++;
+                            stats = stats.Add(0, 0, 1);
                         }
                     }
                     catch
@@ -234,8 +241,16 @@ public sealed class CleanupService : ICleanupService
                 // Best effort : ne pas interrompre le nettoyage global.
             }
 
-            return (freedBytes, filesDeleted, directoriesDeleted);
+            return stats;
         }, ct).ConfigureAwait(false);
+    }
+
+    private static string SafeCombine(params string?[] parts)
+    {
+        if (parts.Any(p => string.IsNullOrWhiteSpace(p)))
+            return string.Empty;
+
+        return Path.Combine(parts!.Select(p => p!).ToArray());
     }
 
     private static string EmptyRecycleBinSafely()
@@ -253,6 +268,92 @@ public sealed class CleanupService : ICleanupService
         {
             return "Corbeille : impossible de vider (ignoré).";
         }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        var megaBytes = bytes / (1024d * 1024d);
+        if (megaBytes >= 1024d)
+        {
+            return $"{megaBytes / 1024d:F2} Go";
+        }
+
+        return $"{megaBytes:F1} Mo";
+    }
+
+    public sealed record CleanupPlan(
+        IReadOnlyCollection<string> TempLocations,
+        IReadOnlyCollection<string> CacheLocations,
+        IReadOnlyCollection<string> LogLocations,
+        IReadOnlyCollection<string> ExcludedSegments,
+        TimeSpan LogRetention,
+        bool EmptyRecycleBin)
+    {
+        internal static CleanupPlan FromEnvironment()
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var windowsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            var commonAppData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+
+            var tempLocations = NormalizePaths(new[]
+            {
+                Path.GetTempPath(),
+                Environment.GetEnvironmentVariable("TEMP"),
+                Environment.GetEnvironmentVariable("TMP"),
+                SafeCombine(localAppData, "Temp"),
+                SafeCombine(windowsFolder, "Temp"),
+            });
+
+            var cacheLocations = NormalizePaths(new[]
+            {
+                SafeCombine(localAppData, "Microsoft", "Windows", "Caches"),
+                SafeCombine(localAppData, "Microsoft", "Windows", "WER", "ReportArchive"),
+                SafeCombine(commonAppData, "Microsoft", "Windows", "WER", "ReportArchive"),
+                SafeCombine(localAppData, "CrashDumps"),
+            });
+
+            var logLocations = NormalizePaths(new[]
+            {
+                SafeCombine(localAppData, "Logs"),
+                SafeCombine(appData, "Logs"),
+            });
+
+            var excludedSegments = new[]
+            {
+                "Chrome",
+                "Edge",
+                "Firefox",
+                "Brave",
+                "Opera",
+                "Opera GX",
+                "Vivaldi",
+                "Safari"
+            };
+
+            return new CleanupPlan(tempLocations, cacheLocations, logLocations, excludedSegments, TimeSpan.FromDays(7), true);
+        }
+
+        internal bool ShouldExclude(string path)
+        {
+            var segments = path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            return segments.Any(segment => ExcludedSegments.Any(ex => segment.Contains(ex, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private static IReadOnlyCollection<string> NormalizePaths(IEnumerable<string?> paths)
+            => paths
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => Path.GetFullPath(p!))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(Directory.Exists)
+                .ToList();
+    }
+
+    private sealed record CleanupStats(long FreedBytes = 0, int FilesDeleted = 0, int DirectoriesDeleted = 0)
+    {
+        public CleanupStats Add(CleanupStats other) => new(FreedBytes + other.FreedBytes, FilesDeleted + other.FilesDeleted, DirectoriesDeleted + other.DirectoriesDeleted);
+
+        public CleanupStats Add(long freedBytes, int filesDeleted, int directoriesDeleted) => new(FreedBytes + freedBytes, FilesDeleted + filesDeleted, DirectoriesDeleted + directoriesDeleted);
     }
 
     [Flags]
