@@ -45,7 +45,7 @@ Date de révision : 5 janvier 2026
 | `apps_update_all` | `UpdateSoftwares` | ✅ Winget via `ApplicationUpdateService` | `UpdateService` |
 | `windows_update` | `RunWindowsUpdate` | ✅ `WindowsUpdateService` (scan/download/install) | `UpdateService` |
 | `chat_thanos` | `ThanosChatWipe` | ✅ Effacement chat | `IChatService` |
-| `browser_soft_clean`, `browser_deep_clean`, `deep_disk_clean`, `network_*`, `perf_*`, `startup_analyze`, `gaming_kill_session`, `gpu_driver_check`, `rambo_repair`, `app_reload_settings`, `monitor*_rescan`, `maintenance_full`, `ram_soft_free` | Divers | ⚠️ Non disponible (retour explicite + log) | Services stubs |
+| `browser_soft_clean`, `browser_deep_clean`, `deep_disk_clean`, `network_*`, `startup_analyze`, `gaming_kill_session`, `gpu_driver_check`, `rambo_repair`, `app_reload_settings`, `monitor*_rescan`, `maintenance_full`, `ram_soft_free` | Divers | ⚠️ Non disponible (retour explicite + log) | Services stubs |
 
 **Comment tester rapidement**
 - Boutons UI / panneau Actions : utilisent `ActionRegistry` et vérifient la confirmation pour les actions destructives.

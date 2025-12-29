@@ -14,11 +14,18 @@ namespace Virgil.App.ViewModels
     public class ActionsViewModel : BaseViewModel
     {
         private readonly Func<string, CancellationToken, Task<ActionResult>> _runner;
+        private string _performanceModeStatus = "Mode performance: Inactif";
 
         /// <summary>
         /// Commande appelée par les boutons d'ActionsPanel.xaml, avec l'identifiant d'action en paramètre.
         /// </summary>
         public ICommand InvokeActionCommand { get; }
+
+        public string PerformanceModeStatus
+        {
+            get => _performanceModeStatus;
+            set => Set(ref _performanceModeStatus, value);
+        }
 
         public ActionsViewModel(Func<string, CancellationToken, Task<ActionResult>> runner)
         {

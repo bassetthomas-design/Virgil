@@ -45,6 +45,7 @@
 
             <!-- Performance -->
             <TextBlock Text="Performance" Margin="0,4,0,4" FontWeight="Bold"/>
+            <TextBlock Text="{Binding PerformanceModeStatus}" Margin="0,0,0,4" Foreground="LightGray"/>
             <Button Content="Activer le mode performance" Tag="perf_mode_on" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>

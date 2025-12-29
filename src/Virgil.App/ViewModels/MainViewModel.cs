@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -9,6 +10,7 @@ using Virgil.App.Interfaces;
 using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Domain.Actions;
+using Virgil.Services;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Chat;
 
@@ -23,6 +25,7 @@ namespace Virgil.App.ViewModels
         private readonly IUiInteractionService _uiInteractions;
         private readonly IConfirmationService _confirmationService;
         private readonly ActionRegistry _actionRegistry;
+        private readonly PerformanceService.PerformanceModeStateStore _performanceStateStore = new();
 
         private bool _isBusy;
         private string _statusText = "Virgil est prêt";
@@ -153,6 +156,7 @@ namespace Virgil.App.ViewModels
             }
 
             StatusText = "Virgil est prêt";
+            await RefreshPerformanceModeStatusAsync().ConfigureAwait(false);
         }
 
         public async Task<ActionResult> RunActionAsync(string key, Dictionary<string, string>? args, CancellationToken ct)
@@ -255,7 +259,27 @@ namespace Virgil.App.ViewModels
                 message = $"{message}\n{details}";
             }
 
+            if (descriptor.VirgilActionId is VirgilActionId.EnableGamingMode or VirgilActionId.RestoreNormalMode)
+            {
+                UpdatePerformanceStatus(message, descriptor.VirgilActionId == VirgilActionId.EnableGamingMode && result.Success);
+            }
+
             return new ActionResult(result.Success, message);
+        }
+
+        private void UpdatePerformanceStatus(string message, bool? forceActive = null)
+        {
+            var firstLine = message.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(firstLine))
+            {
+                Actions.PerformanceModeStatus = firstLine.Trim();
+                return;
+            }
+
+            if (forceActive.HasValue)
+            {
+                Actions.PerformanceModeStatus = forceActive.Value ? "Mode performance: ACTIF" : "Mode performance: Inactif";
+            }
         }
 
         private Task<ActionResult> ToggleMonitoringAsync(CancellationToken ct)
@@ -308,6 +332,21 @@ namespace Virgil.App.ViewModels
             }
 
             return await ToggleHudAsync(ct).ConfigureAwait(false);
+        }
+
+        private async Task RefreshPerformanceModeStatusAsync()
+        {
+            try
+            {
+                var state = await _performanceStateStore.LoadAsync(CancellationToken.None).ConfigureAwait(false);
+                Actions.PerformanceModeStatus = state.IsPerformanceModeActive
+                    ? "Mode performance: ACTIF"
+                    : "Mode performance: Inactif";
+            }
+            catch
+            {
+                Actions.PerformanceModeStatus = "Mode performance: Inconnu";
+            }
         }
 
         private async Task<ActionResult> ValidateRegistryAsync(CancellationToken ct)

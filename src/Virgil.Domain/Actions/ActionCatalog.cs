@@ -30,8 +30,8 @@ public static class ActionCatalog
         ["network_latency_test"] = new(ActionKey: "network_latency_test", VirgilActionId.LatencyStabilityTest, "Test de latence", IsDestructive: false, IsImplemented: true, Service: "NetworkService"),
 
         // Performance
-        ["perf_mode_on"] = new(ActionKey: "perf_mode_on", VirgilActionId.EnableGamingMode, "Activer le mode performance", IsDestructive: false, IsImplemented: false, Service: "PerformanceService"),
-        ["perf_mode_off"] = new(ActionKey: "perf_mode_off", VirgilActionId.RestoreNormalMode, "Désactiver le mode performance", IsDestructive: false, IsImplemented: false, Service: "PerformanceService"),
+        ["perf_mode_on"] = new(ActionKey: "perf_mode_on", VirgilActionId.EnableGamingMode, "Activer le mode performance", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
+        ["perf_mode_off"] = new(ActionKey: "perf_mode_off", VirgilActionId.RestoreNormalMode, "Désactiver le mode performance", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
         ["startup_analyze"] = new(ActionKey: "startup_analyze", VirgilActionId.StartupAnalysis, "Optimiser le démarrage (safe)", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
         ["gaming_kill_session"] = new(ActionKey: "gaming_kill_session", VirgilActionId.CloseGamingSession, "Couper les apps de fond", IsDestructive: false, IsImplemented: false, Service: "PerformanceService"),
 
