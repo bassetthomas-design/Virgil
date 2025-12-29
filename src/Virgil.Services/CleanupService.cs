@@ -87,7 +87,7 @@ public sealed class CleanupService : ICleanupService
 
         return paths
             .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Select(Path.GetFullPath)
+            .Select(p => Path.GetFullPath(p!))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(Directory.Exists)
             .ToList();
