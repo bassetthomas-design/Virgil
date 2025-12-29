@@ -13,9 +13,15 @@ namespace Virgil.App
         private readonly SettingsViewModel _viewModel;
 
         public SettingsWindow()
+            : this(new SettingsService())
+        {
+        }
+
+        public SettingsWindow(SettingsService settingsService)
         {
             InitializeComponent();
-            _settingsService = new SettingsService();
+
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _viewModel = new SettingsViewModel(_settingsService);
             DataContext = _viewModel;
         }
@@ -58,6 +64,8 @@ namespace Virgil.App
             try
             {
                 _viewModel.Save();
+
+                DialogResult = true;
                 MessageBox.Show(
                     this,
                     "Paramètres enregistrés avec succès.",
@@ -76,6 +84,12 @@ namespace Virgil.App
                     MessageBoxImage.Error
                 );
             }
+        }
+
+        private void CancelBtn_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = false;
+            Close();
         }
     }
 }
