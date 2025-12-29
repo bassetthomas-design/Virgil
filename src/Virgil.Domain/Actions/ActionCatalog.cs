@@ -21,7 +21,7 @@ public static class ActionCatalog
 
         // Maintenance avancée
         ["deep_disk_clean"] = new(ActionKey: "deep_disk_clean", VirgilActionId.AdvancedDiskClean, "Nettoyage disque avancé", IsDestructive: true, IsImplemented: true, Service: "CleanupService"),
-        ["browser_deep_clean"] = new(ActionKey: "browser_deep_clean", VirgilActionId.DeepBrowserClean, "Nettoyage navigateur (profond)", IsDestructive: false, IsImplemented: false, Service: "CleanupService"),
+        ["browser_deep_clean"] = new(ActionKey: "browser_deep_clean", VirgilActionId.DeepBrowserClean, "Nettoyage navigateur (profond)", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
 
         // Réseau
         ["network_diag"] = new(ActionKey: "network_diag", VirgilActionId.NetworkQuickDiag, "Diagnostic réseau", IsDestructive: false, IsImplemented: false, Service: "NetworkService"),
