@@ -9,6 +9,7 @@ namespace Virgil.App.Chat
     public partial class ChatService
     {
         public event MessagePostedHandler? MessagePosted;
+        public event EventHandler<ChatClearEventArgs>? HistoryCleared;
 
         // Basic posts
         public Task Post(string text)

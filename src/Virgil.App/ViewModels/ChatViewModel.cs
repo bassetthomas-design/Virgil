@@ -27,6 +27,7 @@ namespace Virgil.App.ViewModels
             _actionBridge = bridge;
             _chatEngine = engine;
             _chat.MessagePosted += OnMessagePosted;
+            _chat.HistoryCleared += OnHistoryCleared;
             SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
         }
 
