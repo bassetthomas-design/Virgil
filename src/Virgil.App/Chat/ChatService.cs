@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,7 +32,16 @@ namespace Virgil.App.Chat
         private static readonly Random _random = new();
 
         /// <inheritdoc />
-        public IReadOnlyList<ChatMessage> Messages => _messages;
+        public IReadOnlyList<ChatMessage> Messages
+        {
+            get
+            {
+                lock (_messages)
+                {
+                    return _messages.ToArray();
+                }
+            }
+        }
 
         /// <inheritdoc />
         public async Task<ChatMessage> SendAsync(string content, CancellationToken cancellationToken = default)
@@ -39,7 +49,10 @@ namespace Virgil.App.Chat
             // In the current Virgil-only chat model there is no direct user
             // input, but this method remains available for compatibility.
             var assistantMessage = new ChatMessage("assistant", content);
-            _messages.Add(assistantMessage);
+            lock (_messages)
+            {
+                _messages.Add(assistantMessage);
+            }
 
             // Notify listeners so UI layers can react to new messages even when
             // using the SendAsync pipeline instead of the Post* helpers.
@@ -59,7 +72,10 @@ namespace Virgil.App.Chat
             // For now we only persist the textual content. The kind/type can
             // be leveraged later to drive styling or routing.
             var message = new ChatMessage("assistant", content);
-            _messages.Add(message);
+            lock (_messages)
+            {
+                _messages.Add(message);
+            }
             
             // Also trigger the event so UI is notified
             MessagePosted?.Invoke(this, content, kind, null);
