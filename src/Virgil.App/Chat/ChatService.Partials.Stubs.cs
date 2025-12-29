@@ -14,8 +14,7 @@ namespace Virgil.App.Chat
         // Basic posts
         public Task Post(string text)
         {
-            var message = new ChatMessage("assistant", text);
-            _messages.Add(message);
+            var message = AddMessage("assistant", text);
             MessagePosted?.Invoke(this, text, ChatKind.Info, null);
             return Task.CompletedTask;
         }
@@ -23,24 +22,21 @@ namespace Virgil.App.Chat
         // Overloads with ChatKind
         public Task Post(string text, ChatKind kind, bool pinned = false, int? ttlMs = null)
         {
-            var message = new ChatMessage("assistant", text);
-            _messages.Add(message);
+            var message = AddMessage("assistant", text);
             MessagePosted?.Invoke(this, text, kind, ttlMs);
             return Task.CompletedTask;
         }
 
         public Task Post(string role, string text)
         {
-            var message = new ChatMessage(role, text);
-            _messages.Add(message);
+            var message = AddMessage(role, text);
             MessagePosted?.Invoke(this, text, ChatKind.Info, null);
             return Task.CompletedTask;
         }
 
         public Task Post(string role, string text, ChatKind kind, bool pinned = false, int? ttlMs = null)
         {
-            var message = new ChatMessage(role, text);
-            _messages.Add(message);
+            var message = AddMessage(role, text);
             MessagePosted?.Invoke(this, text, kind, ttlMs);
             return Task.CompletedTask;
         }
@@ -49,8 +45,7 @@ namespace Virgil.App.Chat
         public Task Post(string text, MessageType type, bool pinned = false, int? ttlMs = null)
         {
             var kind = type == MessageType.Error ? ChatKind.Error : type == MessageType.Warning ? ChatKind.Warning : ChatKind.Info;
-            var message = new ChatMessage("assistant", text);
-            _messages.Add(message);
+            var message = AddMessage("assistant", text);
             MessagePosted?.Invoke(this, text, kind, ttlMs);
             return Task.CompletedTask;
         }
@@ -58,8 +53,7 @@ namespace Virgil.App.Chat
         public Task Post(string role, string text, MessageType type, bool pinned = false, int? ttlMs = null)
         {
             var kind = type == MessageType.Error ? ChatKind.Error : type == MessageType.Warning ? ChatKind.Warning : ChatKind.Info;
-            var message = new ChatMessage(role, text);
-            _messages.Add(message);
+            var message = AddMessage(role, text);
             MessagePosted?.Invoke(this, text, kind, ttlMs);
             return Task.CompletedTask;
         }
