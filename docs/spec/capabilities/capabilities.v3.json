@@ -237,7 +237,11 @@
         }
       },
       "description": "Nettoyer cache navigateurs (tous détectés)",
-      "tags": []
+      "tags": [
+        "browsers",
+        "cleaning",
+        "dry-run"
+      ]
     },
     {
       "id": "CLEAN_BROWSER_COOKIES_SELECTIVE",
