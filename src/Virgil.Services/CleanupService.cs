@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -62,8 +63,87 @@ public sealed class CleanupService : ICleanupService
         return ActionExecutionResult.Ok(summary, details.ToString().TrimEnd());
     }
 
-    public Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage disque avancé non implémenté"));
+    public async Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default)
+    {
+        const string logMessage = "Executing ActionId=08 — Nettoyage disque avancé";
+        Console.WriteLine(logMessage);
+        System.Diagnostics.Trace.WriteLine(logMessage);
+
+        if (OperatingSystem.IsWindows() && !IsRunningAsAdministrator())
+        {
+            const string adminMessage = "Nettoyage disque avancé indisponible : droits administrateur requis";
+            return ActionExecutionResult.NotAvailable(adminMessage, "Exécution bloquée (admin requis)");
+        }
+
+        var categories = BuildAdvancedCategories();
+        var ignored = new List<string>();
+        var cleanedSummaries = new List<string>();
+        long totalFreed = 0;
+
+        foreach (var category in categories)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var categoryFreed = 0L;
+            var categoryFiles = 0;
+            var categoryDirectories = 0;
+
+            var existingPaths = category.Paths.Where(Directory.Exists).ToList();
+            if (existingPaths.Count == 0)
+            {
+                ignored.Add($"{category.Name} (aucun chemin trouvé)");
+                continue;
+            }
+
+            foreach (var path in existingPaths)
+            {
+                var (freedBytes, filesDeleted, directoriesDeleted) = await CleanDirectoryAsync(path, ct).ConfigureAwait(false);
+                categoryFreed += freedBytes;
+                categoryFiles += filesDeleted;
+                categoryDirectories += directoriesDeleted;
+            }
+
+            if (categoryFiles == 0 && categoryDirectories == 0)
+            {
+                ignored.Add($"{category.Name} (rien à supprimer)");
+                continue;
+            }
+
+            totalFreed += categoryFreed;
+            cleanedSummaries.Add($"{category.Name} — {categoryFiles} fichiers, {categoryDirectories} dossiers supprimés");
+        }
+
+        var freedMb = totalFreed / (1024.0 * 1024);
+        if (cleanedSummaries.Count == 0)
+        {
+            var message = "Nettoyage disque avancé : Échec — aucune catégorie nettoyée";
+            var details = ignored.Count == 0 ? null : string.Join("\n", ignored);
+            return ActionExecutionResult.Failure(message, details);
+        }
+
+        var status = ignored.Count > 0 ? "Partiel" : "OK";
+        var summary = $"Nettoyage disque avancé — Statut : {status}. Espace libéré : {freedMb:F1} MB.";
+
+        var detailsBuilder = new StringBuilder();
+        detailsBuilder.AppendLine("Catégories nettoyées :");
+        foreach (var item in cleanedSummaries)
+        {
+            detailsBuilder.AppendLine($"- {item}");
+        }
+
+        if (ignored.Count > 0)
+        {
+            detailsBuilder.AppendLine("Éléments ignorés :");
+            foreach (var skip in ignored)
+            {
+                detailsBuilder.AppendLine($"- {skip}");
+            }
+        }
+
+        detailsBuilder.AppendLine("Suggestion : lancer un re-scan système pour valider l'état du disque.");
+
+        return ActionExecutionResult.Ok(summary, detailsBuilder.ToString().TrimEnd());
+    }
 
     public Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
         => Task.FromResult(ActionExecutionResult.NotAvailable("Nettoyage navigateur léger non implémenté"));
@@ -185,4 +265,47 @@ public sealed class CleanupService : ICleanupService
 
     [DllImport("Shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, RecycleFlags dwFlags);
+
+    private sealed record AdvancedCategory(string Name, IReadOnlyList<string> Paths);
+
+    private static List<AdvancedCategory> BuildAdvancedCategories()
+    {
+        var windowsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+
+        return new List<AdvancedCategory>
+        {
+            new("Cache Windows Update", new List<string>
+            {
+                SafeCombine(windowsFolder, "SoftwareDistribution", "Download"),
+                SafeCombine(windowsFolder, "SoftwareDistribution", "DataStore", "Logs"),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()),
+            new("Logs système", new List<string>
+            {
+                SafeCombine(windowsFolder, "Logs"),
+                SafeCombine(windowsFolder, "System32", "LogFiles"),
+                SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportArchive"),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()),
+            new("Fichiers temporaires profonds", new List<string>
+            {
+                SafeCombine(windowsFolder, "Temp"),
+                SafeCombine(programData, "Microsoft", "Windows", "Caches"),
+                Path.GetTempPath(),
+            }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList())
+        };
+    }
+
+    private static bool IsRunningAsAdministrator()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
