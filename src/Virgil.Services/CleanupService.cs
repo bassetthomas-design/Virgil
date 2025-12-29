@@ -281,7 +281,7 @@ public sealed class CleanupService : ICleanupService
         return $"{megaBytes:F1} Mo";
     }
 
-    internal sealed record CleanupPlan(
+    public sealed record CleanupPlan(
         IReadOnlyCollection<string> TempLocations,
         IReadOnlyCollection<string> CacheLocations,
         IReadOnlyCollection<string> LogLocations,
