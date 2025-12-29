@@ -34,9 +34,18 @@ namespace Virgil.App.Chat
                     _messages.Clear();
                 }
             }
-            // Notify that chat has been cleared
+
+            // Notify listeners (UI, logging) that the history has been wiped.
             MessagePosted?.Invoke(this, "[Chat effacé]", ChatKind.Info, null);
+            HistoryCleared?.Invoke(this, new ChatClearEventArgs(applyThanosEffect, effectDurationMs));
         }
+
+        /// <summary>
+        /// Public alias kept for TODO tracking compatibility. Invokes
+        /// <see cref="ClearHistoryAsync(bool, int, CancellationToken)"/>.
+        /// </summary>
+        public Task ClearAllAsync(bool applyThanosEffect = true, int effectDurationMs = 2000, CancellationToken ct = default)
+            => ClearHistoryAsync(applyThanosEffect, effectDurationMs, ct);
 
         /// <summary>
         /// Gradually removes messages to produce a "snap" effect. The delay between
