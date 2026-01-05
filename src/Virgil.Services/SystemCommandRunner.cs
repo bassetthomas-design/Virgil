@@ -5,17 +5,17 @@ using System.Threading.Tasks;
 
 namespace Virgil.Services;
 
-internal interface ISystemCommandRunner
+public interface ISystemCommandRunner
 {
     Task<CommandResult> RunAsync(string fileName, string arguments, TimeSpan timeout, CancellationToken ct = default);
 }
 
-internal sealed record CommandResult(bool Success, string? Output = null, string? Error = null)
+public sealed record CommandResult(bool Success, string? Output = null, string? Error = null)
 {
     public string? PickMessage() => !string.IsNullOrWhiteSpace(Output) ? Output : Error;
 }
 
-internal sealed class SystemCommandRunner : ISystemCommandRunner
+public sealed class SystemCommandRunner : ISystemCommandRunner
 {
     public async Task<CommandResult> RunAsync(string fileName, string arguments, TimeSpan timeout, CancellationToken ct = default)
     {

@@ -4,14 +4,14 @@ using System.Text.Json;
 
 namespace Virgil.Services;
 
-internal interface IPerformanceStateStore
+public interface IPerformanceStateStore
 {
     PerformanceModeState Load();
     void Save(PerformanceModeState state);
     void Clear();
 }
 
-internal sealed class FilePerformanceStateStore : IPerformanceStateStore
+public sealed class FilePerformanceStateStore : IPerformanceStateStore
 {
     private readonly string _path;
 
@@ -70,7 +70,7 @@ internal sealed class FilePerformanceStateStore : IPerformanceStateStore
     }
 }
 
-internal record PerformanceModeState
+public record PerformanceModeState
 {
     public bool IsActive { get; init; }
     public string? PreviousPowerPlanGuid { get; init; }
