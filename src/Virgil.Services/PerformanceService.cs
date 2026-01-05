@@ -6,10 +6,14 @@ using System.IO;
 using System.Linq;
 using System.Runtime;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using Virgil.Services.Abstractions;
+using Virgil.Services.Network;
 using Virgil.Services.Startup;
 
 namespace Virgil.Services;
@@ -24,26 +28,103 @@ public sealed class PerformanceService : IPerformanceService
     private readonly IStandbyMemoryReleaser _standbyReleaser;
     private readonly IProcessWhitelistProvider _whitelistProvider;
     private readonly IAppMemoryTrimmer _appMemoryTrimmer;
+    private readonly IPlatformInfo _platformInfo;
+    private readonly IPrivilegeChecker _privilegeChecker;
+    private readonly ISystemCommandRunner _commandRunner;
+    private readonly IPerformanceStateStore _stateStore;
+
+    private const string HighPerformancePlan = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+    private const string BalancedPlan = "381b4222-f694-41f0-9685-ff5bb260df2e";
+    private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
 
     public PerformanceService(
         IProcessProvider? processProvider = null,
         IMemoryReader? memoryReader = null,
         IStandbyMemoryReleaser? standbyMemoryReleaser = null,
         IProcessWhitelistProvider? whitelistProvider = null,
-        IAppMemoryTrimmer? appMemoryTrimmer = null)
+        IAppMemoryTrimmer? appMemoryTrimmer = null,
+        IPlatformInfo? platformInfo = null,
+        IPrivilegeChecker? privilegeChecker = null,
+        ISystemCommandRunner? commandRunner = null,
+        IPerformanceStateStore? stateStore = null)
     {
         _processProvider = processProvider ?? new WindowsProcessProvider();
         _memoryReader = memoryReader ?? new WindowsMemoryReader();
         _standbyReleaser = standbyMemoryReleaser ?? new NoAdminStandbyReleaser();
         _whitelistProvider = whitelistProvider ?? new ProcessMapWhitelistProvider();
         _appMemoryTrimmer = appMemoryTrimmer ?? new AppMemoryTrimmer();
+        _platformInfo = platformInfo ?? new RuntimePlatformInfo();
+        _privilegeChecker = privilegeChecker ?? new WindowsPrivilegeChecker();
+        _commandRunner = commandRunner ?? new SystemCommandRunner();
+        _stateStore = stateStore ?? new FilePerformanceStateStore();
     }
 
-    public Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Mode performance non disponible"));
+    public async Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default)
+    {
+        if (!_platformInfo.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Mode performance disponible uniquement sur Windows");
+        }
 
-    public Task<ActionExecutionResult> RestoreNormalModeAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Retour au mode normal non disponible"));
+        var state = _stateStore.Load();
+        var steps = new List<StepResult>();
+
+        var powerPlan = await ApplyHighPerformancePlanAsync(state, ct).ConfigureAwait(false);
+        state = powerPlan.State;
+        steps.Add(powerPlan.Step);
+
+        steps.Add(await ReduceCpuSavingsAsync(ct).ConfigureAwait(false));
+
+        var priority = await BoostForegroundPriorityAsync(state, ct).ConfigureAwait(false);
+        state = priority.State;
+        steps.Add(priority.Step);
+        steps.Add(DisableNonCriticalBackgroundTasks());
+
+        state = state with
+        {
+            IsActive = true,
+            ActivatedAt = DateTimeOffset.UtcNow,
+            ActivePowerPlanGuid = HighPerformancePlan
+        };
+        _stateStore.Save(state);
+
+        var (powerStatus, systemStatus) = Summarize(steps);
+        var gpuStatus = "Ignoré (proposition seulement)";
+        var summary = new StringBuilder();
+        summary.Append($"Mode performance: ACTIVÉ. Alimentation: {powerStatus}. Système: {systemStatus}. GPU: {gpuStatus}.");
+        summary.Append(" Désactiver le mode performance ?");
+
+        var details = BuildDetails(steps, gpuStatus, true);
+        var success = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial) && steps.All(s => s.Status != StepOutcome.Fail);
+        return new ActionExecutionResult(success, summary.ToString(), details);
+    }
+
+    public async Task<ActionExecutionResult> RestoreNormalModeAsync(CancellationToken ct = default)
+    {
+        if (!_platformInfo.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Retour au mode normal uniquement disponible sur Windows");
+        }
+
+        var state = _stateStore.Load();
+        var steps = new List<StepResult>();
+
+        if (!state.IsActive && string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid) && state.PreviousPrioritySeparation is null)
+        {
+            return ActionExecutionResult.NotAvailable("Mode performance déjà désactivé");
+        }
+
+        steps.Add(await RestorePowerPlanAsync(state, ct).ConfigureAwait(false));
+        steps.Add(await RestorePrioritySeparationAsync(state, ct).ConfigureAwait(false));
+
+        _stateStore.Clear();
+
+        var (powerStatus, systemStatus) = Summarize(steps);
+        var summary = $"Mode performance: DÉSACTIVÉ. Alimentation: {powerStatus}. Système: {systemStatus}. Retour en roue libre.";
+        var details = BuildDetails(steps, gpuStatus: "N/A", includeGpu: false);
+        var success = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial) || steps.All(s => s.Status != StepOutcome.Fail);
+        return new ActionExecutionResult(success, summary, details);
+    }
 
     public Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default)
     {
@@ -516,6 +597,189 @@ public sealed class PerformanceService : IPerformanceService
                 // Best-effort GC trim.
             }
         }
+    }
+
+    private enum StepOutcome
+    {
+        Ok,
+        Partial,
+        Skipped,
+        Fail
+    }
+
+    private sealed record StepResult(string Component, StepOutcome Status, string Details);
+
+    private async Task<(StepResult Step, PerformanceModeState State)> ApplyHighPerformancePlanAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        var currentPlan = await GetActivePowerPlanAsync(ct).ConfigureAwait(false);
+        if (currentPlan.Success && string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid))
+        {
+            state = state with { PreviousPowerPlanGuid = currentPlan.PlanGuid };
+            _stateStore.Save(state);
+        }
+
+        var switchResult = await _commandRunner.RunAsync("powercfg", $"/S {HighPerformancePlan}", DefaultCommandTimeout, ct).ConfigureAwait(false);
+        if (!switchResult.Success)
+        {
+            var reason = switchResult.PickMessage() ?? "powercfg indisponible";
+            return (new StepResult("Alimentation", StepOutcome.Partial, $"Plan hautes performances non appliqué : {reason}"), state);
+        }
+
+        return (new StepResult("Alimentation", StepOutcome.Ok, "Plan \"Performances élevées\" appliqué"), state);
+    }
+
+    private async Task<StepResult> ReduceCpuSavingsAsync(CancellationToken ct)
+    {
+        var tweak = await _commandRunner.RunAsync("powercfg", "-setacvalueindex scheme_current sub_processor PROCTHROTTLEMIN 100", DefaultCommandTimeout, ct).ConfigureAwait(false);
+        if (!tweak.Success)
+        {
+            var reason = tweak.PickMessage() ?? "réglage CPU ignoré";
+            return new StepResult("Alimentation", StepOutcome.Partial, $"Économies CPU non réduites : {reason}");
+        }
+
+        return new StepResult("Alimentation", StepOutcome.Ok, "Économies CPU réduites (AC)");
+    }
+
+    private async Task<(StepResult Step, PerformanceModeState State)> BoostForegroundPriorityAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        if (!_privilegeChecker.IsAdministrator())
+        {
+            return (new StepResult("Système", StepOutcome.Partial, "Priorité premier plan ignorée (droits admin requis)"), state);
+        }
+
+        try
+        {
+            const string keyPath = "SYSTEM\\CurrentControlSet\\Control\\PriorityControl";
+            using var key = Registry.LocalMachine.OpenSubKey(keyPath, writable: true);
+            if (key is null)
+            {
+                return (new StepResult("Système", StepOutcome.Partial, "Clé de priorité introuvable"), state);
+            }
+
+            var currentValue = key.GetValue("Win32PrioritySeparation");
+            if (currentValue is int current && state.PreviousPrioritySeparation is null)
+            {
+                state = state with { PreviousPrioritySeparation = current }; // Persist snapshot.
+                _stateStore.Save(state);
+            }
+
+            key.SetValue("Win32PrioritySeparation", 0x26, RegistryValueKind.DWord);
+            return (new StepResult("Système", StepOutcome.Ok, "Priorité premier plan renforcée"), state);
+        }
+        catch (Exception ex)
+        {
+            return (new StepResult("Système", StepOutcome.Partial, $"Priorité premier plan non appliquée: {ex.Message}"), state);
+        }
+    }
+
+    private StepResult DisableNonCriticalBackgroundTasks()
+    {
+        return new StepResult("Système", StepOutcome.Partial, "Tâches arrière-plan non critiques ignorées (aucune liste définie)");
+    }
+
+    private async Task<StepResult> RestorePowerPlanAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        var target = !string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid)
+            ? state.PreviousPowerPlanGuid!
+            : BalancedPlan;
+
+        var result = await _commandRunner.RunAsync("powercfg", $"/S {target}", DefaultCommandTimeout, ct).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            var reason = result.PickMessage() ?? "impossible de restaurer le plan";
+            return new StepResult("Alimentation", StepOutcome.Partial, $"Plan d'origine non restauré : {reason}");
+        }
+
+        return new StepResult("Alimentation", StepOutcome.Ok, "Plan d'alimentation rétabli");
+    }
+
+    private async Task<StepResult> RestorePrioritySeparationAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        if (!_privilegeChecker.IsAdministrator())
+        {
+            return new StepResult("Système", StepOutcome.Partial, "Priorité système non rétablie (droits admin requis)");
+        }
+
+        if (state.PreviousPrioritySeparation is null)
+        {
+            return new StepResult("Système", StepOutcome.Skipped, "Priorité système déjà par défaut");
+        }
+
+        try
+        {
+            const string keyPath = "SYSTEM\\CurrentControlSet\\Control\\PriorityControl";
+            using var key = Registry.LocalMachine.OpenSubKey(keyPath, writable: true);
+            if (key is null)
+            {
+                return new StepResult("Système", StepOutcome.Partial, "Clé de priorité introuvable");
+            }
+
+            key.SetValue("Win32PrioritySeparation", state.PreviousPrioritySeparation.Value, RegistryValueKind.DWord);
+            return new StepResult("Système", StepOutcome.Ok, "Priorité système restaurée");
+        }
+        catch (Exception ex)
+        {
+            return new StepResult("Système", StepOutcome.Partial, $"Priorité système inchangée: {ex.Message}");
+        }
+    }
+
+    private async Task<(bool Success, string? PlanGuid)> GetActivePowerPlanAsync(CancellationToken ct)
+    {
+        var result = await _commandRunner.RunAsync("powercfg", "/GetActiveScheme", DefaultCommandTimeout, ct).ConfigureAwait(false);
+        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
+        {
+            return (false, null);
+        }
+
+        var match = Regex.Match(result.Output, "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})");
+        return match.Success ? (true, match.Groups[1].Value) : (false, null);
+    }
+
+    private static (string powerStatus, string systemStatus) Summarize(List<StepResult> steps)
+    {
+        var power = steps.Where(s => s.Component == "Alimentation").ToList();
+        var system = steps.Where(s => s.Component == "Système").ToList();
+
+        return (FormatGroupStatus(power), FormatGroupStatus(system));
+    }
+
+    private static string FormatGroupStatus(List<StepResult> steps)
+    {
+        if (steps.Count == 0)
+        {
+            return "Ignoré";
+        }
+
+        if (steps.All(s => s.Status == StepOutcome.Ok))
+        {
+            return "OK";
+        }
+
+        if (steps.Any(s => s.Status == StepOutcome.Ok))
+        {
+            var firstPartial = steps.FirstOrDefault(s => s.Status != StepOutcome.Ok);
+            return firstPartial is not null ? $"Partiel ({firstPartial.Details})" : "Partiel";
+        }
+
+        var partial = steps.FirstOrDefault(s => s.Status == StepOutcome.Partial);
+        return partial is not null ? $"Partiel ({partial.Details})" : "Ignoré";
+    }
+
+    private static string BuildDetails(List<StepResult> steps, string gpuStatus, bool includeGpu)
+    {
+        var sb = new StringBuilder();
+        foreach (var step in steps)
+        {
+            sb.AppendLine($"- {step.Component}: {step.Status} — {step.Details}");
+        }
+
+        if (includeGpu)
+        {
+            sb.AppendLine($"- GPU: {gpuStatus}");
+        }
+
+        sb.Append("Ton PC passe en mode 'je fais des efforts'.");
+        return sb.ToString().TrimEnd();
     }
 
     public static class ProcessNameHelper
