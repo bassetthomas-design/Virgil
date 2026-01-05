@@ -34,7 +34,6 @@ public sealed class PerformanceService : IPerformanceService
     private readonly IPerformanceStateStore _stateStore;
 
     private const string HighPerformancePlan = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
-    private const string BalancedPlan = "381b4222-f694-41f0-9685-ff5bb260df2e";
     private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
 
     public PerformanceService(
@@ -73,7 +72,9 @@ public sealed class PerformanceService : IPerformanceService
         state = powerPlan.State;
         steps.Add(powerPlan.Step);
 
-        steps.Add(await ReduceCpuSavingsAsync(ct).ConfigureAwait(false));
+        var cpuSettings = await ReduceCpuSavingsAsync(state, ct).ConfigureAwait(false);
+        state = cpuSettings.State;
+        steps.Add(cpuSettings.Step);
 
         var priority = await BoostForegroundPriorityAsync(state, ct).ConfigureAwait(false);
         state = priority.State;
@@ -94,7 +95,7 @@ public sealed class PerformanceService : IPerformanceService
         summary.Append($"Mode performance: ACTIVÉ. Alimentation: {powerStatus}. Système: {systemStatus}. GPU: {gpuStatus}.");
         summary.Append(" Désactiver le mode performance ?");
 
-        var details = BuildDetails(steps, gpuStatus, true);
+        var details = BuildDetails(steps, gpuStatus, includeGpu: true, performanceEnabled: true);
         var success = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial) && steps.All(s => s.Status != StepOutcome.Fail);
         return new ActionExecutionResult(success, summary.ToString(), details);
     }
@@ -109,20 +110,31 @@ public sealed class PerformanceService : IPerformanceService
         var state = _stateStore.Load();
         var steps = new List<StepResult>();
 
-        if (!state.IsActive && string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid) && state.PreviousPrioritySeparation is null)
+        if (!HasSnapshot(state))
         {
-            return ActionExecutionResult.NotAvailable("Mode performance déjà désactivé");
+            steps.Add(new StepResult("Alimentation", StepOutcome.Skipped, "Plan d'origine inconnu (aucun état enregistré)"));
+            steps.Add(new StepResult("Système", StepOutcome.Skipped, "Réglages initiaux non enregistrés"));
+
+            var (missingPowerStatus, missingSystemStatus) = Summarize(steps);
+            var missingGpuStatus = "Ignoré (aucun changement enregistré)";
+            var missingSnapshotSummary =
+                $"Mode performance: DÉSACTIVÉ. Alimentation: {missingPowerStatus}. Système: {missingSystemStatus}. GPU: {missingGpuStatus}. Impossible de restaurer complètement: état initial non enregistré.";
+            var missingDetails = BuildDetails(steps, missingGpuStatus, includeGpu: true, performanceEnabled: false);
+            return new ActionExecutionResult(false, missingSnapshotSummary, missingDetails);
         }
 
         steps.Add(await RestorePowerPlanAsync(state, ct).ConfigureAwait(false));
+        steps.Add(await RestoreCpuSavingsAsync(state, ct).ConfigureAwait(false));
         steps.Add(await RestorePrioritySeparationAsync(state, ct).ConfigureAwait(false));
+        steps.Add(RestoreBackgroundTasks(state));
 
         _stateStore.Clear();
 
         var (powerStatus, systemStatus) = Summarize(steps);
-        var summary = $"Mode performance: DÉSACTIVÉ. Alimentation: {powerStatus}. Système: {systemStatus}. Retour en roue libre.";
-        var details = BuildDetails(steps, gpuStatus: "N/A", includeGpu: false);
-        var success = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial) || steps.All(s => s.Status != StepOutcome.Fail);
+        var gpuStatus = "Ignoré (aucun réglage GPU enregistré)";
+        var summary = $"Mode performance: DÉSACTIVÉ. Alimentation: {powerStatus}. Système: {systemStatus}. GPU: {gpuStatus}. Retour au mode \"je fais moins d'efforts\".";
+        var details = BuildDetails(steps, gpuStatus, includeGpu: true, performanceEnabled: false);
+        var success = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial) && steps.All(s => s.Status != StepOutcome.Fail);
         return new ActionExecutionResult(success, summary, details);
     }
 
@@ -628,16 +640,23 @@ public sealed class PerformanceService : IPerformanceService
         return (new StepResult("Alimentation", StepOutcome.Ok, "Plan \"Performances élevées\" appliqué"), state);
     }
 
-    private async Task<StepResult> ReduceCpuSavingsAsync(CancellationToken ct)
+    private async Task<(StepResult Step, PerformanceModeState State)> ReduceCpuSavingsAsync(PerformanceModeState state, CancellationToken ct)
     {
+        var snapshot = await GetCpuThrottleMinAsync(ct).ConfigureAwait(false);
+        if (snapshot.Success && state.PreviousCpuThrottleMinAc is null)
+        {
+            state = state with { PreviousCpuThrottleMinAc = snapshot.Value };
+            _stateStore.Save(state);
+        }
+
         var tweak = await _commandRunner.RunAsync("powercfg", "-setacvalueindex scheme_current sub_processor PROCTHROTTLEMIN 100", DefaultCommandTimeout, ct).ConfigureAwait(false);
         if (!tweak.Success)
         {
             var reason = tweak.PickMessage() ?? "réglage CPU ignoré";
-            return new StepResult("Alimentation", StepOutcome.Partial, $"Économies CPU non réduites : {reason}");
+            return (new StepResult("Alimentation", StepOutcome.Partial, $"Économies CPU non réduites : {reason}"), state);
         }
 
-        return new StepResult("Alimentation", StepOutcome.Ok, "Économies CPU réduites (AC)");
+        return (new StepResult("Alimentation", StepOutcome.Ok, "Économies CPU réduites (AC)"), state);
     }
 
     private async Task<(StepResult Step, PerformanceModeState State)> BoostForegroundPriorityAsync(PerformanceModeState state, CancellationToken ct)
@@ -679,11 +698,12 @@ public sealed class PerformanceService : IPerformanceService
 
     private async Task<StepResult> RestorePowerPlanAsync(PerformanceModeState state, CancellationToken ct)
     {
-        var target = !string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid)
-            ? state.PreviousPowerPlanGuid!
-            : BalancedPlan;
+        if (string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid))
+        {
+            return new StepResult("Alimentation", StepOutcome.Skipped, "Plan d'origine inconnu (aucun snapshot)");
+        }
 
-        var result = await _commandRunner.RunAsync("powercfg", $"/S {target}", DefaultCommandTimeout, ct).ConfigureAwait(false);
+        var result = await _commandRunner.RunAsync("powercfg", $"/S {state.PreviousPowerPlanGuid}", DefaultCommandTimeout, ct).ConfigureAwait(false);
         if (!result.Success)
         {
             var reason = result.PickMessage() ?? "impossible de restaurer le plan";
@@ -691,6 +711,28 @@ public sealed class PerformanceService : IPerformanceService
         }
 
         return new StepResult("Alimentation", StepOutcome.Ok, "Plan d'alimentation rétabli");
+    }
+
+    private async Task<StepResult> RestoreCpuSavingsAsync(PerformanceModeState state, CancellationToken ct)
+    {
+        if (state.PreviousCpuThrottleMinAc is null)
+        {
+            return new StepResult("Alimentation", StepOutcome.Skipped, "Réglage CPU ignoré (état initial manquant)");
+        }
+
+        var restore = await _commandRunner.RunAsync(
+            "powercfg",
+            $"-setacvalueindex scheme_current sub_processor PROCTHROTTLEMIN {state.PreviousCpuThrottleMinAc.Value}",
+            DefaultCommandTimeout,
+            ct).ConfigureAwait(false);
+
+        if (!restore.Success)
+        {
+            var reason = restore.PickMessage() ?? "impossible de restaurer le réglage CPU";
+            return new StepResult("Alimentation", StepOutcome.Partial, $"Réglage CPU non restauré : {reason}");
+        }
+
+        return new StepResult("Alimentation", StepOutcome.Ok, $"Réglage CPU restauré ({state.PreviousCpuThrottleMinAc.Value}%)");
     }
 
     private async Task<StepResult> RestorePrioritySeparationAsync(PerformanceModeState state, CancellationToken ct)
@@ -720,6 +762,46 @@ public sealed class PerformanceService : IPerformanceService
         catch (Exception ex)
         {
             return new StepResult("Système", StepOutcome.Partial, $"Priorité système inchangée: {ex.Message}");
+        }
+    }
+
+    private StepResult RestoreBackgroundTasks(PerformanceModeState state)
+    {
+        if (state.DisabledTasks is null || state.DisabledTasks.Count == 0)
+        {
+            return new StepResult("Système", StepOutcome.Skipped, "Aucune tâche arrière-plan à réactiver");
+        }
+
+        return new StepResult("Système", StepOutcome.Partial, $"Réactivation non implémentée ({state.DisabledTasks.Count} tâches enregistrées)");
+    }
+
+    private async Task<(bool Success, int? Value)> GetCpuThrottleMinAsync(CancellationToken ct)
+    {
+        var query = await _commandRunner.RunAsync(
+            "powercfg",
+            "-q scheme_current sub_processor PROCTHROTTLEMIN",
+            DefaultCommandTimeout,
+            ct).ConfigureAwait(false);
+
+        if (!query.Success || string.IsNullOrWhiteSpace(query.Output))
+        {
+            return (false, null);
+        }
+
+        var match = Regex.Match(query.Output, "Current AC Power Setting Index:\\s*0x([0-9a-fA-F]+)");
+        if (!match.Success)
+        {
+            return (false, null);
+        }
+
+        try
+        {
+            var value = Convert.ToInt32(match.Groups[1].Value, 16);
+            return (true, value);
+        }
+        catch
+        {
+            return (false, null);
         }
     }
 
@@ -765,7 +847,17 @@ public sealed class PerformanceService : IPerformanceService
         return partial is not null ? $"Partiel ({partial.Details})" : "Ignoré";
     }
 
-    private static string BuildDetails(List<StepResult> steps, string gpuStatus, bool includeGpu)
+    private static bool HasSnapshot(PerformanceModeState state)
+    {
+        var hasTasks = state.DisabledTasks is { Count: > 0 };
+        return state.IsActive
+            || !string.IsNullOrWhiteSpace(state.PreviousPowerPlanGuid)
+            || state.PreviousPrioritySeparation is not null
+            || state.PreviousCpuThrottleMinAc is not null
+            || hasTasks;
+    }
+
+    private static string BuildDetails(List<StepResult> steps, string gpuStatus, bool includeGpu, bool performanceEnabled)
     {
         var sb = new StringBuilder();
         foreach (var step in steps)
@@ -778,7 +870,10 @@ public sealed class PerformanceService : IPerformanceService
             sb.AppendLine($"- GPU: {gpuStatus}");
         }
 
-        sb.Append("Ton PC passe en mode 'je fais des efforts'.");
+        var remark = performanceEnabled
+            ? "Ton PC passe en mode 'je fais des efforts'."
+            : "Retour au mode 'je fais moins d'efforts'. C'est cohérent.";
+        sb.Append(remark);
         return sb.ToString().TrimEnd();
     }
 
