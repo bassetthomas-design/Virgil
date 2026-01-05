@@ -1,592 +1,122 @@
-using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using Virgil.Services.Abstractions;
-using Virgil.Services.Network;
 
-namespace Virgil.Services
+namespace Virgil.Services;
+
+public enum NetworkResetStatus
 {
-
-public sealed class NetworkService : INetworkService
-{
-    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(20);
-    private const int PingCount = 10; // Aligné avec l'ancienne implémentation UI (10 paquets)
-    private const int PingTimeoutMs = 800;
-    private const int LatencyWarningThresholdMs = 80; // Cf. docs/ARCHITECTURE.md
-    private const int PacketLossWarningThresholdPercent = 5; // Seuil conservateur en l'absence de spec dédiée
-    private const int JitterWarningThresholdMs = 25; // Seuil conservateur documenté en code
-    private const string ExternalStableHost = "1.1.1.1"; // Référence historique du projet (Cloudflare)
-
-    private readonly INetworkCommandRunner _runner;
-    private readonly IPrivilegeChecker _privilegeChecker;
-    private readonly IPlatformInfo _platform;
-    private readonly IPingClient _ping;
-    private readonly INetworkInfoProvider _networkInfo;
-
-    private sealed record StepResult(string Label, StepStatus Status, string Message, RebootAdvice Reboot = RebootAdvice.None)
-    {
-        public string StatusLabel => Status switch
-        {
-            StepStatus.Ok => "OK",
-            StepStatus.Ignored => "Ignoré",
-            _ => "Échec"
-        };
-
-        public static StepResult Ok(string label, string message, RebootAdvice reboot = RebootAdvice.None) => new(label, StepStatus.Ok, message, reboot);
-        public static StepResult Ignored(string label, string message) => new(label, StepStatus.Ignored, message);
-        public static StepResult Failed(string label, string message) => new(label, StepStatus.Failed, message);
-    }
-
-    private enum StepStatus
-    {
-        Ok,
-        Ignored,
-        Failed
-    }
-
-    private enum RebootAdvice
-    {
-        None,
-        Recommended,
-        Required
-    }
-
-    private sealed record StepResult(string Label, StepStatus Status, string Message, RebootAdvice Reboot = RebootAdvice.None)
-    {
-        public string StatusLabel => Status switch
-        {
-            StepStatus.Ok => "OK",
-            StepStatus.Ignored => "Ignoré",
-            _ => "Échec"
-        };
-
-        public static StepResult Ok(string label, string message, RebootAdvice reboot = RebootAdvice.None) => new(label, StepStatus.Ok, message, reboot);
-        public static StepResult Ignored(string label, string message) => new(label, StepStatus.Ignored, message);
-        public static StepResult Failed(string label, string message) => new(label, StepStatus.Failed, message);
-    }
-
-    private enum StepStatus
-    {
-        Ok,
-        Ignored,
-        Failed
-    }
-
-    private enum RebootAdvice
-    {
-        None,
-        Recommended,
-        Required
-    }
-
-    public NetworkService(
-        INetworkCommandRunner? runner = null,
-        IPrivilegeChecker? privilegeChecker = null,
-        IPlatformInfo? platformInfo = null,
-        IPingClient? pingClient = null,
-        INetworkInfoProvider? networkInfoProvider = null)
-    {
-        _runner = runner ?? new NetworkCommandRunner();
-        _privilegeChecker = privilegeChecker ?? new WindowsPrivilegeChecker();
-        _platform = platformInfo ?? new RuntimePlatformInfo();
-        _ping = pingClient ?? new RuntimePingClient();
-        _networkInfo = networkInfoProvider ?? new RuntimeNetworkInfoProvider();
-    }
-
-    public Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Diagnostic réseau non implémenté"));
-
-    public async Task<ActionExecutionResult> SoftResetAsync(CancellationToken ct = default)
-    {
-        if (!_platform.IsWindows())
-        {
-            return ActionExecutionResult.NotAvailable("Reset réseau (soft) uniquement disponible sur Windows");
-        }
-
-        var isAdmin = _privilegeChecker.IsAdministrator();
-        var steps = new List<StepResult>();
-
-        steps.Add(await RunCommandStepAsync("Flush DNS", "ipconfig", "/flushdns", requiresAdmin: false, ct));
-        steps.Add(await RunCommandStepAsync("Release IP", "ipconfig", "/release", requiresAdmin: false, ct));
-        steps.Add(await RunCommandStepAsync("Renew IP", "ipconfig", "/renew", requiresAdmin: false, ct));
-        steps.Add(await RunCommandStepAsync("Reset Winsock léger", "netsh", "winsock reset", requiresAdmin: true, ct));
-        steps.Add(await RunCommandStepAsync("Reset cache réseau Windows", "netsh", "interface ip delete arpcache", requiresAdmin: true, ct));
-        steps.Add(await ResetCustomDnsAsync(isAdmin, ct));
-        steps.Add(await RefreshAdaptersAsync(isAdmin, ct));
-
-        var globalStatus = ComputeGlobalStatus(steps);
-        var summary = BuildSummary(globalStatus, steps, isAdmin);
-
-        return globalStatus == StepStatus.Failed
-            ? ActionExecutionResult.Failure(summary)
-            : ActionExecutionResult.Ok(summary);
-    }
-
-    public async Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default)
-    {
-        if (!_platform.IsWindows())
-        {
-            return ActionExecutionResult.NotAvailable("Reset réseau (complet) uniquement disponible sur Windows");
-        }
-
-        if (!_privilegeChecker.IsAdministrator())
-        {
-            const string message = "Reset réseau (complet) nécessite les droits administrateur. Aucun changement effectué.";
-            const string details = "Relancez en mode administrateur si vous voulez vraiment tout remettre d'équerre. Droits admin requis.";
-            return ActionExecutionResult.NotAvailable(message, details);
-        }
-
-        var steps = new List<StepResult>();
-
-        steps.Add(await RunCommandStepAsync("Reset complet Winsock", "netsh", "winsock reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
-        steps.Add(await RunCommandStepAsync("Reset pile TCP/IP", "netsh", "int ip reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
-        steps.Add(await RefreshAdaptersAsync(isAdmin: true, ct, hardReset: true));
-        steps.Add(await ResetCustomIpAsync(ct));
-        steps.Add(await ResetCustomDnsAsync(isAdmin: true, ct));
-        steps.Add(await RemoveWifiProfilesAsync(ct));
-        steps.Add(await RemoveEthernetProfilesAsync(ct));
-        steps.Add(await RestartNetworkServicesAsync(ct));
-
-        var globalStatus = ComputeGlobalStatus(steps);
-        var summary = BuildAdvancedSummary(globalStatus, steps);
-
-        return globalStatus == StepStatus.Failed
-            ? ActionExecutionResult.Failure(summary)
-            : ActionExecutionResult.Ok(summary);
-    }
-
-        steps.Add(await RunCommandStepAsync("Reset complet Winsock", "netsh", "winsock reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
-        steps.Add(await RunCommandStepAsync("Reset pile TCP/IP", "netsh", "int ip reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
-        steps.Add(await RefreshAdaptersAsync(isAdmin: true, ct, hardReset: true));
-        steps.Add(await ResetCustomIpAsync(ct));
-        steps.Add(await ResetCustomDnsAsync(isAdmin: true, ct));
-        steps.Add(await RemoveWifiProfilesAsync(ct));
-        steps.Add(await RemoveEthernetProfilesAsync(ct));
-        steps.Add(await RestartNetworkServicesAsync(ct));
-
-    private async Task<StepResult> RunCommandStepAsync(string label, string fileName, string args, bool requiresAdmin, CancellationToken ct, Func<NetworkCommandResult, RebootAdvice>? rebootDetector = null)
-    {
-        if (requiresAdmin && !_privilegeChecker.IsAdministrator())
-        {
-            return StepResult.Ignored(label, "Droits admin requis");
-        }
-
-        var result = await _runner.RunAsync(fileName, args, CommandTimeout, ct).ConfigureAwait(false);
-        if (result.Success)
-        {
-            var reboot = rebootDetector?.Invoke(result) ?? RebootAdvice.None;
-            return StepResult.Ok(label, "Terminé", reboot);
-        }
-
-        var error = string.IsNullOrWhiteSpace(result.Error) ? "Erreur inconnue" : result.Error!;
-        return StepResult.Failed(label, error);
-    }
-
-    private async Task<StepResult> ResetCustomDnsAsync(bool isAdmin, CancellationToken ct)
-    {
-        const string label = "Réinitialiser DNS custom";
-        if (!isAdmin)
-        {
-            return StepResult.Ignored(label, "Droits admin requis");
-        }
-
-        var adapters = EnumerateTargetAdapters().ToList();
-        if (adapters.Count == 0)
-        {
-            return StepResult.Ignored(label, "Aucun adaptateur réseau éligible");
-        }
-
-        var failures = 0;
-        foreach (var adapter in adapters)
-        {
-            var name = adapter.Name;
-            var res4 = await _runner.RunAsync("netsh", $"interface ip set dns name=\"{name}\" source=dhcp", CommandTimeout, ct).ConfigureAwait(false);
-            var res6 = await _runner.RunAsync("netsh", $"interface ipv6 set dnsservers \"{name}\" source=dhcp", CommandTimeout, ct).ConfigureAwait(false);
-
-            if (!res4.Success || !res6.Success)
-            {
-                failures++;
-            }
-        }
-
-        if (failures == adapters.Count)
-        {
-            return StepResult.Failed(label, "Impossible de remettre le DNS en automatique");
-        }
-
-        return failures > 0
-            ? StepResult.Ok(label, $"Appliqué avec avertissements sur {failures} adaptateur(s)")
-            : StepResult.Ok(label, "DNS remis en automatique");
-    }
-
-    private async Task<StepResult> ResetCustomIpAsync(CancellationToken ct)
-    {
-        const string label = "Suppression configs IP custom";
-        if (!_privilegeChecker.IsAdministrator())
-        {
-            return StepResult.Ignored(label, "Droits admin requis");
-        }
-
-        var adapters = EnumerateTargetAdapters().ToList();
-        if (adapters.Count == 0)
-        {
-            return StepResult.Ignored(label, "Aucun adaptateur réseau éligible");
-        }
-
-        var failures = 0;
-        foreach (var adapter in adapters)
-        {
-            var name = adapter.Name;
-            var res4 = await _runner.RunAsync("netsh", $"interface ip set address name=\"{name}\" source=dhcp", CommandTimeout, ct).ConfigureAwait(false);
-            var res6 = await _runner.RunAsync("netsh", $"interface ipv6 set address name=\"{name}\" source=dhcp", CommandTimeout, ct).ConfigureAwait(false);
-
-            if (!res4.Success || !res6.Success)
-            {
-                failures++;
-            }
-        }
-
-        if (failures == adapters.Count)
-        {
-            return StepResult.Failed(label, "Impossible de remettre les IP en automatique");
-        }
-
-        return failures > 0
-            ? StepResult.Ok(label, $"Partiel ({failures} adaptateur(s) en échec)")
-            : StepResult.Ok(label, "IP repassées en automatique");
-    }
-
-    private async Task<StepResult> RefreshAdaptersAsync(bool isAdmin, CancellationToken ct, bool hardReset = false)
-    {
-        var label = hardReset ? "Réinitialisation adaptateurs réseau" : "Réinitialiser adaptateurs (soft)";
-        if (!isAdmin)
-        {
-            return StepResult.Ignored(label, "Droits admin requis");
-        }
-
-        var adapterQuery = EnumerateTargetAdapters();
-        if (!hardReset)
-        {
-            adapterQuery = adapterQuery.Where(a => a.OperationalStatus == OperationalStatus.Up);
-        }
-
-        var adapters = adapterQuery.ToList();
-        if (adapters.Count == 0)
-        {
-            return StepResult.Ignored(label, hardReset ? "Aucun adaptateur réseau détecté" : "Aucun adaptateur actif");
-        }
-
-        var failures = 0;
-        foreach (var adapter in adapters)
-        {
-            var name = adapter.Name;
-            var disable = await _runner.RunAsync("netsh", $"interface set interface name=\"{name}\" admin=disable", CommandTimeout, ct).ConfigureAwait(false);
-            var enable = await _runner.RunAsync("netsh", $"interface set interface name=\"{name}\" admin=enable", CommandTimeout, ct).ConfigureAwait(false);
-
-            if (!disable.Success || !enable.Success)
-            {
-                failures++;
-            }
-        }
-
-        if (failures == adapters.Count)
-        {
-            return StepResult.Failed(label, "Impossible de rafraîchir les adaptateurs actifs");
-        }
-
-        return failures > 0
-            ? StepResult.Ok(label, $"Réactivation partielle ({failures} adaptateur(s) en échec)")
-            : StepResult.Ok(label, hardReset ? "Adaptateurs réinitialisés" : "Adaptateurs relancés en douceur");
-    }
-
-    private async Task<StepResult> RemoveWifiProfilesAsync(CancellationToken ct)
-    {
-        const string label = "Suppression profils Wi-Fi";
-        var result = await _runner.RunAsync("netsh", "wlan delete profile name=* i=*", CommandTimeout, ct).ConfigureAwait(false);
-
-        if (!result.Success)
-        {
-            var error = string.IsNullOrWhiteSpace(result.Error) ? "Impossible de supprimer les profils Wi-Fi" : result.Error!;
-            return StepResult.Failed(label, error);
-        }
-
-        return StepResult.Ok(label, "Profils Wi-Fi supprimés (il faudra se reconnecter)");
-    }
-
-    private async Task<StepResult> RemoveEthernetProfilesAsync(CancellationToken ct)
-    {
-        const string label = "Suppression réseaux Ethernet mémorisés";
-        var result = await _runner.RunAsync("netsh", "lan delete profile interface=*", CommandTimeout, ct).ConfigureAwait(false);
-
-        if (!result.Success)
-        {
-            var error = string.IsNullOrWhiteSpace(result.Error) ? "Impossible de purger les profils Ethernet" : result.Error!;
-            return StepResult.Failed(label, error);
-        }
-
-        return StepResult.Ok(label, "Profils Ethernet effacés (configuration à refaire si besoin)");
-    }
-
-    private async Task<StepResult> RestartNetworkServicesAsync(CancellationToken ct)
-    {
-        const string label = "Redémarrage services réseau";
-        var targets = new[] { "Dnscache", "Dhcp", "NlaSvc", "Netman", "WlanSvc", "WwanSvc" };
-
-        var failures = 0;
-        foreach (var service in targets)
-        {
-            var stop = await _runner.RunAsync("net", $"stop {service}", CommandTimeout, ct).ConfigureAwait(false);
-            var start = await _runner.RunAsync("net", $"start {service}", CommandTimeout, ct).ConfigureAwait(false);
-
-            if (!stop.Success || !start.Success)
-            {
-                failures++;
-            }
-        }
-
-        if (failures == targets.Length)
-        {
-            return StepResult.Failed(label, "Impossible de relancer les services réseau critiques");
-        }
-
-        return failures > 0
-            ? StepResult.Ok(label, $"Services relancés avec {failures} échec(s)")
-            : StepResult.Ok(label, "Services réseau relancés");
-    }
-
-    private static IEnumerable<NetworkInterface> EnumerateTargetAdapters()
-    {
-        return NetworkInterface
-            .GetAllNetworkInterfaces()
-            .Where(a => a.NetworkInterfaceType != NetworkInterfaceType.Loopback && a.NetworkInterfaceType != NetworkInterfaceType.Tunnel);
-    }
-
-    private static StepStatus ComputeGlobalStatus(IReadOnlyCollection<StepResult> steps)
-    {
-        var failed = steps.Any(s => s.Status == StepStatus.Failed);
-        if (failed)
-        {
-            return StepStatus.Failed;
-        }
-
-        var warnings = steps.Any(s => s.Status == StepStatus.Ignored);
-        return warnings ? StepStatus.Warning : StepStatus.Ok;
-    }
-
-    private static string BuildSummary(StepStatus globalStatus, IReadOnlyCollection<StepResult> steps, bool isAdmin)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Reset réseau (soft): Résultat global: {globalStatus}");
-        sb.AppendLine($"Droits admin: {(isAdmin ? "Oui" : "Non")}");
-        foreach (var step in steps)
-        {
-            sb.AppendLine($"- {step.Label}: {step.Status} ({step.Details})");
-        }
-
-        sb.Append("Prochaines options: Diagnostic réseau | Reset réseau (complet)");
-        return sb.ToString();
-    }
-
-    private async Task<LatencyProbeResult> ProbeAsync(string label, string target, CancellationToken ct)
-    {
-        var rtts = new List<long>();
-        var failures = 0;
-        var dnsFailures = 0;
-
-        for (var i = 0; i < PingCount; i++)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            var attempt = await _ping.SendAsync(target, PingTimeoutMs, ct).ConfigureAwait(false);
-            switch (attempt.Status)
-            {
-                case PingAttemptStatus.Success:
-                    rtts.Add(attempt.RoundtripTimeMs);
-                    break;
-                case PingAttemptStatus.DnsError:
-                    dnsFailures++;
-                    failures++;
-                    break;
-                default:
-                    failures++;
-                    break;
-            }
-        }
-
-        var packetLossPercent = (double)failures / PingCount * 100;
-        var hasSuccess = rtts.Count > 0;
-        var min = hasSuccess ? rtts.Min() : (long?)null;
-        var max = hasSuccess ? rtts.Max() : (long?)null;
-        var avg = hasSuccess ? rtts.Average() : (double?)null;
-        var jitter = CalculateJitter(rtts);
-
-        var status = DetermineStatus(hasSuccess, dnsFailures, packetLossPercent, avg, jitter);
-        return new LatencyProbeResult(label, target, status, min, avg, max, packetLossPercent, jitter);
-    }
-
-    private static LatencyStatus DetermineStatus(bool hasSuccess, int dnsFailures, double packetLossPercent, double? avg, double? jitter)
-    {
-        if (dnsFailures > 0 && !hasSuccess)
-        {
-            return LatencyStatus.DnsFailure;
-        }
-
-        if (!hasSuccess)
-        {
-            return LatencyStatus.Failure;
-        }
-
-        var warning = false;
-        if (avg.HasValue && avg.Value > LatencyWarningThresholdMs)
-        {
-            warning = true;
-        }
-
-        if (packetLossPercent >= PacketLossWarningThresholdPercent)
-        {
-            warning = true;
-        }
-
-        if (jitter.HasValue && jitter.Value > JitterWarningThresholdMs)
-        {
-            warning = true;
-        }
-
-        return warning ? LatencyStatus.Warning : LatencyStatus.Ok;
-    }
-
-    private static double? CalculateJitter(IReadOnlyList<long> rtts)
-    {
-        if (rtts.Count < 2)
-        {
-            return null;
-        }
-
-        var deltas = new List<double>();
-        for (var i = 1; i < rtts.Count; i++)
-        {
-            deltas.Add(Math.Abs(rtts[i] - rtts[i - 1]));
-        }
-
-        // Jitter = moyenne des variations absolues entre RTT consécutifs (définition projet par défaut)
-        return deltas.Average();
-    }
-
-    private string BuildLatencySummary(LatencyProbeResult gateway, LatencyProbeResult external)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Passerelle locale: {FormatProbe(gateway)}");
-        sb.AppendLine($"Serveur externe stable: {FormatProbe(external)}");
-
-        var global = ComputeGlobalStatus(gateway, external);
-        sb.AppendLine($"Résumé global: {global}");
-        sb.Append("Ton réseau respire… parfois.");
-
-        return sb.ToString();
-    }
-
-    private static string BuildAdvancedSummary(StepStatus global, IReadOnlyCollection<StepResult> steps)
-    {
-        var sb = new StringBuilder();
-        var globalText = global switch
-        {
-            StepStatus.Ok => "OK",
-            StepStatus.Ignored => "Attention",
-            _ => "Échec"
-        };
-    }
-
-        sb.AppendLine($"Reset réseau (complet): Résultat global: {globalText}. Connexion perdue temporairement, mais on remet tout à zéro.");
-        foreach (var step in steps)
-        {
-            sb.AppendLine($"- {step.Label}: {step.StatusLabel} — {step.Message}");
-        }
-
-        var rebootAdvice = ComputeRebootAdvice(steps);
-        var rebootText = rebootAdvice switch
-        {
-            RebootAdvice.Required => "requis",
-            RebootAdvice.Recommended => "recommandé",
-            _ => "non"
-        };
-
-        sb.AppendLine($"Redémarrage: {rebootText}.");
-        sb.AppendLine("À prévoir: reconfiguration Wi-Fi / VPN (profils supprimés, clients VPN préservés mais configuration réseau rafraîchie).");
-        sb.Append("Prochaines options: Diagnostic réseau");
-        return sb.ToString();
-    }
-
-    private static string BuildAdvancedSummary(StepStatus global, IReadOnlyCollection<StepResult> steps)
-    {
-        var sb = new StringBuilder();
-        var globalText = global switch
-        {
-            StepStatus.Ok => "OK",
-            StepStatus.Ignored => "Attention",
-            _ => "Échec"
-        };
-
-        sb.AppendLine($"Reset réseau (complet): Résultat global: {globalText}. Connexion perdue temporairement, mais on remet tout à zéro.");
-        foreach (var step in steps)
-        {
-            sb.AppendLine($"- {step.Label}: {step.StatusLabel} — {step.Message}");
-        }
-
-        var rebootAdvice = ComputeRebootAdvice(steps);
-        var rebootText = rebootAdvice switch
-        {
-            RebootAdvice.Required => "requis",
-            RebootAdvice.Recommended => "recommandé",
-            _ => "non"
-        };
-
-        sb.AppendLine($"Redémarrage: {rebootText}.");
-        sb.AppendLine("À prévoir: reconfiguration Wi-Fi / VPN (profils supprimés, clients VPN préservés mais configuration réseau rafraîchie).");
-        sb.Append("Prochaines options: Diagnostic réseau");
-        return sb.ToString();
-    }
-
-    private static RebootAdvice ComputeRebootAdvice(IEnumerable<StepResult> steps)
-    {
-        if (steps.Any(s => s.Reboot == RebootAdvice.Required))
-        {
-            return RebootAdvice.Required;
-        }
-
-        if (steps.Any(s => s.Reboot == RebootAdvice.Recommended))
-        {
-            return RebootAdvice.Recommended;
-        }
-
-        return RebootAdvice.None;
-    }
-
-    private static RebootAdvice DetectRebootSignal(NetworkCommandResult result, RebootAdvice fallback)
-    {
-        if (ContainsRebootCue(result.Output) || ContainsRebootCue(result.Error))
-        {
-            return RebootAdvice.Required;
-        }
-
-        return fallback;
-    }
-
-    private static bool ContainsRebootCue(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        return text.Contains("restart", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("reboot", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("redémarrer", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("redemarrer", StringComparison.OrdinalIgnoreCase);
-    }
+    Pending,
+    Success,
+    Failed
 }
 
+public sealed record NetworkResetStep(string Label, string Command, string Description);
+
+public sealed record NetworkResetStepResult(string Label, NetworkResetStatus Status, string Message)
+{
+    public string StatusLabel => Status.ToString();
+}
+
+public sealed record NetworkResetResult(NetworkResetStatus Status, IReadOnlyList<NetworkResetStepResult> Steps, string Summary);
+
+/// <summary>
+/// Provides helpers to reset common Windows network components (Winsock, TCP/IP, DNS cache).
+/// The implementation executes the commands sequentially and reports a per-step status.
+/// </summary>
+public sealed class NetworkService
+{
+    private readonly IReadOnlyList<NetworkResetStep> _resetSteps = new List<NetworkResetStep>
+    {
+        new("Reset complet Winsock", "netsh winsock reset", "Réinitialise la configuration Winsock."),
+        new("Reset pile TCP/IP", "netsh int ip reset", "Réinitialise la pile TCP/IP."),
+        new("Vider cache DNS", "ipconfig /flushdns", "Purge le cache DNS."),
+        new("Renouveler DHCP", "ipconfig /renew", "Renouvelle la configuration DHCP."),
+        new("Relâcher DHCP", "ipconfig /release", "Libère l'adresse DHCP actuelle."),
+        new("Réinitialiser pare-feu", "netsh advfirewall reset", "Restaure la configuration du pare-feu."),
+        new("Réinitialiser configuration proxy", "netsh winhttp reset proxy", "Supprime la configuration de proxy WinHTTP."),
+        new("Réinitialiser statistiques interface", "netstat -rn", "Affiche la table de routage pour vérification."),
+        new("Réinitialiser adaptateurs", "ipconfig /registerdns", "Force l'enregistrement DNS des adaptateurs."),
+        new("Réinitialiser paramètres Winsock supplémentaires", "netsh winsock reset catalog", "Réinitialise le catalogue Winsock."),
+    };
+
+    public async Task<NetworkResetResult> ResetNetworkAsync()
+    {
+        var stepResults = new List<NetworkResetStepResult>();
+        foreach (var step in _resetSteps)
+        {
+            var result = await ExecuteStepAsync(step);
+            stepResults.Add(result);
+        }
+
+        var globalStatus = stepResults.Any(r => r.Status == NetworkResetStatus.Failed)
+            ? NetworkResetStatus.Failed
+            : NetworkResetStatus.Success;
+
+        var summaryBuilder = new StringBuilder();
+        summaryBuilder.AppendLine($"Reset réseau (complet): Résultat global: {globalStatus}.");
+        foreach (var step in stepResults)
+        {
+            summaryBuilder.AppendLine($"- {step.Label}: {step.StatusLabel} — {step.Message}");
+        }
+
+        return new NetworkResetResult(globalStatus, stepResults, summaryBuilder.ToString().TrimEnd());
+    }
+
+    private async Task<NetworkResetStepResult> ExecuteStepAsync(NetworkResetStep step)
+    {
+        try
+        {
+            var (success, output) = await RunCommandAsync(step.Command);
+            var status = success ? NetworkResetStatus.Success : NetworkResetStatus.Failed;
+            var message = string.IsNullOrWhiteSpace(output)
+                ? step.Description
+                : output.Trim();
+
+            return new NetworkResetStepResult(step.Label, status, message);
+        }
+        catch (Exception ex)
+        {
+            return new NetworkResetStepResult(step.Label, NetworkResetStatus.Failed, ex.Message);
+        }
+    }
+
+    private static async Task<(bool Success, string Output)> RunCommandAsync(string command)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/C {command}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+        var outputBuilder = new StringBuilder();
+
+        var tcs = new TaskCompletionSource<int>();
+        process.EnableRaisingEvents = true;
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data != null) outputBuilder.AppendLine(e.Data);
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null) outputBuilder.AppendLine(e.Data);
+        };
+        process.Exited += (_, _) => tcs.TrySetResult(process.ExitCode);
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        var exitCode = await tcs.Task.ConfigureAwait(false);
+        var output = outputBuilder.ToString();
+
+        return (exitCode == 0, output);
+    }
 }
