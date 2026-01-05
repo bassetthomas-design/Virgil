@@ -1,8 +1,3 @@
-diff --git a/src/Virgil.Core/Virgil.Core.csproj b/src/Virgil.Core/Virgil.Core.csproj
-index 51568fe94460e9bff03211c44b2eaacc9d51d78e..a68c8ef3b27d7e03a64514d661c8b8c9bc4ee740 100644
---- a/src/Virgil.Core/Virgil.Core.csproj
-+++ b/src/Virgil.Core/Virgil.Core.csproj
-@@ -1,17 +1,21 @@
  ﻿<Project Sdk="Microsoft.NET.Sdk">
  
    <PropertyGroup>
