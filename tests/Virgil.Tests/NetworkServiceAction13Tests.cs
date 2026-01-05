@@ -38,8 +38,8 @@ public class NetworkServiceAction13Tests
         var result = await service.RunLatencyTestAsync(CancellationToken.None);
 
         Assert.True(result.Success);
-        Assert.Contains("Passerelle locale: OK", result.Message);
-        Assert.Contains("Serveur externe stable: OK", result.Message);
+        Assert.Contains("Passerelle locale: OK — min/avg/max: 4/4/4 ms, perte: 0%", result.Message);
+        Assert.Contains("Serveur externe stable: OK — min/avg/max: 11/13/15 ms, perte: 0%", result.Message);
         Assert.Contains("Résumé global: OK", result.Message);
         Assert.Contains("jitter", result.Message);
     }
