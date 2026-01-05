@@ -115,12 +115,12 @@ public sealed class PerformanceService : IPerformanceService
             steps.Add(new StepResult("Alimentation", StepOutcome.Skipped, "Plan d'origine inconnu (aucun état enregistré)"));
             steps.Add(new StepResult("Système", StepOutcome.Skipped, "Réglages initiaux non enregistrés"));
 
-            var (powerStatus, systemStatus) = Summarize(steps);
-            var gpuStatus = "Ignoré (aucun changement enregistré)";
-            var summary =
-                $"Mode performance: DÉSACTIVÉ. Alimentation: {powerStatus}. Système: {systemStatus}. GPU: {gpuStatus}. Impossible de restaurer complètement: état initial non enregistré.";
-            var details = BuildDetails(steps, gpuStatus, includeGpu: true, performanceEnabled: false);
-            return new ActionExecutionResult(false, summary, details);
+            var (missingPowerStatus, missingSystemStatus) = Summarize(steps);
+            var missingGpuStatus = "Ignoré (aucun changement enregistré)";
+            var missingSnapshotSummary =
+                $"Mode performance: DÉSACTIVÉ. Alimentation: {missingPowerStatus}. Système: {missingSystemStatus}. GPU: {missingGpuStatus}. Impossible de restaurer complètement: état initial non enregistré.";
+            var missingDetails = BuildDetails(steps, missingGpuStatus, includeGpu: true, performanceEnabled: false);
+            return new ActionExecutionResult(false, missingSnapshotSummary, missingDetails);
         }
 
         steps.Add(await RestorePowerPlanAsync(state, ct).ConfigureAwait(false));
