@@ -8,7 +8,8 @@ using System.Threading.Tasks;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Network;
 
-namespace Virgil.Services;
+namespace Virgil.Services
+{
 
 public sealed class NetworkService : INetworkService
 {
@@ -25,6 +26,34 @@ public sealed class NetworkService : INetworkService
     private readonly IPlatformInfo _platform;
     private readonly IPingClient _ping;
     private readonly INetworkInfoProvider _networkInfo;
+
+    private sealed record StepResult(string Label, StepStatus Status, string Message, RebootAdvice Reboot = RebootAdvice.None)
+    {
+        public string StatusLabel => Status switch
+        {
+            StepStatus.Ok => "OK",
+            StepStatus.Ignored => "Ignoré",
+            _ => "Échec"
+        };
+
+        public static StepResult Ok(string label, string message, RebootAdvice reboot = RebootAdvice.None) => new(label, StepStatus.Ok, message, reboot);
+        public static StepResult Ignored(string label, string message) => new(label, StepStatus.Ignored, message);
+        public static StepResult Failed(string label, string message) => new(label, StepStatus.Failed, message);
+    }
+
+    private enum StepStatus
+    {
+        Ok,
+        Ignored,
+        Failed
+    }
+
+    private enum RebootAdvice
+    {
+        None,
+        Recommended,
+        Required
+    }
 
     private sealed record StepResult(string Label, StepStatus Status, string Message, RebootAdvice Reboot = RebootAdvice.None)
     {
@@ -107,7 +136,7 @@ public sealed class NetworkService : INetworkService
         if (!_privilegeChecker.IsAdministrator())
         {
             const string message = "Reset réseau (complet) nécessite les droits administrateur. Aucun changement effectué.";
-            const string details = "Relancez en mode administrateur si vous voulez vraiment tout remettre d'équerre.";
+            const string details = "Relancez en mode administrateur si vous voulez vraiment tout remettre d'équerre. Droits admin requis.";
             return ActionExecutionResult.NotAvailable(message, details);
         }
 
@@ -130,15 +159,6 @@ public sealed class NetworkService : INetworkService
             : ActionExecutionResult.Ok(summary);
     }
 
-        if (!_privilegeChecker.IsAdministrator())
-        {
-            const string message = "Reset réseau (complet) nécessite les droits administrateur. Aucun changement effectué.";
-            const string details = "Relancez en mode administrateur si vous voulez vraiment tout remettre d'équerre.";
-            return ActionExecutionResult.NotAvailable(message, details);
-        }
-
-        var steps = new List<StepResult>();
-
         steps.Add(await RunCommandStepAsync("Reset complet Winsock", "netsh", "winsock reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
         steps.Add(await RunCommandStepAsync("Reset pile TCP/IP", "netsh", "int ip reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
         steps.Add(await RefreshAdaptersAsync(isAdmin: true, ct, hardReset: true));
@@ -147,14 +167,6 @@ public sealed class NetworkService : INetworkService
         steps.Add(await RemoveWifiProfilesAsync(ct));
         steps.Add(await RemoveEthernetProfilesAsync(ct));
         steps.Add(await RestartNetworkServicesAsync(ct));
-
-        var globalStatus = ComputeGlobalStatus(steps);
-        var summary = BuildAdvancedSummary(globalStatus, steps);
-
-        return globalStatus == StepStatus.Failed
-            ? ActionExecutionResult.Failure(summary)
-            : ActionExecutionResult.Ok(summary);
-    }
 
     private async Task<StepResult> RunCommandStepAsync(string label, string fileName, string args, bool requiresAdmin, CancellationToken ct, Func<NetworkCommandResult, RebootAdvice>? rebootDetector = null)
     {
@@ -508,6 +520,36 @@ public sealed class NetworkService : INetworkService
         return sb.ToString();
     }
 
+    private static string BuildAdvancedSummary(StepStatus global, IReadOnlyCollection<StepResult> steps)
+    {
+        var sb = new StringBuilder();
+        var globalText = global switch
+        {
+            StepStatus.Ok => "OK",
+            StepStatus.Ignored => "Attention",
+            _ => "Échec"
+        };
+
+        sb.AppendLine($"Reset réseau (complet): Résultat global: {globalText}. Connexion perdue temporairement, mais on remet tout à zéro.");
+        foreach (var step in steps)
+        {
+            sb.AppendLine($"- {step.Label}: {step.StatusLabel} — {step.Message}");
+        }
+
+        var rebootAdvice = ComputeRebootAdvice(steps);
+        var rebootText = rebootAdvice switch
+        {
+            RebootAdvice.Required => "requis",
+            RebootAdvice.Recommended => "recommandé",
+            _ => "non"
+        };
+
+        sb.AppendLine($"Redémarrage: {rebootText}.");
+        sb.AppendLine("À prévoir: reconfiguration Wi-Fi / VPN (profils supprimés, clients VPN préservés mais configuration réseau rafraîchie).");
+        sb.Append("Prochaines options: Diagnostic réseau");
+        return sb.ToString();
+    }
+
     private static RebootAdvice ComputeRebootAdvice(IEnumerable<StepResult> steps)
     {
         if (steps.Any(s => s.Reboot == RebootAdvice.Required))
@@ -545,45 +587,6 @@ public sealed class NetworkService : INetworkService
             || text.Contains("redémarrer", StringComparison.OrdinalIgnoreCase)
             || text.Contains("redemarrer", StringComparison.OrdinalIgnoreCase);
     }
-
 }
 
-public sealed record StepResult(string Label, StepStatus Status, string Details)
-{
-    public static StepResult Ok(string label, string details) => new(label, StepStatus.Ok, details);
-
-    public static StepResult Failed(string label, string details) => new(label, StepStatus.Failed, details);
-
-    public static StepResult Ignored(string label, string details) => new(label, StepStatus.Ignored, details);
-}
-
-public enum StepStatus
-{
-    Ok,
-    Failed,
-    Ignored,
-    Warning
-}
-
-public sealed record LatencyProbeResult(
-    string Label,
-    string Target,
-    LatencyStatus Status,
-    long? MinMs,
-    double? AverageMs,
-    long? MaxMs,
-    double PacketLossPercent,
-    double? JitterMs)
-{
-    public static LatencyProbeResult MissingGateway()
-        => new("Passerelle locale", string.Empty, LatencyStatus.MissingGateway, null, null, null, 100, null);
-}
-
-public enum LatencyStatus
-{
-    Ok,
-    Warning,
-    Failure,
-    DnsFailure,
-    MissingGateway
 }
