@@ -1,31 +1,26 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <RootNamespace>Virgil.Core</RootNamespace>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.10" />
-    <PackageReference Include="System.Management" Version="9.0.0" />
-    <PackageReference Include="Serilog" Version="3.1.1" />
-    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
-    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.4" />
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
-  </ItemGroup>
-
-  <!-- Dialogues JSON, si tu le gardes ici -->
-  <ItemGroup>
-    <None Include="virgil-dialogues.json" CopyToOutputDirectory="Always" Condition="Exists('virgil-dialogues.json')" />
-    <None Include="..\Virgil.Services\Startup\startup_rules.safe.json" CopyToOutputDirectory="Always" Condition="Exists('..\Virgil.Services\Startup\startup_rules.safe.json')" />
-  </ItemGroup>
-
-  <!-- Domain + Services (actions, orchestrateur, services métier) -->
-  <ItemGroup>
-    <Compile Include="..\Virgil.Domain\**\*.cs" />
-    <Compile Include="..\Virgil.Services\**\*.cs" />
-  </ItemGroup>
-
-</Project>
+diff --git a/src/Virgil.Core/Virgil.Core.csproj b/src/Virgil.Core/Virgil.Core.csproj
+index 51568fe94460e9bff03211c44b2eaacc9d51d78e..a68c8ef3b27d7e03a64514d661c8b8c9bc4ee740 100644
+--- a/src/Virgil.Core/Virgil.Core.csproj
++++ b/src/Virgil.Core/Virgil.Core.csproj
+@@ -1,17 +1,21 @@
+ ﻿<Project Sdk="Microsoft.NET.Sdk">
+ 
+   <PropertyGroup>
+     <TargetFramework>net8.0</TargetFramework>
+     <ImplicitUsings>enable</ImplicitUsings>
+     <Nullable>enable</Nullable>
+   </PropertyGroup>
+ 
+   <ItemGroup>
+     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+     <PackageReference Include="Serilog" Version="4.3.0" />
+     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+     <PackageReference Include="System.Management" Version="9.0.10" />
+   </ItemGroup>
+ 
++  <ItemGroup>
++    <Compile Include="..\Virgil.Services\NetworkService.cs" Link="Services\NetworkService.cs" />
++  </ItemGroup>
++
+ </Project>
