@@ -6,6 +6,13 @@ using System.Threading.Tasks;
 using Virgil.Services;
 using Virgil.Services.Network;
 using Virgil.Services.Startup;
+using IAppMemoryTrimmer = Virgil.Services.PerformanceService.IAppMemoryTrimmer;
+using IMemoryReader = Virgil.Services.PerformanceService.IMemoryReader;
+using IProcessHandle = Virgil.Services.PerformanceService.IProcessHandle;
+using IProcessProvider = Virgil.Services.PerformanceService.IProcessProvider;
+using IProcessWhitelistProvider = Virgil.Services.PerformanceService.IProcessWhitelistProvider;
+using IStandbyMemoryReleaser = Virgil.Services.PerformanceService.IStandbyMemoryReleaser;
+using MemorySnapshot = Virgil.Services.PerformanceService.MemorySnapshot;
 using Xunit;
 
 namespace Virgil.Tests;
