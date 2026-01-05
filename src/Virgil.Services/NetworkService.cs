@@ -11,6 +11,9 @@ namespace Virgil.Services;
 
 public sealed class NetworkService : INetworkService
 {
+    private const string ExternalLatencyHost = "1.1.1.1";
+    private const int LatencySampleCount = 10;
+    private const int PingTimeoutMs = 2000;
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
 
     private readonly INetworkCommandRunner _runner;
@@ -110,16 +113,17 @@ public sealed class NetworkService : INetworkService
             return ActionExecutionResult.NotAvailable("Test de latence uniquement supporté sur Windows");
         }
 
-        var sb = new StringBuilder();
         var gateway = _networkInfoProvider.GetDefaultGateway();
-        var gatewayStatus = await EvaluateEndpointAsync(gateway, "Passerelle locale", ct).ConfigureAwait(false);
-        var externalStatus = await EvaluateEndpointAsync("1.1.1.1", "Serveur externe stable", ct).ConfigureAwait(false);
+        var gatewayResult = await EvaluateEndpointMetricsAsync(gateway, "Passerelle locale", ct).ConfigureAwait(false);
+        var externalResult = await EvaluateEndpointMetricsAsync(ExternalLatencyHost, "Serveur externe stable", ct).ConfigureAwait(false);
 
-        sb.AppendLine(gatewayStatus.Line);
-        sb.AppendLine(externalStatus.Line);
+        var sb = new StringBuilder();
+        sb.AppendLine(FormatEndpointResult(gatewayResult));
+        sb.AppendLine(FormatEndpointResult(externalResult));
 
-        var summary = gatewayStatus.Status == "OK" && externalStatus.Status == "OK" ? "OK" : "Échec";
-        sb.Append($"Résumé global: {summary}.");
+        var global = DeriveGlobalSummary(gatewayResult.Status, externalResult.Status);
+        sb.AppendLine($"Résumé global: {global}.");
+        sb.Append("Ton réseau respire… parfois.");
 
         return ActionExecutionResult.Ok(sb.ToString().TrimEnd());
     }
@@ -158,6 +162,104 @@ public sealed class NetworkService : INetworkService
 
         return results;
     }
+
+    private async Task<EndpointLatencyResult> EvaluateEndpointMetricsAsync(string? host, string label, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return EndpointLatencyResult.Failure(label, "Échec (passerelle non détectée)");
+        }
+
+        var samples = new List<long>(LatencySampleCount);
+        var failures = 0;
+        var dnsFailures = 0;
+
+        for (var i = 0; i < LatencySampleCount; i++)
+        {
+            var attempt = await _pingClient.SendAsync(host, PingTimeoutMs, ct).ConfigureAwait(false);
+            if (attempt.Status == PingAttemptStatus.Success)
+            {
+                samples.Add(attempt.RoundtripTimeMs);
+            }
+            else
+            {
+                failures++;
+                if (attempt.Status == PingAttemptStatus.DnsError)
+                {
+                    dnsFailures++;
+                }
+            }
+        }
+
+        if (samples.Count == 0)
+        {
+            var reason = dnsFailures > 0 ? "DNS/resolve" : failures > 0 ? "Timeout" : "Inconnu";
+            return EndpointLatencyResult.Failure(label, $"Échec ({reason})");
+        }
+
+        var min = (int)Math.Round((double)samples.Min());
+        var max = (int)Math.Round((double)samples.Max());
+        var avg = (int)Math.Round(samples.Average());
+        var loss = Math.Round((double)failures / (failures + samples.Count) * 100, 1);
+
+        // Fallback jitter definition: mean absolute difference between consecutive RTTs.
+        var diffs = samples.Zip(samples.Skip(1), (a, b) => Math.Abs(a - b)).ToList();
+        var jitter = diffs.Count > 0 ? (int)Math.Round(diffs.Average()) : 0;
+
+        var status = DeriveEndpointStatus(avg, jitter, loss);
+        var metrics = new LatencyMetrics(min, avg, max, jitter, loss);
+        var message = $"{label}: {StatusToText(status)} — min/avg/max: {min}/{avg}/{max} ms, perte: {loss}%, jitter: {jitter} ms";
+
+        return new EndpointLatencyResult(label, status, message, metrics, dnsFailures > 0);
+    }
+
+    private static EndpointStatus DeriveEndpointStatus(int avg, int jitter, double loss)
+    {
+        // Conservative thresholds documented here: warn when loss > 0%, avg > 200ms or jitter > 50ms.
+        if (loss >= 50)
+        {
+            return EndpointStatus.Failure;
+        }
+
+        if (loss > 0 || avg > 200 || jitter > 50)
+        {
+            return EndpointStatus.Attention;
+        }
+
+        return EndpointStatus.Ok;
+    }
+
+    private static string DeriveGlobalSummary(EndpointStatus gateway, EndpointStatus external)
+    {
+        if (gateway == EndpointStatus.Failure || external == EndpointStatus.Failure)
+        {
+            return "Échec";
+        }
+
+        if (gateway == EndpointStatus.Attention || external == EndpointStatus.Attention)
+        {
+            return "Attention";
+        }
+
+        return "OK";
+    }
+
+    private static string FormatEndpointResult(EndpointLatencyResult result)
+    {
+        if (result.Metrics is null)
+        {
+            return $"{result.Label}: {result.Message}";
+        }
+
+        return result.Message;
+    }
+
+    private static string StatusToText(EndpointStatus status) => status switch
+    {
+        EndpointStatus.Ok => "OK",
+        EndpointStatus.Attention => "Attention",
+        _ => "Échec"
+    };
 
     private static string DeriveGlobalStatus(IEnumerable<NetworkStepResult> results)
     {
@@ -209,47 +311,6 @@ public sealed class NetworkService : INetworkService
         return sb.ToString().TrimEnd();
     }
 
-    private async Task<(string Status, string Line)> EvaluateEndpointAsync(string? host, string label, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(host))
-        {
-            return ("Échec", $"{label}: Échec (passerelle non détectée)");
-        }
-
-        var latencies = new List<long>();
-        var failures = 0;
-        var dnsFailures = 0;
-        for (var i = 0; i < 10; i++)
-        {
-            var attempt = await _pingClient.SendAsync(host, timeoutMs: 2000, ct).ConfigureAwait(false);
-            if (attempt.Status == PingAttemptStatus.Success)
-            {
-                latencies.Add(attempt.RoundtripTimeMs);
-            }
-            else
-            {
-                failures++;
-                if (attempt.Status == PingAttemptStatus.DnsError)
-                {
-                    dnsFailures++;
-                }
-            }
-        }
-
-        if (latencies.Count == 0)
-        {
-            var reason = dnsFailures > 0 ? "DNS/resolve" : failures > 0 ? "Timeout" : "Inconnu";
-            return ("Échec", $"{label}: Échec ({reason})");
-        }
-
-        var avg = (int)Math.Round(latencies.Average());
-        var jitter = latencies.Count > 1 ? latencies.Max() - latencies.Min() : 0;
-        var status = failures == 0 ? "OK" : "Instable";
-        var reasonText = failures == 0 ? $"latence moyenne {avg} ms, jitter {jitter} ms" : "paquets perdus";
-
-        return (status == "OK" ? "OK" : "Échec", $"{label}: {status} ({reasonText})");
-    }
-
     private static string FormatMessage(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -268,6 +329,21 @@ public sealed class NetworkService : INetworkService
 
         public static NetworkStep AdminOptional(string label, string fileName, string arguments, string description)
             => new(label, fileName, arguments, description, false);
+    }
+
+    private sealed record LatencyMetrics(int Min, int Avg, int Max, int Jitter, double LossPercent);
+
+    private sealed record EndpointLatencyResult(string Label, EndpointStatus Status, string Message, LatencyMetrics? Metrics, bool HadDnsFailure)
+    {
+        public static EndpointLatencyResult Failure(string label, string message)
+            => new(label, EndpointStatus.Failure, message, null, false);
+    }
+
+    private enum EndpointStatus
+    {
+        Ok,
+        Attention,
+        Failure
     }
 
     private sealed record NetworkStepResult(string Label, string Status, string Message, bool OutputContainsRestartHint);
