@@ -26,6 +26,34 @@ public sealed class NetworkService : INetworkService
     private readonly IPingClient _ping;
     private readonly INetworkInfoProvider _networkInfo;
 
+    private sealed record StepResult(string Label, StepStatus Status, string Message, RebootAdvice Reboot = RebootAdvice.None)
+    {
+        public string StatusLabel => Status switch
+        {
+            StepStatus.Ok => "OK",
+            StepStatus.Ignored => "Ignoré",
+            _ => "Échec"
+        };
+
+        public static StepResult Ok(string label, string message, RebootAdvice reboot = RebootAdvice.None) => new(label, StepStatus.Ok, message, reboot);
+        public static StepResult Ignored(string label, string message) => new(label, StepStatus.Ignored, message);
+        public static StepResult Failed(string label, string message) => new(label, StepStatus.Failed, message);
+    }
+
+    private enum StepStatus
+    {
+        Ok,
+        Ignored,
+        Failed
+    }
+
+    private enum RebootAdvice
+    {
+        None,
+        Recommended,
+        Required
+    }
+
     public NetworkService(
         INetworkCommandRunner? runner = null,
         IPrivilegeChecker? privilegeChecker = null,
@@ -102,18 +130,30 @@ public sealed class NetworkService : INetworkService
             : ActionExecutionResult.Ok(summary);
     }
 
-    public async Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default)
-    {
-        var gateway = _networkInfo.GetDefaultGateway();
-        var gatewayResult = string.IsNullOrWhiteSpace(gateway)
-            ? LatencyProbeResult.MissingGateway()
-            : await ProbeAsync("Passerelle locale", gateway!, ct).ConfigureAwait(false);
+        if (!_privilegeChecker.IsAdministrator())
+        {
+            const string message = "Reset réseau (complet) nécessite les droits administrateur. Aucun changement effectué.";
+            const string details = "Relancez en mode administrateur si vous voulez vraiment tout remettre d'équerre.";
+            return ActionExecutionResult.NotAvailable(message, details);
+        }
 
-        var externalResult = await ProbeAsync($"Serveur externe stable ({ExternalStableHost})", ExternalStableHost, ct).ConfigureAwait(false);
+        var steps = new List<StepResult>();
 
-        var summary = BuildLatencySummary(gatewayResult, externalResult);
+        steps.Add(await RunCommandStepAsync("Reset complet Winsock", "netsh", "winsock reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
+        steps.Add(await RunCommandStepAsync("Reset pile TCP/IP", "netsh", "int ip reset", requiresAdmin: true, ct, result => DetectRebootSignal(result, RebootAdvice.Recommended)));
+        steps.Add(await RefreshAdaptersAsync(isAdmin: true, ct, hardReset: true));
+        steps.Add(await ResetCustomIpAsync(ct));
+        steps.Add(await ResetCustomDnsAsync(isAdmin: true, ct));
+        steps.Add(await RemoveWifiProfilesAsync(ct));
+        steps.Add(await RemoveEthernetProfilesAsync(ct));
+        steps.Add(await RestartNetworkServicesAsync(ct));
 
-        return ActionExecutionResult.Ok(summary);
+        var globalStatus = ComputeGlobalStatus(steps);
+        var summary = BuildAdvancedSummary(globalStatus, steps);
+
+        return globalStatus == StepStatus.Failed
+            ? ActionExecutionResult.Failure(summary)
+            : ActionExecutionResult.Ok(summary);
     }
 
     private async Task<StepResult> RunCommandStepAsync(string label, string fileName, string args, bool requiresAdmin, CancellationToken ct, Func<NetworkCommandResult, RebootAdvice>? rebootDetector = null)
@@ -247,8 +287,63 @@ public sealed class NetworkService : INetworkService
         }
 
         return failures > 0
-            ? StepResult.Ok(label, $"Rafraîchi avec avertissements sur {failures} adaptateur(s)")
-            : StepResult.Ok(label, "Adaptateurs rafraîchis");
+            ? StepResult.Ok(label, $"Réactivation partielle ({failures} adaptateur(s) en échec)")
+            : StepResult.Ok(label, hardReset ? "Adaptateurs réinitialisés" : "Adaptateurs relancés en douceur");
+    }
+
+    private async Task<StepResult> RemoveWifiProfilesAsync(CancellationToken ct)
+    {
+        const string label = "Suppression profils Wi-Fi";
+        var result = await _runner.RunAsync("netsh", "wlan delete profile name=* i=*", CommandTimeout, ct).ConfigureAwait(false);
+
+        if (!result.Success)
+        {
+            var error = string.IsNullOrWhiteSpace(result.Error) ? "Impossible de supprimer les profils Wi-Fi" : result.Error!;
+            return StepResult.Failed(label, error);
+        }
+
+        return StepResult.Ok(label, "Profils Wi-Fi supprimés (il faudra se reconnecter)");
+    }
+
+    private async Task<StepResult> RemoveEthernetProfilesAsync(CancellationToken ct)
+    {
+        const string label = "Suppression réseaux Ethernet mémorisés";
+        var result = await _runner.RunAsync("netsh", "lan delete profile interface=*", CommandTimeout, ct).ConfigureAwait(false);
+
+        if (!result.Success)
+        {
+            var error = string.IsNullOrWhiteSpace(result.Error) ? "Impossible de purger les profils Ethernet" : result.Error!;
+            return StepResult.Failed(label, error);
+        }
+
+        return StepResult.Ok(label, "Profils Ethernet effacés (configuration à refaire si besoin)");
+    }
+
+    private async Task<StepResult> RestartNetworkServicesAsync(CancellationToken ct)
+    {
+        const string label = "Redémarrage services réseau";
+        var targets = new[] { "Dnscache", "Dhcp", "NlaSvc", "Netman", "WlanSvc", "WwanSvc" };
+
+        var failures = 0;
+        foreach (var service in targets)
+        {
+            var stop = await _runner.RunAsync("net", $"stop {service}", CommandTimeout, ct).ConfigureAwait(false);
+            var start = await _runner.RunAsync("net", $"start {service}", CommandTimeout, ct).ConfigureAwait(false);
+
+            if (!stop.Success || !start.Success)
+            {
+                failures++;
+            }
+        }
+
+        if (failures == targets.Length)
+        {
+            return StepResult.Failed(label, "Impossible de relancer les services réseau critiques");
+        }
+
+        return failures > 0
+            ? StepResult.Ok(label, $"Services relancés avec {failures} échec(s)")
+            : StepResult.Ok(label, "Services réseau relancés");
     }
 
     private static IEnumerable<NetworkInterface> EnumerateTargetAdapters()
@@ -382,55 +477,75 @@ public sealed class NetworkService : INetworkService
         return sb.ToString();
     }
 
-    private static string ComputeGlobalStatus(LatencyProbeResult gateway, LatencyProbeResult external)
+    private static string BuildAdvancedSummary(StepStatus global, IReadOnlyCollection<StepResult> steps)
     {
-        if (gateway.Status is LatencyStatus.DnsFailure or LatencyStatus.MissingGateway || external.Status == LatencyStatus.DnsFailure)
+        var sb = new StringBuilder();
+        var globalText = global switch
         {
-            return "Échec";
-        }
-
-        if (gateway.Status == LatencyStatus.Failure || external.Status == LatencyStatus.Failure)
-        {
-            return "Échec";
-        }
-
-        if (gateway.Status == LatencyStatus.Warning || external.Status == LatencyStatus.Warning)
-        {
-            return "Attention";
-        }
-
-        return "OK";
-    }
-
-    private static string FormatProbe(LatencyProbeResult probe)
-    {
-        return probe.Status switch
-        {
-            LatencyStatus.MissingGateway => "Échec (passerelle non détectée)",
-            LatencyStatus.DnsFailure => "Échec (DNS/resolve)",
-            LatencyStatus.Failure => "Échec (aucune réponse)",
-            _ => FormatMetrics(probe)
+            StepStatus.Ok => "OK",
+            StepStatus.Ignored => "Attention",
+            _ => "Échec"
         };
     }
 
-    private static string FormatMetrics(LatencyProbeResult probe)
-    {
-        var jitter = probe.JitterMs.HasValue ? $"{probe.JitterMs.Value:0.0} ms" : "N/A";
-        var min = probe.MinMs?.ToString() ?? "-";
-        var avg = probe.AverageMs.HasValue ? probe.AverageMs.Value.ToString("0.0") : "-";
-        var max = probe.MaxMs?.ToString() ?? "-";
-        var loss = probe.PacketLossPercent.ToString("0.0");
+        sb.AppendLine($"Reset réseau (complet): Résultat global: {globalText}. Connexion perdue temporairement, mais on remet tout à zéro.");
+        foreach (var step in steps)
+        {
+            sb.AppendLine($"- {step.Label}: {step.StatusLabel} — {step.Message}");
+        }
 
-        var prefix = probe.Status == LatencyStatus.Warning ? "Attention" : "OK";
-        return $"{prefix} (min/avg/max {min}/{avg}/{max} ms, perte {loss} %, jitter {jitter})";
+        var rebootAdvice = ComputeRebootAdvice(steps);
+        var rebootText = rebootAdvice switch
+        {
+            RebootAdvice.Required => "requis",
+            RebootAdvice.Recommended => "recommandé",
+            _ => "non"
+        };
+
+        sb.AppendLine($"Redémarrage: {rebootText}.");
+        sb.AppendLine("À prévoir: reconfiguration Wi-Fi / VPN (profils supprimés, clients VPN préservés mais configuration réseau rafraîchie).");
+        sb.Append("Prochaines options: Diagnostic réseau");
+        return sb.ToString();
     }
 
-    private enum RebootAdvice
+    private static RebootAdvice ComputeRebootAdvice(IEnumerable<StepResult> steps)
     {
-        None,
-        Recommended,
-        Required
+        if (steps.Any(s => s.Reboot == RebootAdvice.Required))
+        {
+            return RebootAdvice.Required;
+        }
+
+        if (steps.Any(s => s.Reboot == RebootAdvice.Recommended))
+        {
+            return RebootAdvice.Recommended;
+        }
+
+        return RebootAdvice.None;
     }
+
+    private static RebootAdvice DetectRebootSignal(NetworkCommandResult result, RebootAdvice fallback)
+    {
+        if (ContainsRebootCue(result.Output) || ContainsRebootCue(result.Error))
+        {
+            return RebootAdvice.Required;
+        }
+
+        return fallback;
+    }
+
+    private static bool ContainsRebootCue(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return text.Contains("restart", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("reboot", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("redémarrer", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("redemarrer", StringComparison.OrdinalIgnoreCase);
+    }
+
 }
 
 public sealed record StepResult(string Label, StepStatus Status, string Details)
