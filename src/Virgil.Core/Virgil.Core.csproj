@@ -8,14 +8,18 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.3" />
     <PackageReference Include="Serilog" Version="4.3.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.0" />
     <PackageReference Include="System.Management" Version="9.0.10" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Virgil.Services\NetworkService.cs" Link="Services\NetworkService.cs" />
+    <Compile Include="..\Virgil.Services\**\*.cs" Link="Services\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Virgil.Domain\**\*.cs" Link="Domain\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
