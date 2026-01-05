@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -76,5 +77,7 @@ public record PerformanceModeState
     public string? PreviousPowerPlanGuid { get; init; }
     public string? ActivePowerPlanGuid { get; init; }
     public int? PreviousPrioritySeparation { get; init; }
+    public int? PreviousCpuThrottleMinAc { get; init; }
+    public List<string> DisabledTasks { get; init; } = new();
     public DateTimeOffset? ActivatedAt { get; init; }
 }
