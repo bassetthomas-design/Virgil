@@ -197,8 +197,8 @@ public sealed class NetworkService : INetworkService
             return EndpointLatencyResult.Failure(label, $"Échec ({reason})");
         }
 
-        var min = (int)Math.Round(samples.Min());
-        var max = (int)Math.Round(samples.Max());
+        var min = (int)Math.Round((double)samples.Min());
+        var max = (int)Math.Round((double)samples.Max());
         var avg = (int)Math.Round(samples.Average());
         var loss = Math.Round((double)failures / (failures + samples.Count) * 100, 1);
 
