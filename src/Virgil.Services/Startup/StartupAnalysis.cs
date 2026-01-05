@@ -8,14 +8,14 @@ using System.Threading;
 
 namespace Virgil.Services.Startup;
 
-internal enum StartupImpactLevel
+public enum StartupImpactLevel
 {
     Faible,
     Moyen,
     Fort,
 }
 
-internal sealed record StartupAnalysisItem(
+public sealed record StartupAnalysisItem(
     string Name,
     string? Publisher,
     string? Path,
@@ -26,13 +26,13 @@ internal sealed record StartupAnalysisItem(
     bool RecommendedForDisable,
     string? Command);
 
-internal sealed record StartupAnalysisReport(
+public sealed record StartupAnalysisReport(
     IReadOnlyList<StartupAnalysisItem> Items,
     TimeSpan? EstimatedBootDuration,
     TimeSpan? LastBootAgo,
     IReadOnlyList<string> Notes);
 
-internal interface IStartupAnalyzer
+public interface IStartupAnalyzer
 {
     StartupAnalysisReport Analyze(CancellationToken ct = default);
 }
