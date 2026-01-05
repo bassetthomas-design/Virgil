@@ -14,7 +14,12 @@ public class NetworkServiceAction11Tests
     public async Task SoftReset_BuildsFullSummary_WhenAdmin()
     {
         var runner = new StubRunner();
-        var service = new NetworkService(runner, new StubPrivilegeChecker(isAdmin: true), new StubPlatformInfo());
+        var service = new NetworkService(
+            runner,
+            new StubPrivilegeChecker(isAdmin: true),
+            new StubPlatformInfo(),
+            new StubPingClient(),
+            new StubNetworkInfoProvider());
 
         var result = await service.SoftResetAsync(CancellationToken.None);
 
@@ -31,7 +36,12 @@ public class NetworkServiceAction11Tests
     public async Task SoftReset_GracefullyDegrades_WhenNotAdmin()
     {
         var runner = new StubRunner();
-        var service = new NetworkService(runner, new StubPrivilegeChecker(isAdmin: false), new StubPlatformInfo());
+        var service = new NetworkService(
+            runner,
+            new StubPrivilegeChecker(isAdmin: false),
+            new StubPlatformInfo(),
+            new StubPingClient(),
+            new StubNetworkInfoProvider());
 
         var result = await service.SoftResetAsync(CancellationToken.None);
 
@@ -47,7 +57,12 @@ public class NetworkServiceAction11Tests
     public async Task AdvancedReset_RefusesWithoutAdmin()
     {
         var runner = new StubRunner();
-        var service = new NetworkService(runner, new StubPrivilegeChecker(isAdmin: false), new StubPlatformInfo());
+        var service = new NetworkService(
+            runner,
+            new StubPrivilegeChecker(isAdmin: false),
+            new StubPlatformInfo(),
+            new StubPingClient(),
+            new StubNetworkInfoProvider());
 
         var result = await service.AdvancedResetAsync(CancellationToken.None);
 
@@ -69,7 +84,12 @@ public class NetworkServiceAction11Tests
             return new NetworkCommandResult(true);
         });
 
-        var service = new NetworkService(runner, new StubPrivilegeChecker(isAdmin: true), new StubPlatformInfo());
+        var service = new NetworkService(
+            runner,
+            new StubPrivilegeChecker(isAdmin: true),
+            new StubPlatformInfo(),
+            new StubPingClient(),
+            new StubNetworkInfoProvider());
 
         var result = await service.AdvancedResetAsync(CancellationToken.None);
 
@@ -91,7 +111,12 @@ public class NetworkServiceAction11Tests
     public async Task AdvancedReset_DoesNotTouchVpnSoftware()
     {
         var runner = new StubRunner();
-        var service = new NetworkService(runner, new StubPrivilegeChecker(isAdmin: true), new StubPlatformInfo());
+        var service = new NetworkService(
+            runner,
+            new StubPrivilegeChecker(isAdmin: true),
+            new StubPlatformInfo(),
+            new StubPingClient(),
+            new StubNetworkInfoProvider());
 
         var result = await service.AdvancedResetAsync(CancellationToken.None);
 
@@ -128,5 +153,16 @@ public class NetworkServiceAction11Tests
     private sealed class StubPlatformInfo : IPlatformInfo
     {
         public bool IsWindows() => true;
+    }
+
+    private sealed class StubPingClient : IPingClient
+    {
+        public Task<PingAttemptResult> SendAsync(string host, int timeoutMs, CancellationToken ct = default)
+            => Task.FromResult(new PingAttemptResult(PingAttemptStatus.Success, 1));
+    }
+
+    private sealed class StubNetworkInfoProvider : INetworkInfoProvider
+    {
+        public string? GetDefaultGateway() => "127.0.0.1";
     }
 }
