@@ -110,10 +110,10 @@ public class StartupAnalysisTests
     private sealed class NoopPolicyProvider : IBackgroundProcessPolicyProvider
     {
         public PerformanceService.BackgroundProcessPolicy GetPolicy() => new(
-            Array.Empty<string>(),
-            Array.Empty<string>(),
-            Array.Empty<string>(),
-            Array.Empty<string>());
+            new HashSet<string>(),
+            new HashSet<string>(),
+            new HashSet<string>(),
+            new HashSet<string>());
     }
 
     private sealed class FakePrivilegeChecker : IPrivilegeChecker
