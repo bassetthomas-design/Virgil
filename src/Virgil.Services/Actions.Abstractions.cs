@@ -31,6 +31,7 @@ public interface INetworkService
     Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> SoftResetAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunInternetSpeedTestAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default);
 }
 
