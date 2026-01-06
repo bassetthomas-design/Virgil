@@ -1084,7 +1084,7 @@ public sealed class CleanupService : ICleanupService
                     SafeCombine(windowsFolder, "Temp"),
                     tempPath,
                 }),
-                fileFilter: fi => fi.LastWriteTimeUtc < now.AddHours(-1)),
+                FileFilter: fi => fi.LastWriteTimeUtc < now.AddHours(-1)),
 
             new(
                 "Caches d'applications système",
@@ -1107,7 +1107,7 @@ public sealed class CleanupService : ICleanupService
                     SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportQueue"),
                     SafeCombine(appData, "Microsoft", "Windows", "WER", "ReportQueue"),
                 }),
-                fileFilter: fi => (fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase)
+                FileFilter: fi => (fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase)
                     || fi.Extension.Equals(".evtx", StringComparison.OrdinalIgnoreCase)
                     || fi.Extension.Equals(".etl", StringComparison.OrdinalIgnoreCase))
                     && fi.LastWriteTimeUtc < logCutoff,
@@ -1120,7 +1120,7 @@ public sealed class CleanupService : ICleanupService
                     SafeCombine(windowsFolder, "SoftwareDistribution", "Download"),
                     SafeCombine(windowsFolder, "SoftwareDistribution", "DataStore", "Logs"),
                 }),
-                fileFilter: fi => fi.LastWriteTimeUtc < updateCutoff,
+                FileFilter: fi => fi.LastWriteTimeUtc < updateCutoff,
                 WindowsOnly: true),
 
             new(
@@ -1131,7 +1131,7 @@ public sealed class CleanupService : ICleanupService
                     SafeCombine(tempPath, "SetupCache"),
                     SafeCombine(tempPath, "Installer"),
                 }),
-                fileFilter: fi => (fi.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase)
+                FileFilter: fi => (fi.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase)
                     || fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase)
                     || fi.Extension.Equals(".bak", StringComparison.OrdinalIgnoreCase)
                     || fi.Extension.Equals(".old", StringComparison.OrdinalIgnoreCase)
