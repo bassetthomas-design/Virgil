@@ -18,6 +18,7 @@ public static class ActionCatalog
         ["quick_clean"] = new(ActionKey: "quick_clean", VirgilActionId.QuickClean, "Nettoyage rapide", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
         ["browser_soft_clean"] = new(ActionKey: "browser_soft_clean", VirgilActionId.LightBrowserClean, "Nettoyage navigateur (léger)", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
         ["ram_soft_free"] = new(ActionKey: "ram_soft_free", VirgilActionId.SoftRamFlush, "Libérer la RAM (soft)", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
+        ["system_temp_clean"] = new(ActionKey: "system_temp_clean", VirgilActionId.SystemTempCleanup, "Nettoyer les temporaires système", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
 
         // Maintenance avancée
         ["deep_disk_clean"] = new(ActionKey: "deep_disk_clean", VirgilActionId.AdvancedDiskClean, "Nettoyage disque avancé", IsDestructive: true, IsImplemented: true, Service: "CleanupService"),

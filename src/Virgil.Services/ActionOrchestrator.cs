@@ -51,6 +51,9 @@ public sealed class ActionOrchestrator : IActionOrchestrator
             case VirgilActionId.SoftRamFlush:
                 return await ExecuteAsync("Libération douce de la RAM", () => _performance.SoftRamFlushAsync(ct), ct);
 
+            case VirgilActionId.SystemTempCleanup:
+                return await ExecuteAsync("Nettoyage des temporaires système", () => _cleanup.RunSystemTempCleanupAsync(ct), ct);
+
             // Maintenance avancée
             case VirgilActionId.AdvancedDiskClean:
                 return await ExecuteAsync("Nettoyage disque avancé", () => _cleanup.RunAdvancedAsync(ct), ct);
