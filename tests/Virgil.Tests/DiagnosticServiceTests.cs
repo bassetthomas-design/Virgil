@@ -76,6 +76,111 @@ public class DiagnosticServiceTests
         Assert.Contains("Recommandations", result.Details!, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task RescanSystemAsync_ShouldHandleFirstScan()
+    {
+        var snapshot = new ExpressScanSnapshot
+        {
+            CpuUsagePercent = 15,
+            MemoryUsagePercent = 20,
+            DiskUsagePercent = 25,
+            DiskLabel = "C:",
+            MissingMetrics = Array.Empty<string>(),
+            HeavyServices = Array.Empty<string>(),
+            SuspiciousProcesses = Array.Empty<string>(),
+            RecentErrors = Array.Empty<string>(),
+            StartupAppsCount = 2,
+            NetworkStatus = NetworkState.Ok
+        };
+
+        var service = new DiagnosticService(
+            new FakeCollector(snapshot),
+            new InMemoryHistoryStore(),
+            new FixedClock(DateTimeOffset.UtcNow));
+
+        var result = await service.RescanSystemAsync(CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Details);
+        Assert.Contains("Évolution: premier scan", result.Details!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Recommandations", result.Details!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RescanSystemAsync_ShouldCompareWithPrevious()
+    {
+        var previousIssues = new List<string>
+        {
+            "CPU surmenée (95 %)",
+            "Mémoire pressurisée (90 %)"
+        };
+
+        var history = new InMemoryHistoryStore(new ScanHistoryEntry(DateTimeOffset.UtcNow.AddHours(-1), "Attention", previousIssues));
+
+        var snapshot = new ExpressScanSnapshot
+        {
+            CpuUsagePercent = 95,
+            MemoryUsagePercent = 40,
+            DiskUsagePercent = 30,
+            DiskLabel = "C:",
+            MissingMetrics = Array.Empty<string>(),
+            HeavyServices = Array.Empty<string>(),
+            SuspiciousProcesses = Array.Empty<string>(),
+            RecentErrors = Array.Empty<string>(),
+            StartupAppsCount = 1,
+            NetworkStatus = NetworkState.Ok
+        };
+
+        var service = new DiagnosticService(
+            new FakeCollector(snapshot),
+            history,
+            new FixedClock(DateTimeOffset.UtcNow));
+
+        var result = await service.RescanSystemAsync(CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Details);
+        Assert.Contains("Évolution: amélioré", result.Details!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Problèmes résolus", result.Details!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Mémoire pressurisée (90 %)", result.Details!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Problèmes persistants", result.Details!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CPU surmenée (95 %)", result.Details!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Recommandations", result.Details!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RescanSystemAsync_ShouldSkipRecommendationsWhenNoPersistent()
+    {
+        var previousIssues = new List<string> { "CPU surmenée (95 %)" };
+        var history = new InMemoryHistoryStore(new ScanHistoryEntry(DateTimeOffset.UtcNow.AddMinutes(-10), "Attention", previousIssues));
+
+        var snapshot = new ExpressScanSnapshot
+        {
+            CpuUsagePercent = 10,
+            MemoryUsagePercent = 20,
+            DiskUsagePercent = 30,
+            DiskLabel = "C:",
+            MissingMetrics = Array.Empty<string>(),
+            HeavyServices = Array.Empty<string>(),
+            SuspiciousProcesses = Array.Empty<string>(),
+            RecentErrors = Array.Empty<string>(),
+            StartupAppsCount = 1,
+            NetworkStatus = NetworkState.Ok
+        };
+
+        var service = new DiagnosticService(
+            new FakeCollector(snapshot),
+            history,
+            new FixedClock(DateTimeOffset.UtcNow));
+
+        var result = await service.RescanSystemAsync(CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Details);
+        Assert.DoesNotContain("Recommandations", result.Details!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Problèmes résolus", result.Details!, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class FakeCollector : IExpressScanCollector
     {
         private readonly ExpressScanSnapshot _snapshot;
