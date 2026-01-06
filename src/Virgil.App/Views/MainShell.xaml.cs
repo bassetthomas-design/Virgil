@@ -73,6 +73,10 @@ namespace Virgil.App.Views
 
             DataContext = mainVm;
 
+#if DEBUG
+            AvatarDebugPanel.Visibility = Visibility.Visible;
+#endif
+
             _clockTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(1)
