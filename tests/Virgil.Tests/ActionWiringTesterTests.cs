@@ -64,6 +64,18 @@ public class ActionWiringTesterTests
         report.Probes.TotalInvocations.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Catalog_ShouldExposeDiskAndIntegrityChecks()
+    {
+        ActionCatalog.All.Values.Should().Contain(d => d.VirgilActionId == VirgilActionId.DiskCheck
+            && d.ActionKey == "disk_check"
+            && d.DisplayName.Contains("disque", StringComparison.OrdinalIgnoreCase));
+
+        ActionCatalog.All.Values.Should().Contain(d => d.VirgilActionId == VirgilActionId.SystemIntegrityCheck
+            && d.ActionKey == "system_integrity_check"
+            && d.DisplayName.Contains("intégrité", StringComparison.OrdinalIgnoreCase));
+    }
+
     private sealed class ThrowingOrchestrator : IActionOrchestrator
     {
         private readonly VirgilActionId _target;
