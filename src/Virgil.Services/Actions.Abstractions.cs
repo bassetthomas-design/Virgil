@@ -20,6 +20,7 @@ public interface ICleanupService
 
 public interface IUpdateService
 {
+    Task<ActionExecutionResult> ManageAutomaticUpdatesAsync(AutoUpdateUserIntent? intent = null, CancellationToken ct = default);
     Task<ActionExecutionResult> UpdateAppsAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> RunWindowsUpdateAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> CheckGpuDriversAsync(CancellationToken ct = default);
