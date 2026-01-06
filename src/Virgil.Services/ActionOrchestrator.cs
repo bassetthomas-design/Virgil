@@ -42,6 +42,9 @@ public sealed class ActionOrchestrator : IActionOrchestrator
             case VirgilActionId.ScanSystemExpress:
                 return await ExecuteAsync("Scan système express", () => _diagnostic.RunExpressAsync(ct), ct);
 
+            case VirgilActionId.HardwareQuickDiagnostic:
+                return await ExecuteAsync("Diagnostic matériel rapide", () => _diagnostic.RunHardwareQuickCheckAsync(ct), ct);
+
             case VirgilActionId.QuickClean:
                 return await ExecuteAsync("Nettoyage rapide", () => _cleanup.RunSimpleAsync(ct), ct);
 
