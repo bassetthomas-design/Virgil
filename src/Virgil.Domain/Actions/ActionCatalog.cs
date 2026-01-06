@@ -47,7 +47,7 @@ public static class ActionCatalog
         // Spéciaux
         ["rambo_repair"] = new(ActionKey: "rambo_repair", VirgilActionId.RamboMode, "Mode RAMBO", IsDestructive: true, IsImplemented: false, Service: "SpecialService"),
         ["chat_thanos"] = new(ActionKey: "chat_thanos", VirgilActionId.ThanosChatWipe, "Effet Thanos", IsDestructive: true, IsImplemented: true, Service: "ChatService"),
-        ["app_reload_settings"] = new(ActionKey: "app_reload_settings", VirgilActionId.ReloadConfiguration, "Recharger la configuration", IsDestructive: false, IsImplemented: false, Service: "SpecialService"),
+        ["app_reload_settings"] = new(ActionKey: "app_reload_settings", VirgilActionId.ReloadConfiguration, "Recharger la configuration", IsDestructive: false, IsImplemented: true, Service: "SpecialService"),
         ["monitoring_rescan"] = new(ActionKey: "monitoring_rescan", VirgilActionId.RescanSystem, "Re-scanner le système", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
         ["monitor_rescan"] = new(ActionKey: "monitor_rescan", VirgilActionId.RescanSystem, "Re-scanner le système", IsDestructive: false, IsImplemented: false, Service: "DiagnosticService"),
         ["clean_browsers"] = new(ActionKey: "clean_browsers", VirgilActionId.LightBrowserClean, "Nettoyage navigateurs", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
