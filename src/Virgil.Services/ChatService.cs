@@ -34,6 +34,7 @@ public sealed class ChatService : IChatService
         WriteTagged("THANOS", preservePinned
             ? "Wipe du chat (messages épinglés préservés)."
             : "Wipe du chat complet.");
+        WriteTagged("THANOS", "Tout a disparu.");
         return Task.CompletedTask;
     }
 

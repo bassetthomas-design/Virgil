@@ -25,12 +25,7 @@ namespace Virgil.App.ViewModels
                     return;
                 }
 
-                var removable = Messages.Where(m => !m.Pinned).Reverse().ToList();
-                if (removable.Count == 0)
-                {
-                    return;
-                }
-
+                var removable = Messages.Reverse().ToList();
                 int delay = e.EffectDurationMs / Math.Max(1, removable.Count);
                 foreach (var item in removable)
                 {

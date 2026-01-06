@@ -117,8 +117,7 @@ public sealed class ActionOrchestrator : IActionOrchestrator
                 return await ExecuteAsync("Mode RAMBO", () => _special.RamboModeAsync(ct), ct);
 
             case VirgilActionId.ThanosChatWipe:
-                await _chat.InfoAsync("Effet Thanos sur le chat.", ct);
-                await _chat.ThanosWipeAsync(preservePinned: true, ct);
+                await _chat.ThanosWipeAsync(preservePinned: false, ct);
                 return ActionExecutionResult.Ok("Chat effacé");
 
             case VirgilActionId.ReloadConfiguration:
