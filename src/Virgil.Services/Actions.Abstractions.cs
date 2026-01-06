@@ -46,6 +46,7 @@ public interface IPerformanceService
 public interface IDiagnosticService
 {
     Task<ActionExecutionResult> RunExpressAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunHardwareQuickCheckAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> DiskCheckAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> SystemIntegrityCheckAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> RescanSystemAsync(CancellationToken ct = default);
