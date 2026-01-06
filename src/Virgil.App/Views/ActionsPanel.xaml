@@ -12,6 +12,9 @@
             <Button Content="Nettoyage rapide" Tag="quick_clean" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Nettoyer les temporaires système" Tag="system_temp_clean" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Nettoyage navigateur (léger)" Tag="browser_soft_clean" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>

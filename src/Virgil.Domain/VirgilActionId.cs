@@ -7,33 +7,34 @@ public enum VirgilActionId
     QuickClean,                 // 2
     LightBrowserClean,          // 3
     SoftRamFlush,               // 4
+    SystemTempCleanup,          // 5
 
     // Maintenance avancée
-    AdvancedDiskClean,          // 5
-    DiskCheck,                  // 6
-    SystemIntegrityCheck,       // 7
-    DeepBrowserClean,           // 8
+    AdvancedDiskClean,          // 6
+    DiskCheck,                  // 7
+    SystemIntegrityCheck,       // 8
+    DeepBrowserClean,           // 9
 
     // Réseau & Internet
-    NetworkQuickDiag,           // 9
-    NetworkSoftReset,           // 10
-    NetworkAdvancedReset,       // 11
-    LatencyStabilityTest,       // 12
+    NetworkQuickDiag,           // 10
+    NetworkSoftReset,           // 11
+    NetworkAdvancedReset,       // 12
+    LatencyStabilityTest,       // 13
 
     // Gaming / Performance
-    EnableGamingMode,           // 13
-    RestoreNormalMode,          // 14
-    StartupAnalysis,            // 15
-    CloseGamingSession,         // 16
+    EnableGamingMode,           // 14
+    RestoreNormalMode,          // 15
+    StartupAnalysis,            // 16
+    CloseGamingSession,         // 17
 
     // Mises à jour
-    UpdateSoftwares,            // 17
-    RunWindowsUpdate,           // 18
-    CheckGpuDrivers,            // 19
+    UpdateSoftwares,            // 18
+    RunWindowsUpdate,           // 19
+    CheckGpuDrivers,            // 20
 
     // Spéciaux
-    RamboMode,                  // 20
-    ThanosChatWipe,             // 21
-    ReloadConfiguration,        // 22
-    RescanSystem                // 23
+    RamboMode,                  // 21
+    ThanosChatWipe,             // 22
+    ReloadConfiguration,        // 23
+    RescanSystem                // 24
 }

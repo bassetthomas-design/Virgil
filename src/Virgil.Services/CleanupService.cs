@@ -24,18 +24,27 @@ public sealed class CleanupService : ICleanupService
     private readonly Func<BrowserCleanPlan> _browserPlanFactory;
     private readonly Func<BrowserDeepCleanPlan> _browserDeepPlanFactory;
     private readonly Func<IReadOnlyCollection<AdvancedStep>> _advancedPlanFactory;
+    private readonly Func<SystemTempCleanupPlan> _systemTempPlanFactory;
     private readonly Func<bool> _isWindows;
     private readonly Func<bool> _isAdministrator;
     private readonly Func<string, string, CancellationToken, Task<CommandResult>> _commandRunner;
     private readonly Func<string, bool> _isProcessRunning;
 
     public CleanupService()
-        : this(CleanupPlan.FromEnvironment, BrowserCleanPlan.FromEnvironment, BrowserDeepCleanPlan.FromEnvironment)
+        : this(
+            CleanupPlan.FromEnvironment,
+            BrowserCleanPlan.FromEnvironment,
+            BrowserDeepCleanPlan.FromEnvironment,
+            systemTempPlanFactory: BuildSystemTempCleanupPlan)
     {
     }
 
-    public CleanupService(Func<CleanupPlan> planFactory)
-        : this(planFactory, BrowserCleanPlan.FromEnvironment, BrowserDeepCleanPlan.FromEnvironment)
+    public CleanupService(Func<CleanupPlan> planFactory, Func<SystemTempCleanupPlan>? systemTempPlanFactory = null)
+        : this(
+            planFactory,
+            BrowserCleanPlan.FromEnvironment,
+            BrowserDeepCleanPlan.FromEnvironment,
+            systemTempPlanFactory: systemTempPlanFactory ?? BuildSystemTempCleanupPlan)
     {
     }
 
@@ -47,12 +56,14 @@ public sealed class CleanupService : ICleanupService
         Func<bool>? isWindows = null,
         Func<bool>? isAdministrator = null,
         Func<string, string, CancellationToken, Task<CommandResult>>? commandRunner = null,
-        Func<string, bool>? isProcessRunning = null)
+        Func<string, bool>? isProcessRunning = null,
+        Func<SystemTempCleanupPlan>? systemTempPlanFactory = null)
     {
         _planFactory = planFactory ?? throw new ArgumentNullException(nameof(planFactory));
         _browserPlanFactory = browserPlanFactory ?? throw new ArgumentNullException(nameof(browserPlanFactory));
         _browserDeepPlanFactory = browserDeepPlanFactory ?? BrowserDeepCleanPlan.FromEnvironment;
         _advancedPlanFactory = advancedPlanFactory ?? BuildAdvancedCategories;
+        _systemTempPlanFactory = systemTempPlanFactory ?? BuildSystemTempCleanupPlan;
         _isWindows = isWindows ?? OperatingSystem.IsWindows;
         _isAdministrator = isAdministrator ?? IsRunningAsAdministrator;
         _commandRunner = commandRunner ?? RunCommandAsync;
@@ -237,6 +248,83 @@ public sealed class CleanupService : ICleanupService
         detailsBuilder.AppendLine("Suggestion : lancer un re-scan du système (commande: monitoring_rescan).");
 
         return ActionExecutionResult.Ok(summary, detailsBuilder.ToString().TrimEnd());
+    }
+
+    public async Task<ActionExecutionResult> RunSystemTempCleanupAsync(CancellationToken ct = default)
+    {
+        const string logMessage = "Executing ActionId=18 — Nettoyer les temporaires système";
+        Console.WriteLine(logMessage);
+        System.Diagnostics.Trace.WriteLine(logMessage);
+
+        var plan = _systemTempPlanFactory();
+        if (plan.Categories.Count == 0)
+        {
+            return ActionExecutionResult.NotAvailable("Nettoyage des temporaires : aucune catégorie détectée");
+        }
+
+        var cleanedCategories = new List<string>();
+        var lockedSummaries = new List<string>();
+        long totalFreed = 0;
+        int totalFiles = 0;
+
+        foreach (var category in plan.Categories)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (category.WindowsOnly && !_isWindows())
+            {
+                continue;
+            }
+
+            var existingPaths = category.Paths.Where(Directory.Exists).ToList();
+            if (existingPaths.Count == 0)
+            {
+                continue;
+            }
+
+            var categoryFreed = 0L;
+            var categoryFiles = 0;
+            var categoryLocked = 0;
+            var hadActivity = false;
+
+            foreach (var path in existingPaths)
+            {
+                var result = await CleanDirectoryAsync(path, ct, fileFilter: category.FileFilter).ConfigureAwait(false);
+                hadActivity |= result.HasActivity;
+                categoryFreed += result.FreedBytes;
+                categoryFiles += result.FilesDeleted;
+                categoryLocked += result.LockedItems;
+            }
+
+            if (hadActivity || categoryLocked > 0)
+            {
+                cleanedCategories.Add(categoryFiles > 0
+                    ? $"{category.Name} ({categoryFiles} fichiers)"
+                    : category.Name);
+                totalFreed += categoryFreed;
+                totalFiles += categoryFiles;
+
+                if (categoryLocked > 0)
+                {
+                    lockedSummaries.Add($"{category.Name}: {categoryLocked} élément(s) verrouillé(s) ignoré(s)");
+                }
+            }
+        }
+
+        var freedText = FormatSize(totalFreed);
+        var categoriesText = cleanedCategories.Count == 0
+            ? "aucune (tout était déjà propre)"
+            : string.Join(", ", cleanedCategories);
+
+        var summary = $"Nettoyage des temporaires système terminé. Espace libéré: {freedText}. Fichiers supprimés: {totalFiles}. Catégories nettoyées: {categoriesText}. Les fichiers temporaires ont pris leurs jambes à leur cou, ton disque respire mieux.";
+
+        string? details = null;
+        if (lockedSummaries.Count > 0)
+        {
+            details = string.Join(Environment.NewLine, lockedSummaries);
+        }
+
+        return ActionExecutionResult.Ok(summary, details);
     }
 
     public async Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
@@ -560,6 +648,14 @@ public sealed class CleanupService : ICleanupService
                 .Where(Directory.Exists)
                 .ToList();
     }
+
+    public sealed record SystemTempCleanupPlan(IReadOnlyCollection<SystemTempCategory> Categories);
+
+    public sealed record SystemTempCategory(
+        string Name,
+        IReadOnlyCollection<string> Paths,
+        Func<FileInfo, bool>? FileFilter = null,
+        bool WindowsOnly = true);
 
     public sealed record CleanupStats(long FreedBytes = 0, int FilesDeleted = 0, int DirectoriesDeleted = 0, int LockedItems = 0)
     {
@@ -958,6 +1054,94 @@ public sealed class CleanupService : ICleanupService
     public sealed record BrowserTarget(string BrowserName, IReadOnlyCollection<string> Paths);
 
     private sealed record BrowserCleanupResult(CleanupStats Stats, bool HadLockedFiles);
+
+    private static SystemTempCleanupPlan BuildSystemTempCleanupPlan()
+    {
+        var windowsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var tempPath = Path.GetTempPath();
+
+        var now = DateTime.UtcNow;
+        var logCutoff = now.AddDays(-7);
+        var updateCutoff = now.AddDays(-2);
+
+        static IReadOnlyCollection<string> Normalize(IEnumerable<string?> paths)
+            => paths
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => Path.GetFullPath(p!))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(Directory.Exists)
+                .ToList();
+
+        var categories = new List<SystemTempCategory>
+        {
+            new(
+                "Fichiers temporaires Windows",
+                Normalize(new[]
+                {
+                    SafeCombine(windowsFolder, "Temp"),
+                    tempPath,
+                }),
+                fileFilter: fi => fi.LastWriteTimeUtc < now.AddHours(-1)),
+
+            new(
+                "Caches d'applications système",
+                Normalize(new[]
+                {
+                    SafeCombine(localAppData, "Microsoft", "Windows", "Caches"),
+                    SafeCombine(localAppData, "Microsoft", "Windows", "WER", "ReportArchive"),
+                    SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportArchive"),
+                    SafeCombine(localAppData, "CrashDumps"),
+                }),
+                WindowsOnly: true),
+
+            new(
+                "Logs système anciens",
+                Normalize(new[]
+                {
+                    SafeCombine(windowsFolder, "Logs"),
+                    SafeCombine(windowsFolder, "System32", "LogFiles"),
+                    SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportArchive"),
+                    SafeCombine(programData, "Microsoft", "Windows", "WER", "ReportQueue"),
+                    SafeCombine(appData, "Microsoft", "Windows", "WER", "ReportQueue"),
+                }),
+                fileFilter: fi => (fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase)
+                    || fi.Extension.Equals(".evtx", StringComparison.OrdinalIgnoreCase)
+                    || fi.Extension.Equals(".etl", StringComparison.OrdinalIgnoreCase))
+                    && fi.LastWriteTimeUtc < logCutoff,
+                WindowsOnly: true),
+
+            new(
+                "Cache Windows Update obsolète",
+                Normalize(new[]
+                {
+                    SafeCombine(windowsFolder, "SoftwareDistribution", "Download"),
+                    SafeCombine(windowsFolder, "SoftwareDistribution", "DataStore", "Logs"),
+                }),
+                fileFilter: fi => fi.LastWriteTimeUtc < updateCutoff,
+                WindowsOnly: true),
+
+            new(
+                "Caches d'installation temporaires",
+                Normalize(new[]
+                {
+                    SafeCombine(programData, "Package Cache"),
+                    SafeCombine(tempPath, "SetupCache"),
+                    SafeCombine(tempPath, "Installer"),
+                }),
+                fileFilter: fi => (fi.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase)
+                    || fi.Extension.Equals(".log", StringComparison.OrdinalIgnoreCase)
+                    || fi.Extension.Equals(".bak", StringComparison.OrdinalIgnoreCase)
+                    || fi.Extension.Equals(".old", StringComparison.OrdinalIgnoreCase)
+                    || fi.Extension.Equals(".cab", StringComparison.OrdinalIgnoreCase))
+                    && fi.LastWriteTimeUtc < logCutoff,
+                WindowsOnly: true)
+        };
+
+        return new SystemTempCleanupPlan(categories.Where(c => c.Paths.Count > 0).ToList());
+    }
 
     private IReadOnlyCollection<AdvancedStep> BuildAdvancedCategories()
     {

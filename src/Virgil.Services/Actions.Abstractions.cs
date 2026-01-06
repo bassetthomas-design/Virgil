@@ -13,6 +13,7 @@ public interface ICleanupService
 {
     Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default);   // Nettoyage rapide
     Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default); // Nettoyage disque avancé
+    Task<ActionExecutionResult> RunSystemTempCleanupAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default);
 }
