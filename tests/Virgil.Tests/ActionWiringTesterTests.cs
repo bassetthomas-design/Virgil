@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Virgil.Domain.Actions;
+using Virgil.Services.Abstractions;
 using Virgil.Services;
 using Virgil.Services.SelfTest;
 using Xunit;
