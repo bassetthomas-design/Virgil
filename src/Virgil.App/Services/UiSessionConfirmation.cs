@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using Virgil.App.Interfaces;
 using Virgil.Services;
 
 namespace Virgil.App.Services;

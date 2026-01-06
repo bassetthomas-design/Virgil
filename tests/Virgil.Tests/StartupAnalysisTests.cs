@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Virgil.Services;
 using Virgil.Services.Network;
 using Virgil.Services.Startup;
+using IBackgroundProcessPolicyProvider = Virgil.Services.PerformanceService.IBackgroundProcessPolicyProvider;
 using IAppMemoryTrimmer = Virgil.Services.PerformanceService.IAppMemoryTrimmer;
 using IMemoryReader = Virgil.Services.PerformanceService.IMemoryReader;
 using IProcessHandle = Virgil.Services.PerformanceService.IProcessHandle;
@@ -28,6 +29,7 @@ public class StartupAnalysisTests
             new SupportedMemoryReader(),
             new NoopStandbyReleaser(),
             new EmptyWhitelistProvider(),
+            new NoopPolicyProvider(),
             new NoopAppMemoryTrimmer(),
             new FakePlatformInfo(),
             new FakePrivilegeChecker(),
@@ -103,6 +105,15 @@ public class StartupAnalysisTests
         public void Trim()
         {
         }
+    }
+
+    private sealed class NoopPolicyProvider : IBackgroundProcessPolicyProvider
+    {
+        public PerformanceService.BackgroundProcessPolicy LoadPolicy() => new(
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>());
     }
 
     private sealed class FakePrivilegeChecker : IPrivilegeChecker

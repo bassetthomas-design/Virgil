@@ -119,7 +119,7 @@ public class PerformanceServiceAction19Tests
 
         result.Success.Should().BeFalse();
         controller.Closed.Should().BeEmpty();
-        result.Message.Should().Contain("aucune app fermée", System.StringComparison.OrdinalIgnoreCase);
+        result.Message.Should().ContainEquivalentOf("aucune app fermée");
     }
 
     private static PerformanceService BuildService(
