@@ -27,7 +27,7 @@ public enum VirgilActionId
     CloseGamingSession,         // 16
 
     // Mises à jour
-    UpdateSoftwares,            // 17
+    ManageAutomaticUpdates,     // 17
     RunWindowsUpdate,           // 18
     CheckGpuDrivers,            // 19
 
@@ -35,5 +35,8 @@ public enum VirgilActionId
     RamboMode,                  // 20
     ThanosChatWipe,             // 21
     ReloadConfiguration,        // 22
-    RescanSystem                // 23
+    RescanSystem,               // 23
+
+    // Divers (hors séquence principale)
+    UpdateSoftwares             // 24
 }

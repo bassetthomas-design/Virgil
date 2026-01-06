@@ -36,6 +36,7 @@ public static class ActionCatalog
         ["gaming_kill_session"] = new(ActionKey: "gaming_kill_session", VirgilActionId.CloseGamingSession, "Couper les apps de fond", IsDestructive: false, IsImplemented: false, Service: "PerformanceService"),
 
         // Mises à jour
+        ["auto_updates_manage"] = new(ActionKey: "auto_updates_manage", VirgilActionId.ManageAutomaticUpdates, "Gérer les mises à jour automatiques", IsDestructive: false, IsImplemented: true, Service: "UpdateService"),
         ["apps_update_all"] = new(ActionKey: "apps_update_all", VirgilActionId.UpdateSoftwares, "Mettre à jour les logiciels", IsDestructive: false, IsImplemented: true, Service: "UpdateService"),
         ["windows_update"] = new(ActionKey: "windows_update", VirgilActionId.RunWindowsUpdate, "Mise à jour Windows", IsDestructive: true, IsImplemented: true, Service: "WindowsUpdateService"),
         ["gpu_driver_check"] = new(ActionKey: "gpu_driver_check", VirgilActionId.CheckGpuDrivers, "Vérifier les drivers GPU", IsDestructive: false, IsImplemented: false, Service: "UpdateService"),
