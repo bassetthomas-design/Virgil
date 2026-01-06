@@ -1,0 +1,93 @@
+<UserControl x:Class="Virgil.App.Controls.VirgilAvatarControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="240"
+             d:DesignWidth="240">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50" />
+        <SolidColorBrush x:Key="AccentStrokeBrush" Color="#804CAF50" />
+        <SolidColorBrush x:Key="FaceFillBrush" Color="#0F181A" />
+    </UserControl.Resources>
+
+    <Grid x:Name="Root" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Viewbox Stretch="Uniform">
+            <Grid Width="220" Height="220">
+                <Ellipse Fill="{StaticResource FaceFillBrush}"
+                         Stroke="{StaticResource AccentStrokeBrush}"
+                         StrokeThickness="6"
+                         x:Name="FaceEllipse">
+                    <Ellipse.Effect>
+                        <DropShadowEffect x:Name="FaceGlow"
+                                          Color="#884CAF50"
+                                          BlurRadius="24"
+                                          ShadowDepth="0"
+                                          Opacity="0.8" />
+                    </Ellipse.Effect>
+                </Ellipse>
+
+                <Ellipse Stroke="{StaticResource AccentBrush}"
+                         StrokeThickness="5"
+                         Width="220"
+                         Height="220"
+                         x:Name="AccentRing">
+                    <Ellipse.Effect>
+                        <DropShadowEffect x:Name="RingGlow"
+                                          Color="#884CAF50"
+                                          BlurRadius="16"
+                                          ShadowDepth="0"
+                                          Opacity="0.6" />
+                    </Ellipse.Effect>
+                </Ellipse>
+
+                <Grid x:Name="EyesLayer"
+                      Width="130"
+                      Height="56"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center">
+                    <Grid.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="EyesOffset" />
+                        </TransformGroup>
+                    </Grid.RenderTransform>
+
+                    <Path x:Name="LeftEye"
+                          Fill="White"
+                          Stretch="Uniform"
+                          Data="M5,15 C5,5 35,5 35,15 C35,25 5,25 5,15 Z"
+                          RenderTransformOrigin="0.5,0.5"
+                          Width="48"
+                          Height="26"
+                          HorizontalAlignment="Left"
+                          Margin="6,0,0,0">
+                        <Path.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="LeftEyeScale" />
+                                <TranslateTransform x:Name="LeftEyeOffset" X="-8" />
+                            </TransformGroup>
+                        </Path.RenderTransform>
+                    </Path>
+
+                    <Path x:Name="RightEye"
+                          Fill="White"
+                          Stretch="Uniform"
+                          Data="M5,15 C5,5 35,5 35,15 C35,25 5,25 5,15 Z"
+                          RenderTransformOrigin="0.5,0.5"
+                          Width="48"
+                          Height="26"
+                          HorizontalAlignment="Right"
+                          Margin="0,0,6,0">
+                        <Path.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="RightEyeScale" />
+                                <TranslateTransform x:Name="RightEyeOffset" X="8" />
+                            </TransformGroup>
+                        </Path.RenderTransform>
+                    </Path>
+                </Grid>
+            </Grid>
+        </Viewbox>
+    </Grid>
+</UserControl>
