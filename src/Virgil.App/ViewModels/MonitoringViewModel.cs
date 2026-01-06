@@ -66,6 +66,43 @@ namespace Virgil.App.ViewModels
 
         public AvatarTelemetryAdapter AvatarTelemetry { get; } = new();
 
+#if DEBUG
+        private bool _useDebugStress;
+        public bool UseDebugStress
+        {
+            get => _useDebugStress;
+            set
+            {
+                if (value == _useDebugStress) return;
+                _useDebugStress = value;
+                OnPropertyChanged();
+
+                if (_useDebugStress)
+                {
+                    AvatarTelemetry.SetStress(_debugStress);
+                }
+            }
+        }
+
+        private double _debugStress = 0.25;
+        public double DebugStress
+        {
+            get => _debugStress;
+            set
+            {
+                var clamped = Math.Clamp(value, 0d, 1d);
+                if (Math.Abs(_debugStress - clamped) < 0.0001) return;
+                _debugStress = clamped;
+                OnPropertyChanged();
+
+                if (UseDebugStress)
+                {
+                    AvatarTelemetry.SetStress(_debugStress);
+                }
+            }
+        }
+#endif
+
         private Mood _currentMood = Mood.Neutral;
         public Mood CurrentMood
         {
@@ -205,6 +242,22 @@ namespace Virgil.App.ViewModels
             GpuTemp = snapshot.GpuTemperature;
             DiskTemp = snapshot.DiskTemperature;
 
+#if DEBUG
+            if (UseDebugStress)
+            {
+                AvatarTelemetry.SetStress(_debugStress);
+            }
+            else
+            {
+                AvatarTelemetry.UpdateFromMetrics(
+                    snapshot.CpuUsage,
+                    snapshot.GpuUsage,
+                    snapshot.RamUsage,
+                    snapshot.CpuTemperature,
+                    snapshot.GpuTemperature,
+                    snapshot.DiskTemperature);
+            }
+#else
             AvatarTelemetry.UpdateFromMetrics(
                 snapshot.CpuUsage,
                 snapshot.GpuUsage,
@@ -212,6 +265,7 @@ namespace Virgil.App.ViewModels
                 snapshot.CpuTemperature,
                 snapshot.GpuTemperature,
                 snapshot.DiskTemperature);
+#endif
 
             UpdateMood(snapshot.CpuUsage, snapshot.GpuUsage, snapshot.RamUsage, snapshot.DiskUsage,
                 snapshot.CpuTemperature, snapshot.GpuTemperature, snapshot.DiskTemperature);
@@ -227,6 +281,22 @@ namespace Virgil.App.ViewModels
             GpuTemp = metrics.GpuTemp;
             DiskTemp = metrics.DiskTemp;
 
+#if DEBUG
+            if (UseDebugStress)
+            {
+                AvatarTelemetry.SetStress(_debugStress);
+            }
+            else
+            {
+                AvatarTelemetry.UpdateFromMetrics(
+                    metrics.CpuUsage,
+                    metrics.GpuUsage,
+                    metrics.RamUsage,
+                    metrics.CpuTemp,
+                    metrics.GpuTemp,
+                    metrics.DiskTemp);
+            }
+#else
             AvatarTelemetry.UpdateFromMetrics(
                 metrics.CpuUsage,
                 metrics.GpuUsage,
@@ -234,6 +304,7 @@ namespace Virgil.App.ViewModels
                 metrics.CpuTemp,
                 metrics.GpuTemp,
                 metrics.DiskTemp);
+#endif
 
             UpdateMood(metrics.CpuUsage, metrics.GpuUsage, metrics.RamUsage, metrics.DiskUsage,
                 metrics.CpuTemp, metrics.GpuTemp, metrics.DiskTemp);
