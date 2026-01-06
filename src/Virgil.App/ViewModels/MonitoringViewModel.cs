@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using Virgil.App.Controls;
 using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Core;
@@ -62,6 +63,8 @@ namespace Virgil.App.ViewModels
             : this(new MonitoringService(), new SettingsService(), new NetworkInsightService())
         {
         }
+
+        public AvatarTelemetryAdapter AvatarTelemetry { get; } = new();
 
         private Mood _currentMood = Mood.Neutral;
         public Mood CurrentMood
@@ -202,6 +205,14 @@ namespace Virgil.App.ViewModels
             GpuTemp = snapshot.GpuTemperature;
             DiskTemp = snapshot.DiskTemperature;
 
+            AvatarTelemetry.UpdateFromMetrics(
+                snapshot.CpuUsage,
+                snapshot.GpuUsage,
+                snapshot.RamUsage,
+                snapshot.CpuTemperature,
+                snapshot.GpuTemperature,
+                snapshot.DiskTemperature);
+
             UpdateMood(snapshot.CpuUsage, snapshot.GpuUsage, snapshot.RamUsage, snapshot.DiskUsage,
                 snapshot.CpuTemperature, snapshot.GpuTemperature, snapshot.DiskTemperature);
         }
@@ -215,6 +226,14 @@ namespace Virgil.App.ViewModels
             CpuTemp = metrics.CpuTemp;
             GpuTemp = metrics.GpuTemp;
             DiskTemp = metrics.DiskTemp;
+
+            AvatarTelemetry.UpdateFromMetrics(
+                metrics.CpuUsage,
+                metrics.GpuUsage,
+                metrics.RamUsage,
+                metrics.CpuTemp,
+                metrics.GpuTemp,
+                metrics.DiskTemp);
 
             UpdateMood(metrics.CpuUsage, metrics.GpuUsage, metrics.RamUsage, metrics.DiskUsage,
                 metrics.CpuTemp, metrics.GpuTemp, metrics.DiskTemp);
