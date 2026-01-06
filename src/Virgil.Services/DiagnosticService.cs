@@ -52,45 +52,8 @@ public sealed class DiagnosticService : IDiagnosticService
         _hardware = hardwareCollector ?? new HardwareQuickDiagnosticsCollector();
     }
 
-    public async Task<ActionExecutionResult> RunExpressAsync(CancellationToken ct = default)
-    {
-        try
-        {
-            var snapshot = await _collector.CaptureAsync(ct).ConfigureAwait(false);
-            var issues = DetectIssues(snapshot);
-            var globalState = issues.Count == 0 ? "OK" : "Attention";
-
-            var previous = await _history.LoadAsync(ct).ConfigureAwait(false);
-            var resolved = previous is null
-                ? new List<string>()
-                : previous.Issues.Except(issues, StringComparer.OrdinalIgnoreCase).ToList();
-
-            var persistent = issues
-                .Select(i => previous?.Issues.Contains(i, StringComparer.OrdinalIgnoreCase) == true
-                    ? i
-                    : $"{i} (nouveau)")
-                .ToList();
-
-            var evolution = DescribeEvolution(previous, globalState, issues.Count);
-            var recommendations = persistent.Count == 0 || persistent.All(i => string.Equals(i, "Aucun", StringComparison.OrdinalIgnoreCase))
-                ? Array.Empty<string>()
-                : BuildRecommendations(snapshot, persistent);
-
-            var summary = BuildChatMessage(globalState, evolution, resolved, persistent, snapshot.MissingMetrics, recommendations);
-
-            await _history.SaveAsync(new ScanHistoryEntry(_clock.Now, globalState, issues), ct).ConfigureAwait(false);
-
-            return ActionExecutionResult.Ok("Scan express terminé", summary);
-        }
-        catch (OperationCanceledException)
-        {
-            return ActionExecutionResult.Failure("Scan express annulé");
-        }
-        catch (Exception ex)
-        {
-            return ActionExecutionResult.NotAvailable("Scan express indisponible", ex.Message);
-        }
-    }
+    public Task<ActionExecutionResult> RunExpressAsync(CancellationToken ct = default)
+        => ExecuteExpressScanAsync("Scan express terminé", ct, onCanceled: "Scan express annulé", onError: "Scan express indisponible");
 
     public async Task<ActionExecutionResult> RunHardwareQuickCheckAsync(CancellationToken ct = default)
     {
@@ -119,7 +82,55 @@ public sealed class DiagnosticService : IDiagnosticService
         => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification intégrité système non implémentée"));
 
     public Task<ActionExecutionResult> RescanSystemAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Re-scan système non implémenté"));
+        => ExecuteExpressScanAsync(
+            "Re-scan terminé",
+            ct,
+            onCanceled: "Re-scan annulé",
+            onError: "Re-scan indisponible");
+
+    private async Task<ActionExecutionResult> ExecuteExpressScanAsync(
+        string successMessage,
+        CancellationToken ct,
+        string? onCanceled = null,
+        string? onError = null)
+    {
+        try
+        {
+            var snapshot = await _collector.CaptureAsync(ct).ConfigureAwait(false);
+            var issues = DetectIssues(snapshot);
+            var globalState = issues.Count == 0 ? "OK" : "Attention";
+
+            var previous = await _history.LoadAsync(ct).ConfigureAwait(false);
+            var resolved = previous is null
+                ? new List<string>()
+                : previous.Issues.Except(issues, StringComparer.OrdinalIgnoreCase).ToList();
+
+            var persistent = issues
+                .Select(i => previous?.Issues.Contains(i, StringComparer.OrdinalIgnoreCase) == true
+                    ? i
+                    : $"{i} (nouveau)")
+                .ToList();
+
+            var evolution = DescribeEvolution(previous, globalState, issues.Count);
+            var recommendations = persistent.Count == 0 || persistent.All(i => string.Equals(i, "Aucun", StringComparison.OrdinalIgnoreCase))
+                ? Array.Empty<string>()
+                : BuildRecommendations(snapshot, persistent);
+
+            var summary = BuildChatMessage(globalState, evolution, resolved, persistent, snapshot.MissingMetrics, recommendations);
+
+            await _history.SaveAsync(new ScanHistoryEntry(_clock.Now, globalState, issues), ct).ConfigureAwait(false);
+
+            return ActionExecutionResult.Ok(successMessage, summary);
+        }
+        catch (OperationCanceledException)
+        {
+            return ActionExecutionResult.Failure(onCanceled ?? "Scan annulé");
+        }
+        catch (Exception ex)
+        {
+            return ActionExecutionResult.NotAvailable(onError ?? "Scan indisponible", ex.Message);
+        }
+    }
 
     private static string BuildChatMessage(
         string globalState,
