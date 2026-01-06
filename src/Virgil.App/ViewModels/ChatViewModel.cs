@@ -20,6 +20,7 @@ namespace Virgil.App.ViewModels
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
         private string _inputText = string.Empty;
         private bool _isBusy;
+        private int _defaultTtlMs = 60000;
 
         public ChatViewModel(ChatService chat, Virgil.Services.Chat.ChatActionBridge? bridge = null, Virgil.Services.Chat.IChatEngine? engine = null)
         {
@@ -32,6 +33,21 @@ namespace Virgil.App.ViewModels
         }
 
         public ICommand SendCommand { get; }
+
+        public int DefaultTtlMs
+        {
+            get => _defaultTtlMs;
+            set
+            {
+                if (_defaultTtlMs == value)
+                {
+                    return;
+                }
+
+                _defaultTtlMs = value;
+                OnPropertyChanged();
+            }
+        }
 
         public string InputText
         {

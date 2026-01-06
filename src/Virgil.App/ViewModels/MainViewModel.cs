@@ -155,6 +155,37 @@ namespace Virgil.App.ViewModels
             StatusText = "Virgil est prêt";
         }
 
+        public async Task ReloadUiFromSettingsAsync(CancellationToken ct)
+        {
+            _isMonitoringEnabled = _settingsService.Settings.MonitoringEnabled;
+            if (_isMonitoringEnabled)
+            {
+                _monitoringService.Start();
+            }
+            else
+            {
+                _monitoringService.Stop();
+            }
+
+            OnPropertyChanged(nameof(MonitoringToggleLabel));
+
+            Chat.DefaultTtlMs = _settingsService.Settings.DefaultMessageTtlMs;
+
+            if (_settingsService.Settings.ShowMiniHud != _isHudVisible)
+            {
+                var hudResult = await EnsureHudVisibleAsync(_settingsService.Settings.ShowMiniHud, ct).ConfigureAwait(false);
+                _isHudVisible = hudResult.Success && _settingsService.Settings.ShowMiniHud;
+                OnPropertyChanged(nameof(HudToggleLabel));
+            }
+        }
+
+        public void ResetTransientState()
+        {
+            LastActionMessage = null;
+            LastActionSuccess = false;
+            StatusText = "Virgil est prêt";
+        }
+
         public async Task<ActionResult> RunActionAsync(string key, Dictionary<string, string>? args, CancellationToken ct)
         {
             Utils.StartupLog.Write($"UI action requested: {key}");

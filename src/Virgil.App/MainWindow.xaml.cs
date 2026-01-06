@@ -33,6 +33,9 @@ namespace Virgil.App
             _monitoringService = new MonitoringService();
             var networkInsightService = new NetworkInsightService();
             _confirmationService = new ConfirmationService();
+            var confirmationPrompt = new UiConfirmationPrompt(_confirmationService);
+
+            var reloader = new ConfigurationReloader(_settingsService, _monitoringService);
 
             var monitoringVm = new MonitoringViewModel(
                 _monitoringService,
@@ -46,7 +49,7 @@ namespace Virgil.App
                 new NetworkService(),
                 new PerformanceService(sessionConfirmation: new UiSessionConfirmation(_confirmationService)),
                 new DiagnosticService(),
-                new SpecialService(),
+                new SpecialService(reloader, confirmationPrompt, uiChat),
                 uiChat);
 
             var mainVm = new MainViewModel(
@@ -57,6 +60,8 @@ namespace Virgil.App
                 _settingsService,
                 this,
                 _confirmationService);
+
+            reloader.Attach(mainVm);
 
             DataContext = mainVm;
 

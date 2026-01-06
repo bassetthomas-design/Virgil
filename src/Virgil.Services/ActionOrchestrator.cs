@@ -122,7 +122,7 @@ public sealed class ActionOrchestrator : IActionOrchestrator
                 return ActionExecutionResult.Ok("Chat effacé");
 
             case VirgilActionId.ReloadConfiguration:
-                return await ExecuteAsync("Rechargement de la configuration", () => _special.ReloadConfigurationAsync(ct), ct);
+                return await ExecuteReloadConfigurationAsync(ct);
 
             case VirgilActionId.RescanSystem:
                 return await ExecuteAsync("Re-scan global du système", () => _diagnostic.RescanSystemAsync(ct), ct);
@@ -163,5 +163,11 @@ public sealed class ActionOrchestrator : IActionOrchestrator
             await _chat.ErrorAsync(failure.Message, ct);
             return failure;
         }
+    }
+
+    private async Task<ActionExecutionResult> ExecuteReloadConfigurationAsync(CancellationToken ct)
+    {
+        var result = await _special.ReloadConfigurationAsync(ct).ConfigureAwait(false);
+        return result;
     }
 }

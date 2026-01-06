@@ -38,6 +38,8 @@ namespace Virgil.App.Views
             _settingsService = new SettingsService();
             var networkInsightService = new NetworkInsightService();
             _confirmationService = new ConfirmationService();
+            var confirmationPrompt = new UiConfirmationPrompt(_confirmationService);
+            var reloader = new ConfigurationReloader(_settingsService, _monitoringService);
 
             var monitoringVm = new MonitoringViewModel(
                 _monitoringService,
@@ -51,7 +53,7 @@ namespace Virgil.App.Views
                 new NetworkService(),
                 new PerformanceService(sessionConfirmation: new UiSessionConfirmation(_confirmationService)),
                 new DiagnosticService(),
-                new SpecialService(),
+                new SpecialService(reloader, confirmationPrompt, uiChat),
                 uiChat);
             var chatEngine = new RuleBasedChatEngine();
             var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));
@@ -66,6 +68,8 @@ namespace Virgil.App.Views
                 _confirmationService,
                 chatBridge,
                 chatEngine);
+
+            reloader.Attach(mainVm);
 
             DataContext = mainVm;
 
