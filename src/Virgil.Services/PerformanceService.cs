@@ -27,12 +27,15 @@ public sealed class PerformanceService : IPerformanceService
     private readonly IMemoryReader _memoryReader;
     private readonly IStandbyMemoryReleaser _standbyReleaser;
     private readonly IProcessWhitelistProvider _whitelistProvider;
+    private readonly IBackgroundProcessPolicyProvider _policyProvider;
     private readonly IAppMemoryTrimmer _appMemoryTrimmer;
     private readonly IPlatformInfo _platformInfo;
     private readonly IPrivilegeChecker _privilegeChecker;
     private readonly ISystemCommandRunner _commandRunner;
     private readonly IPerformanceStateStore _stateStore;
     private readonly IStartupAnalyzer _startupAnalyzer;
+    private readonly ICloseSessionConfirmation _sessionConfirmation;
+    private readonly IProcessController _processController;
 
     private const string HighPerformancePlan = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
     private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
@@ -42,23 +45,29 @@ public sealed class PerformanceService : IPerformanceService
         IMemoryReader? memoryReader = null,
         IStandbyMemoryReleaser? standbyMemoryReleaser = null,
         IProcessWhitelistProvider? whitelistProvider = null,
+        IBackgroundProcessPolicyProvider? policyProvider = null,
         IAppMemoryTrimmer? appMemoryTrimmer = null,
         IPlatformInfo? platformInfo = null,
         IPrivilegeChecker? privilegeChecker = null,
         ISystemCommandRunner? commandRunner = null,
         IPerformanceStateStore? stateStore = null,
-        IStartupAnalyzer? startupAnalyzer = null)
+        IStartupAnalyzer? startupAnalyzer = null,
+        ICloseSessionConfirmation? sessionConfirmation = null,
+        IProcessController? processController = null)
     {
         _processProvider = processProvider ?? new WindowsProcessProvider();
         _memoryReader = memoryReader ?? new WindowsMemoryReader();
         _standbyReleaser = standbyMemoryReleaser ?? new NoAdminStandbyReleaser();
         _whitelistProvider = whitelistProvider ?? new ProcessMapWhitelistProvider();
+        _policyProvider = policyProvider ?? new BackgroundProcessPolicyProvider();
         _appMemoryTrimmer = appMemoryTrimmer ?? new AppMemoryTrimmer();
         _platformInfo = platformInfo ?? new RuntimePlatformInfo();
         _privilegeChecker = privilegeChecker ?? new WindowsPrivilegeChecker();
         _commandRunner = commandRunner ?? new SystemCommandRunner();
         _stateStore = stateStore ?? new FilePerformanceStateStore();
         _startupAnalyzer = startupAnalyzer ?? new StartupAnalyzer();
+        _sessionConfirmation = sessionConfirmation ?? new AlwaysConfirmSession();
+        _processController = processController ?? new WindowsProcessController();
     }
 
     public async Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default)
@@ -165,8 +174,162 @@ public sealed class PerformanceService : IPerformanceService
         }
     }
 
-    public Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Fermeture session gaming non implémentée"));
+    public async Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default)
+    {
+        if (!_platformInfo.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Action gaming disponible uniquement sur Windows");
+        }
+
+        var policy = _policyProvider.GetPolicy();
+        var normalizedWhitelist = policy.Whitelist.Select(ProcessNameHelper.Normalize).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var normalizedBlacklist = policy.Blacklist.Select(ProcessNameHelper.Normalize).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var normalizedGames = policy.Games.Select(ProcessNameHelper.Normalize).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var foregroundPid = _processProvider.TryGetForegroundProcessId();
+        var candidates = new List<ProcessCandidate>();
+        var ignored = new List<string>();
+        string? foregroundGame = null;
+
+        foreach (var process in _processProvider.EnumerateProcesses())
+        {
+            using var handle = process;
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                if (handle.HasExited)
+                    continue;
+
+                var normalizedName = ProcessNameHelper.Normalize(handle.ProcessName);
+                if (string.IsNullOrWhiteSpace(normalizedName))
+                {
+                    ignored.Add("Processus sans nom exploitable");
+                    continue;
+                }
+
+                if (foregroundPid.HasValue && handle.Id == foregroundPid.Value)
+                {
+                    if (normalizedGames.Contains(normalizedName))
+                    {
+                        foregroundGame = normalizedName;
+                    }
+
+                    ignored.Add($"{normalizedName}: fenêtre active, intouchable");
+                    continue;
+                }
+
+                if (IsSystemProcess(handle))
+                {
+                    ignored.Add($"{normalizedName}: processus système");
+                    continue;
+                }
+
+                if (!IsBackgroundProcess(handle, foregroundPid))
+                {
+                    ignored.Add($"{normalizedName}: pas en arrière-plan");
+                    continue;
+                }
+
+                if (normalizedBlacklist.Contains(normalizedName) || policy.ProtectedTags.Any(tag => normalizedName.Contains(tag, StringComparison.OrdinalIgnoreCase)))
+                {
+                    ignored.Add($"{normalizedName}: protégé (blacklist/sécurité)");
+                    continue;
+                }
+
+                if (!normalizedWhitelist.Contains(normalizedName))
+                {
+                    ignored.Add($"{normalizedName}: hors liste blanche");
+                    continue;
+                }
+
+                candidates.Add(new ProcessCandidate(handle.Id, normalizedName));
+            }
+            catch
+            {
+                ignored.Add("Processus ignoré (inspection impossible)");
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            var nothingMessage = foregroundGame is null
+                ? "Aucune app de fond candidate à fermer."
+                : $"Jeu actif détecté ({foregroundGame}) : rien à toucher.";
+            return ActionExecutionResult.NotAvailable(nothingMessage, string.Join("\n", ignored.Distinct()));
+        }
+
+        var proposal = BuildProposal(candidates);
+        var confirmed = await _sessionConfirmation.ConfirmAsync(proposal, ct).ConfigureAwait(false);
+        if (!confirmed)
+        {
+            return ActionExecutionResult.Failure("Aucune app fermée : l'utilisateur a dit non.", string.Join("\n", ignored.Distinct()));
+        }
+
+        var closed = new List<string>();
+        var throttled = new List<string>();
+        var blocked = new List<string>();
+
+        foreach (var candidate in candidates)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var actions = new List<string>();
+
+            if (_processController.TryRequestClose(candidate.Id, out var closeNote))
+            {
+                actions.Add(closeNote ?? "fermeture demandée");
+            }
+
+            if (_processController.TrySuspend(candidate.Id, out var suspendNote))
+            {
+                actions.Add(suspendNote ?? "suspension légère");
+            }
+
+            if (_processController.TryLowerPriority(candidate.Id, out var priorityNote))
+            {
+                actions.Add(priorityNote ?? "priorité réduite");
+                throttled.Add(candidate.Name);
+            }
+
+            if (actions.Count > 0)
+            {
+                closed.Add($"{candidate.Name} ({string.Join(", ", actions)})");
+            }
+            else
+            {
+                blocked.Add(candidate.Name);
+            }
+        }
+
+        var summary = new StringBuilder();
+        summary.Append("Session gaming nettoyée : ");
+        summary.Append(closed.Count == 0 ? "rien à fermer" : string.Join(", ", closed));
+
+        var details = new StringBuilder();
+        if (throttled.Count > 0)
+        {
+            details.AppendLine($"Priorité abaissée : {string.Join(", ", throttled)}");
+        }
+
+        if (blocked.Count > 0)
+        {
+            details.AppendLine($"Ignorés (refus/lock) : {string.Join(", ", blocked)}");
+        }
+
+        if (ignored.Count > 0)
+        {
+            details.AppendLine("Ignorés (filtre) :");
+            foreach (var reason in ignored.Distinct())
+            {
+                details.AppendLine($"- {reason}");
+            }
+        }
+
+        details.Append("Pas de crash, pas de redémarrage. Tu peux retourner frag sans culpabilité.");
+
+        return ActionExecutionResult.Ok(summary.ToString(), details.ToString().TrimEnd());
+    }
 
     public async Task<ActionExecutionResult> SoftRamFlushAsync(CancellationToken ct = default)
     {
@@ -384,6 +547,29 @@ public sealed class PerformanceService : IPerformanceService
         IReadOnlySet<string> GetNormalizedWhitelist();
     }
 
+    public record BackgroundProcessPolicy(
+        IReadOnlySet<string> Whitelist,
+        IReadOnlySet<string> Blacklist,
+        IReadOnlySet<string> Games,
+        IReadOnlySet<string> ProtectedTags);
+
+    public interface IBackgroundProcessPolicyProvider
+    {
+        BackgroundProcessPolicy GetPolicy();
+    }
+
+    public interface ICloseSessionConfirmation
+    {
+        Task<bool> ConfirmAsync(string proposal, CancellationToken ct = default);
+    }
+
+    public interface IProcessController
+    {
+        bool TryRequestClose(int pid, out string? note);
+        bool TrySuspend(int pid, out string? note);
+        bool TryLowerPriority(int pid, out string? note);
+    }
+
     public interface IAppMemoryTrimmer
     {
         void Trim();
@@ -521,6 +707,118 @@ public sealed class PerformanceService : IPerformanceService
         }
     }
 
+    private sealed class BackgroundProcessPolicyProvider : IBackgroundProcessPolicyProvider
+    {
+        public BackgroundProcessPolicy GetPolicy()
+        {
+            try
+            {
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                var path = Path.Combine(baseDir, "assets", "performance", "background-policy.json");
+                if (File.Exists(path))
+                {
+                    var json = File.ReadAllText(path);
+                    var map = JsonSerializer.Deserialize<PolicyMap>(json, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                    if (map is not null)
+                    {
+                        return MapToPolicy(map);
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback to defaults below.
+            }
+
+            return MapToPolicy(PolicyMap.Default());
+        }
+
+        private static BackgroundProcessPolicy MapToPolicy(PolicyMap map)
+        {
+            return new BackgroundProcessPolicy(
+                map.Whitelist.Select(ProcessNameHelper.Normalize).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                map.Blacklist.Select(ProcessNameHelper.Normalize).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                map.Games.Select(ProcessNameHelper.Normalize).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                map.ProtectedTags.Select(t => t.Trim().ToLowerInvariant()).Where(t => !string.IsNullOrWhiteSpace(t)).ToHashSet(StringComparer.OrdinalIgnoreCase));
+        }
+
+        private sealed class PolicyMap
+        {
+            public string[] Games { get; set; } = Array.Empty<string>();
+            public string[] Whitelist { get; set; } = Array.Empty<string>();
+            public string[] Blacklist { get; set; } = Array.Empty<string>();
+            public string[] ProtectedTags { get; set; } = Array.Empty<string>();
+
+            public static PolicyMap Default() => new()
+            {
+                Games = new[] { "eldenring.exe", "valorant.exe", "fortniteclient-win64-shipping.exe", "cs2.exe", "wow.exe", "lol.launcher.exe" },
+                Whitelist = new[] { "discord.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "battle.net.exe", "origin.exe", "uplay.exe", "goggalaxy.exe", "chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "brave.exe", "teamspeak.exe", "telegram.exe", "spotify.exe" },
+                Blacklist = new[] { "system", "idle", "svchost.exe", "lsass.exe", "csrss.exe", "wininit.exe", "services.exe", "fontdrvhost.exe", "dwm.exe", "securityhealthservice.exe", "audiodg.exe", "nvcontainer.exe" },
+                ProtectedTags = new[] { "driver", "audio", "network", "antivirus", "input", "service", "windows" }
+            };
+        }
+    }
+
+    private sealed class AlwaysConfirmSession : ICloseSessionConfirmation
+    {
+        public Task<bool> ConfirmAsync(string proposal, CancellationToken ct = default) => Task.FromResult(true);
+    }
+
+    private sealed class WindowsProcessController : IProcessController
+    {
+        public bool TryRequestClose(int pid, out string? note)
+        {
+            note = null;
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                if (process.HasExited)
+                    return false;
+
+                if (process.MainWindowHandle != IntPtr.Zero && process.CloseMainWindow())
+                {
+                    note = "fermeture demandée";
+                    return true;
+                }
+            }
+            catch
+            {
+                // Ignore errors, best effort only.
+            }
+
+            return false;
+        }
+
+        public bool TrySuspend(int pid, out string? note)
+        {
+            note = "Suspension non supportée (sans droits admin)";
+            return false;
+        }
+
+        public bool TryLowerPriority(int pid, out string? note)
+        {
+            note = null;
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                if (process.HasExited)
+                    return false;
+
+                process.PriorityClass = ProcessPriorityClass.BelowNormal;
+                note = "priorité réduite";
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
     private sealed class ProcessMapWhitelistProvider : IProcessWhitelistProvider
     {
         public IReadOnlySet<string> GetNormalizedWhitelist()
@@ -598,6 +896,8 @@ public sealed class PerformanceService : IPerformanceService
     }
 
     private sealed record StepResult(string Component, StepOutcome Status, string Details);
+
+    private sealed record ProcessCandidate(int Id, string Name);
 
     private async Task<(StepResult Step, PerformanceModeState State)> ApplyHighPerformancePlanAsync(PerformanceModeState state, CancellationToken ct)
     {
@@ -853,6 +1153,14 @@ public sealed class PerformanceService : IPerformanceService
             : "Retour au mode 'je fais moins d'efforts'. C'est cohérent.";
         sb.Append(remark);
         return sb.ToString().TrimEnd();
+    }
+
+    private static string BuildProposal(IEnumerable<ProcessCandidate> candidates)
+    {
+        var names = candidates.Select(c => c.Name).Distinct().ToList();
+        return names.Count == 0
+            ? "Aucun candidat à fermer"
+            : $"Candidats à calmer/fermer : {string.Join(", ", names)}. On tente ?";
     }
 
     public static class ProcessNameHelper
