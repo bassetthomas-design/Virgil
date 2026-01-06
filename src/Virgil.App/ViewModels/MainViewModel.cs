@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -11,6 +13,7 @@ using Virgil.App.Services;
 using Virgil.Domain.Actions;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Chat;
+using Virgil.Services.SelfTest;
 
 namespace Virgil.App.ViewModels
 {
@@ -351,9 +354,27 @@ namespace Virgil.App.ViewModels
                 }
             }
 
-            var status = ActionCatalog.DescribeStatus();
-            _chat.PostSystemMessage(status, MessageType.Info, ChatKind.Info);
-            return await Task.FromResult(ActionResult.Completed($"{_actionRegistry.All.Count} actions câblées."));
+            var tester = new ActionWiringTester(_actionRegistry.All.Select(a => a.Key));
+            var report = await tester.RunAsync(ActionCatalog.All.Values, ct).ConfigureAwait(false);
+
+            var sb = new StringBuilder();
+            foreach (var item in report.Items)
+            {
+                var statusLabel = item.Status switch
+                {
+                    ActionSelfTestStatus.Ok => "OK",
+                    ActionSelfTestStatus.NonCablee => "Non câblée",
+                    _ => "Erreur"
+                };
+
+                var reason = string.IsNullOrWhiteSpace(item.Reason) ? string.Empty : $" ({item.Reason})";
+                sb.AppendLine($"Action {item.ActionNumber:00}: {statusLabel}{reason}");
+            }
+
+            sb.AppendLine($"{report.OkCount} / {report.Total} actions correctement câblées");
+
+            _chat.PostSystemMessage(sb.ToString().TrimEnd(), MessageType.Info, ChatKind.Info);
+            return ActionResult.Completed("Diagnostic câblage terminé");
         }
     }
 }
