@@ -60,6 +60,9 @@
 
             <!-- Mises à jour -->
             <TextBlock Text="Mises à jour" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Gérer les mises à jour automatiques" Tag="auto_updates_manage" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Mettre à jour les logiciels" Tag="apps_update_all" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>

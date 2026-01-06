@@ -91,14 +91,17 @@ public sealed class ActionOrchestrator : IActionOrchestrator
                 return await ExecuteAsync("Fermeture de la session gaming", () => _performance.CloseGamingSessionAsync(ct), ct);
 
             // Mises à jour
-            case VirgilActionId.UpdateSoftwares:
-                return await ExecuteAsync("Mise à jour des logiciels", () => _update.UpdateAppsAsync(ct), ct);
+            case VirgilActionId.ManageAutomaticUpdates:
+                return await ExecuteAsync("Gestion des mises à jour automatiques", () => _update.ManageAutomaticUpdatesAsync(null, ct), ct);
 
             case VirgilActionId.RunWindowsUpdate:
                 return await ExecuteAsync("Lancement de Windows Update", () => _update.RunWindowsUpdateAsync(ct), ct);
 
             case VirgilActionId.CheckGpuDrivers:
                 return await ExecuteAsync("Vérification des pilotes GPU", () => _update.CheckGpuDriversAsync(ct), ct);
+
+            case VirgilActionId.UpdateSoftwares:
+                return await ExecuteAsync("Mise à jour des logiciels", () => _update.UpdateAppsAsync(ct), ct);
 
             // Spéciaux
             case VirgilActionId.RamboMode:
