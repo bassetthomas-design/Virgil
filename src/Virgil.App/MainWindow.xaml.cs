@@ -32,6 +32,7 @@ namespace Virgil.App
             _settingsService = new SettingsService();
             _monitoringService = new MonitoringService();
             var networkInsightService = new NetworkInsightService();
+            _confirmationService = new ConfirmationService();
 
             var monitoringVm = new MonitoringViewModel(
                 _monitoringService,
@@ -43,12 +44,10 @@ namespace Virgil.App
                 new CleanupService(),
                 new UpdateService(),
                 new NetworkService(),
-                new PerformanceService(),
+                new PerformanceService(sessionConfirmation: new UiSessionConfirmation(_confirmationService)),
                 new DiagnosticService(),
                 new SpecialService(),
                 uiChat);
-
-            _confirmationService = new ConfirmationService();
 
             var mainVm = new MainViewModel(
                 _chatService,

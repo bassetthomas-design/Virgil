@@ -1,0 +1,50 @@
+{
+  "games": [
+    "eldenring.exe",
+    "valorant.exe",
+    "fortniteclient-win64-shipping.exe",
+    "cs2.exe",
+    "wow.exe",
+    "lol.launcher.exe"
+  ],
+  "whitelist": [
+    "discord.exe",
+    "steamwebhelper.exe",
+    "epicgameslauncher.exe",
+    "battle.net.exe",
+    "origin.exe",
+    "uplay.exe",
+    "goggalaxy.exe",
+    "chrome.exe",
+    "msedge.exe",
+    "firefox.exe",
+    "opera.exe",
+    "brave.exe",
+    "teamspeak.exe",
+    "telegram.exe",
+    "spotify.exe"
+  ],
+  "blacklist": [
+    "system",
+    "idle",
+    "svchost.exe",
+    "lsass.exe",
+    "csrss.exe",
+    "wininit.exe",
+    "services.exe",
+    "fontdrvhost.exe",
+    "dwm.exe",
+    "securityhealthservice.exe",
+    "audiodg.exe",
+    "nvcontainer.exe"
+  ],
+  "protectedTags": [
+    "driver",
+    "audio",
+    "network",
+    "antivirus",
+    "input",
+    "service",
+    "windows"
+  ]
+}
