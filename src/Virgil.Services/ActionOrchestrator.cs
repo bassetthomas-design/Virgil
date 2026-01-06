@@ -80,6 +80,9 @@ public sealed class ActionOrchestrator : IActionOrchestrator
             case VirgilActionId.NetworkAdvancedReset:
                 return await ExecuteAsync("Réinitialisation réseau avancée", () => _network.AdvancedResetAsync(ct), ct);
 
+            case VirgilActionId.InternetSpeedTest:
+                return await ExecuteAsync("Test de débit Internet", () => _network.RunInternetSpeedTestAsync(ct), ct);
+
             case VirgilActionId.LatencyStabilityTest:
                 return await ExecuteAsync("Test de latence et de stabilité", () => _network.RunLatencyTestAsync(ct), ct);
 

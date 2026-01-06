@@ -45,6 +45,9 @@
             <Button Content="Reset réseau (complet)" Tag="network_hard_reset" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Test de débit Internet" Tag="network_speed_test" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Test de latence" Tag="network_latency_test" Margin="0,0,0,8"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>

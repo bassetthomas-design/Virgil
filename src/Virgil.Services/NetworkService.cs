@@ -21,6 +21,7 @@ public sealed class NetworkService : INetworkService
     private readonly IPlatformInfo _platformInfo;
     private readonly IPingClient _pingClient;
     private readonly INetworkInfoProvider _networkInfoProvider;
+    private readonly IInternetSpeedProbe _speedProbe;
 
     public NetworkService()
         : this(
@@ -28,7 +29,8 @@ public sealed class NetworkService : INetworkService
             new WindowsPrivilegeChecker(),
             new RuntimePlatformInfo(),
             new RuntimePingClient(),
-            new RuntimeNetworkInfoProvider())
+            new RuntimeNetworkInfoProvider(),
+            null)
     {
     }
 
@@ -37,13 +39,15 @@ public sealed class NetworkService : INetworkService
         IPrivilegeChecker privilegeChecker,
         IPlatformInfo platformInfo,
         IPingClient pingClient,
-        INetworkInfoProvider networkInfoProvider)
+        INetworkInfoProvider networkInfoProvider,
+        IInternetSpeedProbe? speedProbe = null)
     {
         _runner = runner;
         _privilegeChecker = privilegeChecker;
         _platformInfo = platformInfo;
         _pingClient = pingClient;
         _networkInfoProvider = networkInfoProvider;
+        _speedProbe = speedProbe ?? new HttpInternetSpeedProbe(_pingClient);
     }
 
     public Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default)
@@ -126,6 +130,48 @@ public sealed class NetworkService : INetworkService
         sb.Append("Ton réseau respire… parfois.");
 
         return ActionExecutionResult.Ok(sb.ToString().TrimEnd());
+    }
+
+    public async Task<ActionExecutionResult> RunInternetSpeedTestAsync(CancellationToken ct = default)
+    {
+        var connectivity = await _pingClient.SendAsync(ExternalLatencyHost, PingTimeoutMs, ct).ConfigureAwait(false);
+        if (connectivity.Status != PingAttemptStatus.Success)
+        {
+            return ActionExecutionResult.Failure("Connexion indisponible");
+        }
+
+        var probeResult = await _speedProbe.MeasureAsync(ct).ConfigureAwait(false);
+        if (!probeResult.Success)
+        {
+            var reason = string.IsNullOrWhiteSpace(probeResult.FailureReason)
+                ? "Test de débit indisponible"
+                : probeResult.FailureReason;
+            return ActionExecutionResult.Failure(reason);
+        }
+
+        var appreciation = DeriveInternetAppreciation(probeResult.DownloadMbps, probeResult.UploadMbps, probeResult.LatencyMs, probeResult.StabilityVariationPercent);
+        var usage = SuggestUsage(appreciation, probeResult.StabilityVariationPercent);
+        var stabilityNote = probeResult.StabilityVariationPercent.HasValue
+            ? $" (Stabilité: variation {probeResult.StabilityVariationPercent.Value:F1}%{(probeResult.StabilityVariationPercent.Value < 8 ? ", plutôt stable" : string.Empty)})"
+            : string.Empty;
+
+        var lines = new List<string>
+        {
+            $"Débit descendant: {probeResult.DownloadMbps:F1} Mbps",
+            $"Débit montant: {probeResult.UploadMbps:F1} Mbps",
+            $"Latence mesurée: {probeResult.LatencyMs:F0} ms",
+            $"Appréciation globale: {appreciation}",
+            $"Usage conseillé: {usage}{stabilityNote}",
+        };
+
+        if (probeResult.UsedFallback)
+        {
+            lines.Add($"Serveur de test: {probeResult.ServerLabel}.");
+        }
+
+        lines.Add("Ce n’est pas de la fibre supersonique, mais ça fait le travail.");
+
+        return ActionExecutionResult.Ok(string.Join(Environment.NewLine, lines));
     }
 
     private async Task<IReadOnlyList<NetworkStepResult>> ExecuteStepsAsync(IEnumerable<NetworkStep> steps, bool isAdmin, CancellationToken ct)
@@ -310,6 +356,37 @@ public sealed class NetworkService : INetworkService
         sb.Append("Prochaines options: Diagnostic réseau");
         return sb.ToString().TrimEnd();
     }
+
+    private static string DeriveInternetAppreciation(double downloadMbps, double uploadMbps, double latencyMs, double? stability)
+    {
+        if (downloadMbps >= 80 && uploadMbps >= 20 && latencyMs <= 30)
+        {
+            return "Bon";
+        }
+
+        if (downloadMbps >= 25 && uploadMbps >= 5 && latencyMs <= 90)
+        {
+            return "Moyen";
+        }
+
+        if (stability.HasValue && stability.Value < 6)
+        {
+            return "Faible mais stable";
+        }
+
+        return "Faible";
+    }
+
+    private static string SuggestUsage(string appreciation, double? stability)
+        => appreciation switch
+        {
+            "Bon" => "jeu en ligne et streaming 4K sans sourciller",
+            "Moyen" => "streaming HD, visio et télétravail tranquille",
+            "Faible mais stable" => "navigation, musique en ligne, streaming SD stable",
+            _ => stability.HasValue && stability.Value < 12
+                ? "navigation basique et streaming léger"
+                : "navigation basique et mails (le reste sera au ralenti)",
+        };
 
     private static string FormatMessage(string message)
     {

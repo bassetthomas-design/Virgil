@@ -20,27 +20,28 @@ public enum VirgilActionId
     NetworkSoftReset,           // 11
     NetworkAdvancedReset,       // 12
     LatencyStabilityTest,       // 13
+    InternetSpeedTest,          // 14
 
     // Gaming / Performance
-    EnableGamingMode,           // 14
-    RestoreNormalMode,          // 15
-    StartupAnalysis,            // 16
-    CloseGamingSession,         // 17
+    EnableGamingMode,           // 15
+    RestoreNormalMode,          // 16
+    StartupAnalysis,            // 17
+    CloseGamingSession,         // 18
 
     // Mises à jour
-    UpdateSoftwares,            // 18
-    ManageAutomaticUpdates,     // 19
+    UpdateSoftwares,            // 19
+    ManageAutomaticUpdates,     // 20
 
     // Diagnostic matériel
-    HardwareQuickDiagnostic,    // 20
+    HardwareQuickDiagnostic,    // 21
 
     // Mises à jour (suite)
-    RunWindowsUpdate,           // 21
-    CheckGpuDrivers,            // 22
+    RunWindowsUpdate,           // 22
+    CheckGpuDrivers,            // 23
 
     // Spéciaux
-    RamboMode,                  // 23
-    ThanosChatWipe,             // 24
-    ReloadConfiguration,        // 25
-    RescanSystem                // 26
+    RamboMode,                  // 24
+    ThanosChatWipe,             // 25
+    ReloadConfiguration,        // 26
+    RescanSystem                // 27
 }
