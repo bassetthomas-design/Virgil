@@ -32,6 +32,9 @@ namespace Virgil.App.Chat
 
             if (applyThanosEffect)
             {
+                // Kick off the UI animation immediately so messages vanish in a "snap"
+                // without intermediate placeholder entries.
+                HistoryCleared?.Invoke(this, new ChatClearEventArgs(applyThanosEffect, effectDurationMs));
                 await SnapAsync(effectDurationMs, ct).ConfigureAwait(false);
             }
             else
@@ -40,10 +43,10 @@ namespace Virgil.App.Chat
                 {
                     _messages.Clear();
                 }
-            }
 
-            // Notify listeners (UI, logging) that the history has been wiped.
-            HistoryCleared?.Invoke(this, new ChatClearEventArgs(applyThanosEffect, effectDurationMs));
+                // Notify listeners (UI, logging) that the history has been wiped.
+                HistoryCleared?.Invoke(this, new ChatClearEventArgs(applyThanosEffect, effectDurationMs));
+            }
 
             PostSystemMessage("Tout a disparu.", MessageType.Info, ChatKind.Info, rearmTimer: false);
 
@@ -92,8 +95,6 @@ namespace Virgil.App.Chat
                         _messages.RemoveAt(i);
                     }
                 }
-                // Fire an event for each removal so that the UI can animate the bubble
-                MessagePosted?.Invoke(this, "[Message supprimé]", ChatKind.Info, null);
                 try
                 {
                     await Task.Delay(delay, ct).ConfigureAwait(false);
