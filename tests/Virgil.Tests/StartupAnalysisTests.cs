@@ -109,7 +109,7 @@ public class StartupAnalysisTests
 
     private sealed class NoopPolicyProvider : IBackgroundProcessPolicyProvider
     {
-        public PerformanceService.BackgroundProcessPolicy LoadPolicy() => new(
+        public PerformanceService.BackgroundProcessPolicy GetPolicy() => new(
             Array.Empty<string>(),
             Array.Empty<string>(),
             Array.Empty<string>(),
