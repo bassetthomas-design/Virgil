@@ -32,6 +32,7 @@ public sealed class PerformanceService : IPerformanceService
     private readonly IPrivilegeChecker _privilegeChecker;
     private readonly ISystemCommandRunner _commandRunner;
     private readonly IPerformanceStateStore _stateStore;
+    private readonly IStartupAnalyzer _startupAnalyzer;
 
     private const string HighPerformancePlan = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
     private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
@@ -45,7 +46,8 @@ public sealed class PerformanceService : IPerformanceService
         IPlatformInfo? platformInfo = null,
         IPrivilegeChecker? privilegeChecker = null,
         ISystemCommandRunner? commandRunner = null,
-        IPerformanceStateStore? stateStore = null)
+        IPerformanceStateStore? stateStore = null,
+        IStartupAnalyzer? startupAnalyzer = null)
     {
         _processProvider = processProvider ?? new WindowsProcessProvider();
         _memoryReader = memoryReader ?? new WindowsMemoryReader();
@@ -56,6 +58,7 @@ public sealed class PerformanceService : IPerformanceService
         _privilegeChecker = privilegeChecker ?? new WindowsPrivilegeChecker();
         _commandRunner = commandRunner ?? new SystemCommandRunner();
         _stateStore = stateStore ?? new FilePerformanceStateStore();
+        _startupAnalyzer = startupAnalyzer ?? new StartupAnalyzer();
     }
 
     public async Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default)
@@ -140,50 +143,25 @@ public sealed class PerformanceService : IPerformanceService
 
     public Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!_platformInfo.IsWindows())
         {
-            return Task.FromResult(ActionExecutionResult.NotAvailable("Optimisation du démarrage uniquement disponible sur Windows."));
+            return Task.FromResult(ActionExecutionResult.NotAvailable("Analyse du démarrage uniquement disponible sur Windows."));
         }
 
         try
         {
-            var optimizer = new StartupOptimizer(AppContext.BaseDirectory);
-            var plan = optimizer.BuildAndApply();
-
-            if (plan.Total == 0)
+            var report = _startupAnalyzer.Analyze(ct);
+            if (!report.Items.Any())
             {
-                return Task.FromResult(ActionExecutionResult.NotAvailable("Aucun élément de démarrage détecté."));
+                return Task.FromResult(ActionExecutionResult.NotAvailable("Aucun élément de démarrage détecté ou accessible."));
             }
 
-            var disabledApplied = plan.Disabled;
-            var disabledPlanned = plan.DisablePlanned;
-            var optionalCount = plan.Optionals;
-            var keptCount = plan.Critical;
-            var summary = $"Optimisation démarrage (safe) : {plan.Total} éléments scannés – gardés {keptCount}, optionnels {optionalCount}, désactivés {disabledApplied}/{disabledPlanned}.";
-
-            var detailsLines = new List<string>();
-            var impact = disabledApplied > 0
-                ? "Impact attendu : démarrage plus léger (sans toucher aux composants critiques)."
-                : "Impact attendu : diagnostic uniquement, aucun composant critique touché.";
-            detailsLines.Add(impact);
-
-            foreach (var entry in plan.Entries.Where(e => e.Decision == StartupDecision.Disable))
-            {
-                var status = entry.Applied ? "désactivé" : "proposé";
-                var note = string.IsNullOrWhiteSpace(entry.ApplyNote) ? entry.Reason : entry.ApplyNote;
-                detailsLines.Add($"- {entry.Entry.Name} ({entry.Entry.Source}): {status} – {note}");
-            }
-
-            foreach (var entry in plan.Entries.Where(e => e.Decision == StartupDecision.Optional).Take(5))
-            {
-                detailsLines.Add($"- {entry.Entry.Name} marqué optionnel : {entry.Reason}");
-            }
-
-            return Task.FromResult(ActionExecutionResult.Ok(summary, string.Join(Environment.NewLine, detailsLines)));
+            var message = StartupAnalysisFormatter.BuildMessage(report);
+            return Task.FromResult(ActionExecutionResult.Ok(message));
         }
         catch (Exception ex)
         {
-            return Task.FromResult(ActionExecutionResult.Failure($"Optimisation démarrage impossible : {ex.Message}"));
+            return Task.FromResult(ActionExecutionResult.Failure($"Analyse du démarrage impossible : {ex.Message}"));
         }
     }
 

@@ -154,7 +154,12 @@ internal sealed class StartupRuleDto
     public StartupRule ToModel() => new(Keyword, string.IsNullOrWhiteSpace(Reason) ? "Règle sans raison" : Reason);
 }
 
-internal sealed class StartupInventory
+internal interface IStartupInventory
+{
+    List<StartupEntry> Collect();
+}
+
+internal sealed class StartupInventory : IStartupInventory
 {
     private static readonly string[] RegistryRunPaths =
     {
