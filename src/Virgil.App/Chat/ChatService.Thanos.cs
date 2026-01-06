@@ -12,6 +12,11 @@ namespace Virgil.App.Chat
     public partial class ChatService
     {
         private bool _snapInProgress;
+        private readonly object _thanosTimerLock = new();
+        private CancellationTokenSource? _thanosTimerCts;
+        private int _activityVersion;
+
+        internal TimeSpan AutoEraseDelay { get; set; } = TimeSpan.FromSeconds(30);
 
         /// <summary>
         /// Clears the entire chat history. If <paramref name="applyThanosEffect"/> is true,
@@ -21,8 +26,10 @@ namespace Virgil.App.Chat
         /// <param name="applyThanosEffect">Whether to play the snap animation.</param>
         /// <param name="effectDurationMs">Total duration of the effect in milliseconds.</param>
         /// <param name="ct">Cancellation token to abort the operation.</param>
-        public async Task ClearHistoryAsync(bool applyThanosEffect = false, int effectDurationMs = 2000, CancellationToken ct = default)
+        public async Task ClearHistoryAsync(bool applyThanosEffect = false, int effectDurationMs = 2000, CancellationToken ct = default, bool startAutoEraseTimer = true)
         {
+            var generation = RegisterActivity(rearmTimer: false);
+
             if (applyThanosEffect)
             {
                 await SnapAsync(effectDurationMs, ct).ConfigureAwait(false);
@@ -36,8 +43,14 @@ namespace Virgil.App.Chat
             }
 
             // Notify listeners (UI, logging) that the history has been wiped.
-            MessagePosted?.Invoke(this, "[Chat effacé]", ChatKind.Info, null);
             HistoryCleared?.Invoke(this, new ChatClearEventArgs(applyThanosEffect, effectDurationMs));
+
+            PostSystemMessage("Tout a disparu.", MessageType.Info, ChatKind.Info, rearmTimer: false);
+
+            if (startAutoEraseTimer)
+            {
+                ArmThanosTimer(generation);
+            }
         }
 
         /// <summary>
@@ -91,6 +104,48 @@ namespace Virgil.App.Chat
                 }
             }
             _snapInProgress = false;
+        }
+
+        private void ArmThanosTimer(int generation)
+        {
+            lock (_thanosTimerLock)
+            {
+                _thanosTimerCts?.Cancel();
+                _thanosTimerCts?.Dispose();
+                _thanosTimerCts = new CancellationTokenSource();
+                var token = _thanosTimerCts.Token;
+                _ = RunAutoEraseAsync(generation, token);
+            }
+        }
+
+        private async Task RunAutoEraseAsync(int generation, CancellationToken token)
+        {
+            try
+            {
+                await Task.Delay(AutoEraseDelay, token).ConfigureAwait(false);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            if (generation != Volatile.Read(ref _activityVersion))
+            {
+                return;
+            }
+
+            await ClearHistoryAsync(applyThanosEffect: true, effectDurationMs: 1800, ct: token, startAutoEraseTimer: false).ConfigureAwait(false);
+        }
+
+        private int RegisterActivity(bool rearmTimer = true)
+        {
+            var generation = Interlocked.Increment(ref _activityVersion);
+            if (rearmTimer)
+            {
+                ArmThanosTimer(generation);
+            }
+
+            return generation;
         }
     }
 }

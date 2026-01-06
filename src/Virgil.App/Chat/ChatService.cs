@@ -49,14 +49,7 @@ namespace Virgil.App.Chat
             // In the current Virgil-only chat model there is no direct user
             // input, but this method remains available for compatibility.
             var assistantMessage = new ChatMessage("assistant", content);
-            lock (_messages)
-            {
-                _messages.Add(assistantMessage);
-            }
-
-            // Notify listeners so UI layers can react to new messages even when
-            // using the SendAsync pipeline instead of the Post* helpers.
-            MessagePosted?.Invoke(this, content, ChatKind.Info, null);
+            AddMessage(assistantMessage, ChatKind.Info, null);
 
             await Task.CompletedTask;
             return assistantMessage;
@@ -67,18 +60,12 @@ namespace Virgil.App.Chat
         /// any notion of user input. This is the main entry point for parts
         /// of the application that want Virgil to "speak" in the chat box.
         /// </summary>
-        public void PostSystemMessage(string content, MessageType type = MessageType.Info, ChatKind kind = ChatKind.Info)
+        public void PostSystemMessage(string content, MessageType type = MessageType.Info, ChatKind kind = ChatKind.Info, bool rearmTimer = true)
         {
             // For now we only persist the textual content. The kind/type can
             // be leveraged later to drive styling or routing.
             var message = new ChatMessage("assistant", content);
-            lock (_messages)
-            {
-                _messages.Add(message);
-            }
-            
-            // Also trigger the event so UI is notified
-            MessagePosted?.Invoke(this, content, kind, null);
+            AddMessage(message, kind, null, rearmTimer);
         }
 
         /// <summary>
@@ -95,6 +82,17 @@ namespace Virgil.App.Chat
 
             var content = _defaultPhrases[_random.Next(_defaultPhrases.Length)];
             PostSystemMessage(content, MessageType.Info, ChatKind.Info);
+        }
+
+        private void AddMessage(ChatMessage message, ChatKind kind, int? ttlMs, bool rearmTimer = true)
+        {
+            lock (_messages)
+            {
+                _messages.Add(message);
+            }
+
+            RegisterActivity(rearmTimer);
+            MessagePosted?.Invoke(this, message.Content, kind, ttlMs);
         }
     }
 }

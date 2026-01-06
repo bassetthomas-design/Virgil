@@ -17,4 +17,8 @@
     <ProjectReference Include="../../src/Virgil.Core/Virgil.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\src\Virgil.App\Chat\**\*.cs" Link="AppChat\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
