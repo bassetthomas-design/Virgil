@@ -8,6 +8,7 @@ namespace Virgil.Services;
 
 public sealed class ActionOrchestrator : IActionOrchestrator
 {
+    private static readonly ActionResultToChatFormatter ChatFormatter = new();
     private readonly ICleanupService _cleanup;
     private readonly IUpdateService _update;
     private readonly INetworkService _network;
@@ -139,27 +140,14 @@ public sealed class ActionOrchestrator : IActionOrchestrator
         try
         {
             var result = await action().ConfigureAwait(false);
-            if (result.Success)
-            {
-                var msg = string.IsNullOrWhiteSpace(result.Message) ? label : result.Message;
-                await _chat.InfoAsync($"Terminé : {msg}", ct);
-            }
-            else
-            {
-                await _chat.WarnAsync($"Échec/indispo : {result.Message}", ct);
-            }
-
-            if (result.TryGetDetails(out var details))
-            {
-                await _chat.InfoAsync(details, ct);
-            }
+            await SendFormattedResultAsync(result, ct);
 
             return result;
         }
         catch (Exception ex)
         {
             var failure = ActionExecutionResult.Failure($"Erreur pendant {label}: {ex.Message}");
-            await _chat.ErrorAsync(failure.Message, ct);
+            await SendFormattedResultAsync(failure, ct);
             return failure;
         }
     }
@@ -168,5 +156,27 @@ public sealed class ActionOrchestrator : IActionOrchestrator
     {
         var result = await _special.ReloadConfigurationAsync(ct).ConfigureAwait(false);
         return result;
+    }
+
+    private async Task SendFormattedResultAsync(ActionExecutionResult result, CancellationToken ct)
+    {
+        var formatted = ChatFormatter.Format(result);
+        switch (formatted.Severity)
+        {
+            case ChatSeverity.Error:
+                await _chat.ErrorAsync(formatted.PrimaryMessage, ct);
+                break;
+            case ChatSeverity.Warning:
+                await _chat.WarnAsync(formatted.PrimaryMessage, ct);
+                break;
+            default:
+                await _chat.InfoAsync(formatted.PrimaryMessage, ct);
+                break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(formatted.Details))
+        {
+            await _chat.InfoAsync(formatted.Details, ct);
+        }
     }
 }

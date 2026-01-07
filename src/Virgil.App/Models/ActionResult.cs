@@ -1,11 +1,36 @@
+using System.Collections.Generic;
+using Virgil.Core.Models;
+
 namespace Virgil.App.Models
 {
-    public record ActionResult(bool Success, string Message)
+    public sealed record ActionResult(
+        ActionResultStatus Status,
+        string Title,
+        string Summary,
+        IReadOnlyList<ActionStepResult>? Steps = null,
+        IReadOnlyList<string>? Recommendations = null,
+        string? DebugInfo = null)
     {
-        public static ActionResult Completed(string message = "") => new(true, message);
+        public bool Success => Status is ActionResultStatus.Success or ActionResultStatus.PartialSuccess;
 
-        public static ActionResult Failure(string message) => new(false, message);
+        public string Message => string.IsNullOrWhiteSpace(Summary) ? Title : Summary;
 
-        public static ActionResult NotImplemented(string message = "Action non implémentée") => new(false, message);
+        public static ActionResult Completed(string message = "")
+            => new(ActionResultStatus.Success, message, string.Empty);
+
+        public static ActionResult PartialSuccess(string title, string? summary = null)
+            => new(ActionResultStatus.PartialSuccess, title, summary ?? string.Empty);
+
+        public static ActionResult Failure(string message)
+            => new(ActionResultStatus.Failed, message, string.Empty);
+
+        public static ActionResult NotAvailable(string title, string? summary = null)
+            => new(ActionResultStatus.NotAvailable, title, summary ?? string.Empty);
+
+        public static ActionResult NotImplemented(string title = "Action non implémentée", string? summary = null)
+            => new(ActionResultStatus.NotImplemented, title, summary ?? string.Empty);
+
+        public static ActionResult Skipped(string title, string? summary = null)
+            => new(ActionResultStatus.Skipped, title, summary ?? string.Empty);
     }
 }

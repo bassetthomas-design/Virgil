@@ -75,7 +75,7 @@ public sealed class CleanupService : ICleanupService
         var plan = _planFactory();
         if (plan.TempLocations.Count == 0 && plan.CacheLocations.Count == 0 && plan.LogLocations.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Aucune zone de nettoyage détectée");
+            return ActionExecutionResult.NotAvailable("Nettoyage rapide", "Aucune zone de nettoyage détectée");
         }
 
         var stats = new CleanupStats();
@@ -110,12 +110,12 @@ public sealed class CleanupService : ICleanupService
         }
         catch (OperationCanceledException)
         {
-            return ActionExecutionResult.Failure("Nettoyage annulé");
+            return ActionExecutionResult.Failure("Nettoyage rapide", "Nettoyage annulé");
         }
 
         var freedText = FormatSize(stats.FreedBytes);
         var summary = $"Quantité libérée : {freedText} — Nombre de fichiers supprimés : {stats.FilesDeleted}. Ce n'était pas spectaculaire, mais ton disque respire mieux.";
-        return ActionExecutionResult.Ok(summary);
+        return ActionExecutionResult.Ok("Nettoyage rapide terminé", summary);
     }
 
     public async Task<ActionExecutionResult> RunAdvancedAsync(CancellationToken ct = default)
@@ -128,7 +128,7 @@ public sealed class CleanupService : ICleanupService
         {
             const string adminMessage = "Nettoyage disque avancé indisponible : droits administrateur requis";
             const string details = "Action avancée, peut prendre du temps — mais sans admin, c’est niet (sécurité + accès système).";
-            return ActionExecutionResult.NotAvailable(adminMessage, details);
+            return ActionExecutionResult.NotAvailable("Nettoyage disque avancé", $"{adminMessage}. {details}");
         }
 
         var categories = _advancedPlanFactory();
@@ -214,7 +214,7 @@ public sealed class CleanupService : ICleanupService
         {
             var message = "Nettoyage disque avancé : Échec — aucune catégorie nettoyée";
             var details = ignored.Count == 0 ? null : string.Join("\n", ignored);
-            return ActionExecutionResult.Failure(message, details);
+            return ActionExecutionResult.Failure("Nettoyage disque avancé", $"{message}\n{details}".Trim());
         }
 
         var status = ignored.Count > 0 ? "Partiel" : "OK";
@@ -247,7 +247,8 @@ public sealed class CleanupService : ICleanupService
 
         detailsBuilder.AppendLine("Suggestion : lancer un re-scan du système (commande: monitoring_rescan).");
 
-        return ActionExecutionResult.Ok(summary, detailsBuilder.ToString().TrimEnd());
+        var details = $"{summary}\n{detailsBuilder.ToString().TrimEnd()}".TrimEnd();
+        return ActionExecutionResult.Ok("Nettoyage disque avancé terminé", details);
     }
 
     public async Task<ActionExecutionResult> RunSystemTempCleanupAsync(CancellationToken ct = default)
@@ -259,7 +260,7 @@ public sealed class CleanupService : ICleanupService
         var plan = _systemTempPlanFactory();
         if (plan.Categories.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Nettoyage des temporaires : aucune catégorie détectée");
+            return ActionExecutionResult.NotAvailable("Nettoyage des temporaires", "Aucune catégorie détectée");
         }
 
         var cleanedCategories = new List<string>();
@@ -324,7 +325,8 @@ public sealed class CleanupService : ICleanupService
             details = string.Join(Environment.NewLine, lockedSummaries);
         }
 
-        return ActionExecutionResult.Ok(summary, details);
+        var fullSummary = string.IsNullOrWhiteSpace(details) ? summary : $"{summary}\n{details}";
+        return ActionExecutionResult.Ok("Nettoyage des temporaires terminé", fullSummary);
     }
 
     public async Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
@@ -332,7 +334,7 @@ public sealed class CleanupService : ICleanupService
         var plan = _browserPlanFactory();
         if (plan.Targets.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Aucun navigateur détecté (rien à nettoyer)");
+            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (léger)", "Aucun navigateur détecté (rien à nettoyer)");
         }
 
         var cleaned = new List<string>();
@@ -369,7 +371,7 @@ public sealed class CleanupService : ICleanupService
 
         if (cleaned.Count == 0 && ignored.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Aucune donnée de navigation à nettoyer");
+            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (léger)", "Aucune donnée de navigation à nettoyer");
         }
 
         var freedText = FormatSize(totalStats.FreedBytes);
@@ -377,7 +379,7 @@ public sealed class CleanupService : ICleanupService
         var skipped = ignored.Count == 0 ? "aucun" : string.Join(", ", ignored);
 
         var summary = $"Navigateurs traités: {treated}. Navigateurs ignorés (ouverts/verrouillés): {skipped}. Quantité libérée: {freedText}. Fichiers supprimés: {totalStats.FilesDeleted}. Les miettes ont disparu. Les onglets n’ont rien remarqué.";
-        return ActionExecutionResult.Ok(summary);
+        return ActionExecutionResult.Ok("Nettoyage navigateur (léger) terminé", summary);
     }
 
     public async Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default)
@@ -385,7 +387,7 @@ public sealed class CleanupService : ICleanupService
         var plan = _browserDeepPlanFactory();
         if (plan.Targets.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Aucun navigateur détecté (nettoyage profond)");
+            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (profond)", "Aucun navigateur détecté (nettoyage profond)");
         }
 
         var running = plan.Targets
@@ -398,7 +400,7 @@ public sealed class CleanupService : ICleanupService
         {
             var opened = string.Join(", ", running);
             var message = $"Impossible de lancer le nettoyage profond : navigateur(s) ouvert(s) : {opened}. Ferme-les et on re-tente.";
-            return ActionExecutionResult.Failure(message);
+            return ActionExecutionResult.Failure("Nettoyage navigateur (profond)", message);
         }
 
         var cleanedBrowsers = new List<string>();
@@ -426,7 +428,7 @@ public sealed class CleanupService : ICleanupService
 
         if (cleanedBrowsers.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Nettoyage profond : aucune donnée supprimée");
+            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (profond)", "Aucune donnée supprimée");
         }
 
         var freedText = FormatSize(totalStats.FreedBytes);
@@ -434,7 +436,7 @@ public sealed class CleanupService : ICleanupService
         var browsersText = string.Join(", ", cleanedBrowsers.Distinct());
 
         var summary = $"Navigateurs nettoyés : {browsersText}. Données supprimées : {typesText}. Quantité libérée : {freedText}. Reconnexion requise (cookies vaporisés).";
-        return ActionExecutionResult.Ok(summary);
+        return ActionExecutionResult.Ok("Nettoyage navigateur (profond) terminé", summary);
     }
 
     private static async Task<CleanupStats> CleanDirectoryAsync(

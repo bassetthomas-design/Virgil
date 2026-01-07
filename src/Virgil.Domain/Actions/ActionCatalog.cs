@@ -28,7 +28,7 @@ public static class ActionCatalog
         ["browser_deep_clean"] = new(ActionKey: "browser_deep_clean", VirgilActionId.DeepBrowserClean, "Nettoyage navigateur (profond)", IsDestructive: false, IsImplemented: true, Service: "CleanupService"),
 
         // Réseau
-        ["network_diag"] = new(ActionKey: "network_diag", VirgilActionId.NetworkQuickDiag, "Diagnostic réseau", IsDestructive: false, IsImplemented: false, Service: "NetworkService"),
+        ["network_diag"] = new(ActionKey: "network_diag", VirgilActionId.NetworkQuickDiag, "Diagnostic réseau", IsDestructive: false, IsImplemented: true, Service: "NetworkService"),
         ["network_soft_reset"] = new(ActionKey: "network_soft_reset", VirgilActionId.NetworkSoftReset, "Reset réseau (soft)", IsDestructive: false, IsImplemented: true, Service: "NetworkService"),
         ["network_hard_reset"] = new(ActionKey: "network_hard_reset", VirgilActionId.NetworkAdvancedReset, "Reset réseau (complet)", IsDestructive: true, IsImplemented: true, Service: "NetworkService"),
         ["network_speed_test"] = new(ActionKey: "network_speed_test", VirgilActionId.InternetSpeedTest, "Test de débit Internet", IsDestructive: false, IsImplemented: true, Service: "NetworkService"),
@@ -44,10 +44,10 @@ public static class ActionCatalog
         ["auto_updates_manage"] = new(ActionKey: "auto_updates_manage", VirgilActionId.ManageAutomaticUpdates, "Gérer les mises à jour automatiques", IsDestructive: false, IsImplemented: true, Service: "UpdateService"),
         ["apps_update_all"] = new(ActionKey: "apps_update_all", VirgilActionId.UpdateSoftwares, "Mettre à jour les logiciels", IsDestructive: false, IsImplemented: true, Service: "UpdateService"),
         ["windows_update"] = new(ActionKey: "windows_update", VirgilActionId.RunWindowsUpdate, "Mise à jour Windows", IsDestructive: true, IsImplemented: true, Service: "WindowsUpdateService"),
-        ["gpu_driver_check"] = new(ActionKey: "gpu_driver_check", VirgilActionId.CheckGpuDrivers, "Vérifier les drivers GPU", IsDestructive: false, IsImplemented: false, Service: "UpdateService"),
+        ["gpu_driver_check"] = new(ActionKey: "gpu_driver_check", VirgilActionId.CheckGpuDrivers, "Vérifier les drivers GPU", IsDestructive: false, IsImplemented: true, Service: "UpdateService"),
 
         // Spéciaux
-        ["rambo_repair"] = new(ActionKey: "rambo_repair", VirgilActionId.RamboMode, "Mode RAMBO", IsDestructive: true, IsImplemented: false, Service: "SpecialService"),
+        ["rambo_repair"] = new(ActionKey: "rambo_repair", VirgilActionId.RamboMode, "Mode RAMBO", IsDestructive: true, IsImplemented: true, Service: "SpecialService"),
         ["chat_thanos"] = new(ActionKey: "chat_thanos", VirgilActionId.ThanosChatWipe, "Effet Thanos", IsDestructive: true, IsImplemented: true, Service: "ChatService"),
         ["app_reload_settings"] = new(ActionKey: "app_reload_settings", VirgilActionId.ReloadConfiguration, "Recharger la configuration", IsDestructive: false, IsImplemented: true, Service: "SpecialService"),
         ["monitoring_rescan"] = new(ActionKey: "monitoring_rescan", VirgilActionId.RescanSystem, "Re-scanner le système", IsDestructive: false, IsImplemented: true, Service: "DiagnosticService"),

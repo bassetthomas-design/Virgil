@@ -76,10 +76,10 @@ public sealed class DiagnosticService : IDiagnosticService
     }
 
     public Task<ActionExecutionResult> DiskCheckAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification disque non implémentée"));
+        => Task.FromResult(ActionExecutionResult.NotImplemented("Vérification disque non implémentée"));
 
     public Task<ActionExecutionResult> SystemIntegrityCheckAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification intégrité système non implémentée"));
+        => Task.FromResult(ActionExecutionResult.NotImplemented("Vérification intégrité système non implémentée"));
 
     public Task<ActionExecutionResult> RescanSystemAsync(CancellationToken ct = default)
         => ExecuteExpressScanAsync(
@@ -632,6 +632,7 @@ internal sealed class HardwareQuickDiagnosticsCollector : IHardwareSnapshotColle
                 disks.Add(new DiskStatus($"Disque {drive.Name.TrimEnd(Path.DirectorySeparatorChar)}", usage, freeGb, "non disponible"));
             }
 
+            missing.Add("SMART: non disponible");
             return disks;
         }
         catch

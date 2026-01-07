@@ -25,7 +25,7 @@ public sealed class SpecialService : ISpecialService
     }
 
     public Task<ActionExecutionResult> RamboModeAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Mode RAMBO non implémenté"));
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Mode RAMBO", "Service SpecialService indisponible"));
 
     public async Task<ActionExecutionResult> ReloadConfigurationAsync(CancellationToken ct = default)
     {
@@ -49,7 +49,12 @@ public sealed class SpecialService : ISpecialService
             };
 
             await _chat.InfoAsync(message, ct).ConfigureAwait(false);
-            return new ActionExecutionResult(status != ConfigurationReloadStatus.Failure, message);
+            return status switch
+            {
+                ConfigurationReloadStatus.Ok => ActionExecutionResult.Ok("Configuration rechargée", message),
+                ConfigurationReloadStatus.Partial => ActionExecutionResult.Partial("Configuration rechargée", message),
+                _ => ActionExecutionResult.Failure("Configuration rechargée", message),
+            };
         }
         catch (Exception ex)
         {

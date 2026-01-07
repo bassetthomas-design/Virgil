@@ -56,17 +56,40 @@ public sealed class ChatActionBridge
         {
             if (!descriptor.IsImplemented)
             {
-                await _chat.WarnAsync($"Action {actionId} non disponible ({descriptor.Service}).", ct);
+                var unavailable = ActionExecutionResult.NotImplemented(descriptor.DisplayName, $"Service: {descriptor.Service}");
+                await PostFormattedAsync(unavailable, ct);
                 return;
             }
 
             var resultExec = await _actions.RunAsync(descriptor.VirgilActionId, ct);
-            var status = resultExec.Success ? "exécutée" : "échouée";
-            await _chat.InfoAsync($"Action {actionId} {status}: {resultExec.Message}", ct);
+            await PostFormattedAsync(resultExec, ct);
         }
         catch (Exception ex)
         {
             await _chat.ErrorAsync($"Echec de l'action {actionId}: {ex.Message}", ct);
+        }
+    }
+
+    private async Task PostFormattedAsync(ActionExecutionResult result, CancellationToken ct)
+    {
+        var formatter = new ActionResultToChatFormatter();
+        var formatted = formatter.Format(result);
+        switch (formatted.Severity)
+        {
+            case ChatSeverity.Error:
+                await _chat.ErrorAsync(formatted.PrimaryMessage, ct);
+                break;
+            case ChatSeverity.Warning:
+                await _chat.WarnAsync(formatted.PrimaryMessage, ct);
+                break;
+            default:
+                await _chat.InfoAsync(formatted.PrimaryMessage, ct);
+                break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(formatted.Details))
+        {
+            await _chat.InfoAsync(formatted.Details, ct);
         }
     }
 

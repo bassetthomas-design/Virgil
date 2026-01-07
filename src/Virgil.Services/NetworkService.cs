@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Virgil.Core.Models;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Network;
 
@@ -51,13 +52,13 @@ public sealed class NetworkService : INetworkService
     }
 
     public Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Diagnostic réseau rapide non implémenté"));
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Diagnostic réseau rapide", "Service NetworkService indisponible"));
 
     public async Task<ActionExecutionResult> SoftResetAsync(CancellationToken ct = default)
     {
         if (!_platformInfo.IsWindows())
         {
-            return ActionExecutionResult.NotAvailable("Reset réseau (soft) uniquement supporté sur Windows");
+            return ActionExecutionResult.NotAvailable("Reset réseau (soft)", "Uniquement supporté sur Windows");
         }
 
         var isAdmin = _privilegeChecker.IsAdministrator();
@@ -72,22 +73,28 @@ public sealed class NetworkService : INetworkService
 
         var results = await ExecuteStepsAsync(steps, isAdmin, ct).ConfigureAwait(false);
         var globalStatus = DeriveGlobalStatus(results);
-        var message = BuildSoftSummary(globalStatus, results, isAdmin);
+        var summary = BuildSoftSummary(globalStatus, isAdmin);
+        var recommendations = BuildSoftRecommendations(isAdmin);
 
-        var success = globalStatus != "Échec";
-        return new ActionExecutionResult(success, message);
+        return globalStatus switch
+        {
+            ActionResultStatus.Success => ActionExecutionResult.Ok("Reset réseau (soft)", summary, results, recommendations),
+            ActionResultStatus.PartialSuccess => ActionExecutionResult.Partial("Reset réseau (soft)", summary, results, recommendations),
+            ActionResultStatus.Failed => ActionExecutionResult.Failure("Reset réseau (soft)", summary, results, recommendations),
+            _ => ActionExecutionResult.Skipped("Reset réseau (soft)", summary, results)
+        };
     }
 
     public async Task<ActionExecutionResult> AdvancedResetAsync(CancellationToken ct = default)
     {
         if (!_platformInfo.IsWindows())
         {
-            return ActionExecutionResult.NotAvailable("Reset réseau (complet) uniquement supporté sur Windows");
+            return ActionExecutionResult.NotAvailable("Reset réseau (complet)", "Uniquement supporté sur Windows");
         }
 
         if (!_privilegeChecker.IsAdministrator())
         {
-            return ActionExecutionResult.Failure("Reset réseau (complet) refusé : droits administrateur requis");
+            return ActionExecutionResult.Failure("Reset réseau (complet)", "Refusé : droits administrateur requis");
         }
 
         var steps = new List<NetworkStep>
@@ -102,19 +109,25 @@ public sealed class NetworkService : INetworkService
         };
 
         var results = await ExecuteStepsAsync(steps, isAdmin: true, ct).ConfigureAwait(false);
-        var rebootRequired = results.Any(r => r.OutputContainsRestartHint);
+        var rebootRequired = results.Any(r => ContainsRestartHint(r.Summary));
         var globalStatus = DeriveGlobalStatus(results);
-        var message = BuildAdvancedSummary(globalStatus, results, rebootRequired);
+        var summary = BuildAdvancedSummary(globalStatus, rebootRequired);
+        var recommendations = BuildAdvancedRecommendations(rebootRequired);
 
-        var success = globalStatus != "Échec";
-        return new ActionExecutionResult(success, message);
+        return globalStatus switch
+        {
+            ActionResultStatus.Success => ActionExecutionResult.Ok("Reset réseau (complet)", summary, results, recommendations),
+            ActionResultStatus.PartialSuccess => ActionExecutionResult.Partial("Reset réseau (complet)", summary, results, recommendations),
+            ActionResultStatus.Failed => ActionExecutionResult.Failure("Reset réseau (complet)", summary, results, recommendations),
+            _ => ActionExecutionResult.Skipped("Reset réseau (complet)", summary, results)
+        };
     }
 
     public async Task<ActionExecutionResult> RunLatencyTestAsync(CancellationToken ct = default)
     {
         if (!_platformInfo.IsWindows())
         {
-            return ActionExecutionResult.NotAvailable("Test de latence uniquement supporté sur Windows");
+            return ActionExecutionResult.NotAvailable("Test de latence", "Uniquement supporté sur Windows");
         }
 
         var gateway = _networkInfoProvider.GetDefaultGateway();
@@ -129,7 +142,7 @@ public sealed class NetworkService : INetworkService
         sb.AppendLine($"Résumé global: {global}.");
         sb.Append("Ton réseau respire… parfois.");
 
-        return ActionExecutionResult.Ok(sb.ToString().TrimEnd());
+        return ActionExecutionResult.Ok("Test de latence terminé", sb.ToString().TrimEnd());
     }
 
     public async Task<ActionExecutionResult> RunInternetSpeedTestAsync(CancellationToken ct = default)
@@ -137,7 +150,7 @@ public sealed class NetworkService : INetworkService
         var connectivity = await _pingClient.SendAsync(ExternalLatencyHost, PingTimeoutMs, ct).ConfigureAwait(false);
         if (connectivity.Status != PingAttemptStatus.Success)
         {
-            return ActionExecutionResult.Failure("Connexion indisponible");
+            return ActionExecutionResult.Failure("Test de débit Internet", "Connexion indisponible");
         }
 
         var probeResult = await _speedProbe.MeasureAsync(ct).ConfigureAwait(false);
@@ -146,7 +159,7 @@ public sealed class NetworkService : INetworkService
             var reason = string.IsNullOrWhiteSpace(probeResult.FailureReason)
                 ? "Test de débit indisponible"
                 : probeResult.FailureReason;
-            return ActionExecutionResult.Failure(reason);
+            return ActionExecutionResult.Failure("Test de débit Internet", reason);
         }
 
         var appreciation = DeriveInternetAppreciation(probeResult.DownloadMbps, probeResult.UploadMbps, probeResult.LatencyMs, probeResult.StabilityVariationPercent);
@@ -171,39 +184,35 @@ public sealed class NetworkService : INetworkService
 
         lines.Add("Ce n’est pas de la fibre supersonique, mais ça fait le travail.");
 
-        return ActionExecutionResult.Ok(string.Join(Environment.NewLine, lines));
+        return ActionExecutionResult.Ok("Test de débit Internet terminé", string.Join(Environment.NewLine, lines));
     }
 
-    private async Task<IReadOnlyList<NetworkStepResult>> ExecuteStepsAsync(IEnumerable<NetworkStep> steps, bool isAdmin, CancellationToken ct)
+    private async Task<IReadOnlyList<ActionStepResult>> ExecuteStepsAsync(IEnumerable<NetworkStep> steps, bool isAdmin, CancellationToken ct)
     {
-        var results = new List<NetworkStepResult>();
+        var results = new List<ActionStepResult>();
 
         foreach (var step in steps)
         {
             if (ct.IsCancellationRequested)
             {
-                results.Add(new NetworkStepResult(step.Label, "Ignoré", "Annulé", false));
+                results.Add(new ActionStepResult(ActionResultStatus.Skipped, step.Label, "Annulé"));
                 continue;
             }
 
             if (step.AdminOnly && !isAdmin)
             {
-                results.Add(new NetworkStepResult(step.Label, "Ignoré", "Droits admin requis", false));
+                results.Add(new ActionStepResult(ActionResultStatus.Skipped, step.Label, "Droits admin requis"));
                 continue;
             }
 
             var result = await _runner.RunAsync(step.FileName, step.Arguments, DefaultTimeout, ct).ConfigureAwait(false);
-            var status = result.Success ? "OK" : "Échec";
             var message = !string.IsNullOrWhiteSpace(result.Output)
                 ? result.Output
                 : !string.IsNullOrWhiteSpace(result.Error)
                     ? result.Error!
                     : step.Description;
 
-            var restartHint = (result.Output ?? string.Empty).IndexOf("restart", StringComparison.OrdinalIgnoreCase) >= 0
-                || (result.Output ?? string.Empty).IndexOf("reboot", StringComparison.OrdinalIgnoreCase) >= 0;
-
-            results.Add(new NetworkStepResult(step.Label, status, message, restartHint));
+            results.Add(new ActionStepResult(result.Success ? ActionResultStatus.Success : ActionResultStatus.Failed, step.Label, TrimMessage(message)));
         }
 
         return results;
@@ -307,54 +316,60 @@ public sealed class NetworkService : INetworkService
         _ => "Échec"
     };
 
-    private static string DeriveGlobalStatus(IEnumerable<NetworkStepResult> results)
+    private static ActionResultStatus DeriveGlobalStatus(IEnumerable<ActionStepResult> results)
     {
-        if (results.Any(r => r.Status == "Échec"))
+        var list = results.ToList();
+        if (list.Count == 0)
         {
-            return "Échec";
+            return ActionResultStatus.Failed;
         }
 
-        if (results.Any(r => r.Status == "Ignoré"))
+        var succeeded = list.Count(r => r.Status == ActionResultStatus.Success);
+        var failed = list.Count(r => r.Status == ActionResultStatus.Failed);
+
+        if (failed == list.Count)
         {
-            return "Attention";
+            return ActionResultStatus.Failed;
         }
 
-        return "OK";
+        if (succeeded > 0 && failed > 0)
+        {
+            return ActionResultStatus.PartialSuccess;
+        }
+
+        if (succeeded > 0)
+        {
+            return ActionResultStatus.Success;
+        }
+
+        return ActionResultStatus.Failed;
     }
 
-    private static string BuildSoftSummary(string globalStatus, IReadOnlyList<NetworkStepResult> steps, bool isAdmin)
+    private static string BuildSoftSummary(ActionResultStatus globalStatus, bool isAdmin)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Reset réseau (soft): Résultat global: {globalStatus}.");
-
-        foreach (var step in steps)
+        var statusLabel = globalStatus switch
         {
-            sb.AppendLine($"- {step.Label}: {step.Status} — {FormatMessage(step.Message)}");
-        }
+            ActionResultStatus.PartialSuccess => "Partiel",
+            ActionResultStatus.Failed => "Échec",
+            _ => "OK"
+        };
 
-        if (!isAdmin)
-        {
-            sb.AppendLine("Note: certaines actions nécessitent les droits administrateur.");
-        }
-
-        sb.Append("Prochaines options: Diagnostic réseau | Reset réseau (complet)");
-        return sb.ToString().TrimEnd();
+        var note = isAdmin ? string.Empty : "Certaines actions nécessitent les droits administrateur.";
+        var summary = $"Résultat global: {statusLabel}.";
+        return string.IsNullOrWhiteSpace(note) ? summary : $"{summary} {note}";
     }
 
-    private static string BuildAdvancedSummary(string globalStatus, IReadOnlyList<NetworkStepResult> steps, bool rebootRequired)
+    private static string BuildAdvancedSummary(ActionResultStatus globalStatus, bool rebootRequired)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Reset réseau (complet): Résultat global: {globalStatus}.");
-
-        foreach (var step in steps)
+        var statusLabel = globalStatus switch
         {
-            sb.AppendLine($"- {step.Label}: {step.Status} — {FormatMessage(step.Message)}");
-        }
+            ActionResultStatus.PartialSuccess => "Partiel",
+            ActionResultStatus.Failed => "Échec",
+            _ => "OK"
+        };
 
-        sb.AppendLine($"Redémarrage: {(rebootRequired ? "requis" : "recommandé")}");
-        sb.AppendLine("À prévoir: reconfiguration Wi-Fi / VPN (profils et réseaux supprimés, VPN non désinstallé).");
-        sb.Append("Prochaines options: Diagnostic réseau");
-        return sb.ToString().TrimEnd();
+        var reboot = rebootRequired ? "requis" : "recommandé";
+        return $"Résultat global: {statusLabel}. Redémarrage: {reboot}.";
     }
 
     private static string DeriveInternetAppreciation(double downloadMbps, double uploadMbps, double latencyMs, double? stability)
@@ -388,7 +403,29 @@ public sealed class NetworkService : INetworkService
                 : "navigation basique et mails (le reste sera au ralenti)",
         };
 
-    private static string FormatMessage(string message)
+    private static IReadOnlyList<string> BuildSoftRecommendations(bool isAdmin)
+    {
+        var list = new List<string>();
+        if (!isAdmin)
+        {
+            list.Add("Certaines actions nécessitent les droits administrateur.");
+        }
+
+        list.Add("Prochaines options: Diagnostic réseau | Reset réseau (complet)");
+        return list;
+    }
+
+    private static IReadOnlyList<string> BuildAdvancedRecommendations(bool rebootRequired)
+    {
+        var list = new List<string>
+        {
+            "À prévoir: reconfiguration Wi-Fi / VPN (profils et réseaux supprimés, VPN non désinstallé).",
+            "Prochaines options: Diagnostic réseau"
+        };
+        return list;
+    }
+
+    private static string TrimMessage(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -423,5 +460,8 @@ public sealed class NetworkService : INetworkService
         Failure
     }
 
-    private sealed record NetworkStepResult(string Label, string Status, string Message, bool OutputContainsRestartHint);
+    private static bool ContainsRestartHint(string? output)
+        => !string.IsNullOrWhiteSpace(output)
+           && (output.IndexOf("restart", StringComparison.OrdinalIgnoreCase) >= 0
+               || output.IndexOf("reboot", StringComparison.OrdinalIgnoreCase) >= 0);
 }

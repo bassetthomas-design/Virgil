@@ -11,6 +11,8 @@ using Virgil.App.Interfaces;
 using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Domain.Actions;
+using Virgil.Core.Models;
+using Virgil.Services;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Chat;
 using Virgil.Services.SelfTest;
@@ -211,9 +213,9 @@ namespace Virgil.App.ViewModels
                 var confirmed = _confirmationService.Confirm(confirmationMessage, "Confirmation", System.Windows.MessageBoxImage.Warning);
                 if (!confirmed)
                 {
-                    var cancelled = ActionResult.Failure("Action annulée par l'utilisateur");
+                    var cancelled = ActionResult.Skipped("Action annulée par l'utilisateur");
                     StatusText = cancelled.Message;
-                    LastActionSuccess = false;
+                    LastActionSuccess = cancelled.Status != ActionResultStatus.Failed;
                     LastActionMessage = cancelled.Message;
                     return cancelled;
                 }
@@ -225,7 +227,7 @@ namespace Virgil.App.ViewModels
                 BusyText = $"Exécution : {definition.DisplayName}";
 
                 var result = await definition.ExecuteAsync(args ?? new Dictionary<string, string>(), ct).ConfigureAwait(false);
-                LastActionSuccess = result.Success;
+                LastActionSuccess = result.Status != ActionResultStatus.Failed;
                 LastActionMessage = result.Message;
                 StatusText = string.IsNullOrWhiteSpace(result.Message)
                     ? definition.DisplayName
@@ -277,19 +279,16 @@ namespace Virgil.App.ViewModels
         {
             if (!descriptor.IsImplemented)
             {
-                var unavailable = ActionResult.NotImplemented($"{descriptor.DisplayName}: non disponible ({descriptor.Service})");
-                _chat.PostSystemMessage(unavailable.Message, MessageType.Warning, ChatKind.Warning);
-                return unavailable;
+                var unavailableResult = ActionExecutionResult.NotImplemented(
+                    descriptor.DisplayName,
+                    $"Action non implémentée ({descriptor.Service})");
+
+                PostActionResultToChat(unavailableResult);
+                return MapResult(unavailableResult);
             }
 
             var result = await _orchestrator.RunAsync(descriptor.VirgilActionId, ct).ConfigureAwait(false);
-            var message = string.IsNullOrWhiteSpace(result.Message) ? descriptor.DisplayName : result.Message;
-            if (result.TryGetDetails(out var details))
-            {
-                message = $"{message}\n{details}";
-            }
-
-            return new ActionResult(result.Success, message);
+            return MapResult(result);
         }
 
         private Task<ActionResult> ToggleMonitoringAsync(CancellationToken ct)
@@ -375,6 +374,27 @@ namespace Virgil.App.ViewModels
 
             _chat.PostSystemMessage(sb.ToString().TrimEnd(), MessageType.Info, ChatKind.Info);
             return ActionResult.Completed("Diagnostic câblage terminé");
+        }
+
+        private static ActionResult MapResult(ActionExecutionResult result)
+            => new(result.Status, result.Title, result.Summary, result.Steps, result.Recommendations, result.DebugInfo);
+
+        private void PostActionResultToChat(ActionExecutionResult result)
+        {
+            var formatter = new ActionResultToChatFormatter();
+            var formatted = formatter.Format(result);
+            var (type, kind) = formatted.Severity switch
+            {
+                ChatSeverity.Error => (MessageType.Error, ChatKind.Error),
+                ChatSeverity.Warning => (MessageType.Warning, ChatKind.Warning),
+                _ => (MessageType.Info, ChatKind.Info)
+            };
+
+            _chat.PostSystemMessage(formatted.PrimaryMessage, type, kind);
+            if (!string.IsNullOrWhiteSpace(formatted.Details))
+            {
+                _chat.PostSystemMessage(formatted.Details, MessageType.Info, ChatKind.Info);
+            }
         }
     }
 }
