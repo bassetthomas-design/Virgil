@@ -11,6 +11,7 @@ public partial class VirgilAvatarControl : UserControl
 {
     private readonly DispatcherTimer _animationTimer;
     private readonly Random _random = new();
+    private readonly ExpressionEngine _expressionEngine = new();
 
     private SolidColorBrush AccentBrush => (SolidColorBrush)FindResource("AccentBrush");
     private SolidColorBrush AccentStrokeBrush => (SolidColorBrush)FindResource("AccentStrokeBrush");
@@ -21,9 +22,7 @@ public partial class VirgilAvatarControl : UserControl
     private double _timeToNextBlink;
     private double _blinkProgress;
     private bool _isBlinking;
-    private Point _eyeOffset;
-    private Point _eyeTargetOffset;
-    private double _microMoveCooldown;
+    private ExpressionState _expressionState = ExpressionState.Neutral;
 
     public VirgilAvatarControl()
     {
@@ -78,6 +77,18 @@ public partial class VirgilAvatarControl : UserControl
         set => SetValue(StateProperty, value);
     }
 
+    public static readonly DependencyProperty IsWorkingProperty = DependencyProperty.Register(
+        nameof(IsWorking),
+        typeof(bool),
+        typeof(VirgilAvatarControl),
+        new PropertyMetadata(false, OnIsWorkingChanged));
+
+    public bool IsWorking
+    {
+        get => (bool)GetValue(IsWorkingProperty);
+        set => SetValue(IsWorkingProperty, value);
+    }
+
     private static void OnStressChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is VirgilAvatarControl control)
@@ -107,6 +118,18 @@ public partial class VirgilAvatarControl : UserControl
         }
     }
 
+    private static void OnIsWorkingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is VirgilAvatarControl control)
+        {
+            control._timeToNextBlink = control.ComputeNextBlinkTime();
+            if (!control.IsAnimated)
+            {
+                control.UpdateVisuals(force: true);
+            }
+        }
+    }
+
     private void StartOrStopTimer()
     {
         if (IsAnimated && IsLoaded)
@@ -125,7 +148,7 @@ public partial class VirgilAvatarControl : UserControl
         _smoothedStress += (_targetStress - _smoothedStress) * smoothing;
 
         UpdateBlink(_animationTimer.Interval.TotalSeconds);
-        UpdateMicroMovement(_animationTimer.Interval.TotalSeconds);
+        _expressionState = _expressionEngine.Update(_animationTimer.Interval.TotalSeconds, _smoothedStress, IsWorking);
         UpdateGlowIntensity();
         UpdateVisuals();
     }
@@ -160,26 +183,8 @@ public partial class VirgilAvatarControl : UserControl
 
     private double ComputeNextBlinkTime()
     {
-        var baseDelay = 2.8 - (_targetStress * 1.4);
-        return Math.Max(1.1, baseDelay) + _random.NextDouble();
-    }
-
-    private void UpdateMicroMovement(double deltaSeconds)
-    {
-        _microMoveCooldown -= deltaSeconds;
-        if (_microMoveCooldown <= 0)
-        {
-            var range = 1.5 + (_smoothedStress * 1.5);
-            _eyeTargetOffset = new Point(
-                (_random.NextDouble() * 2 - 1) * range,
-                (_random.NextDouble() * 2 - 1) * range);
-            _microMoveCooldown = 1.2 + _random.NextDouble() * 1.5;
-        }
-
-        var follow = 0.08;
-        _eyeOffset = new Point(
-            _eyeOffset.X + (_eyeTargetOffset.X - _eyeOffset.X) * follow,
-            _eyeOffset.Y + (_eyeTargetOffset.Y - _eyeOffset.Y) * follow);
+        var baseDelay = 2.9 - (_smoothedStress * 1.3) - (IsWorking ? 0.35 : 0d);
+        return Math.Max(0.9, baseDelay) + (_random.NextDouble() * 0.9);
     }
 
     private void UpdateGlowIntensity()
@@ -214,21 +219,29 @@ public partial class VirgilAvatarControl : UserControl
             ? 1 - 0.9 * Math.Sin(Math.Min(_blinkProgress, 1) * Math.PI)
             : 1.0;
 
-        var tension = 1 + (_smoothedStress * 0.14);
-        var openess = Math.Max(0.22, blinkScale * tension);
+        var leftBaseOpen = 0.35 + (0.65 * _expressionState.EyeOpenLeft);
+        var rightBaseOpen = 0.35 + (0.65 * _expressionState.EyeOpenRight);
+        var squintFactor = 1 - (_expressionState.Squint * 0.35);
+        var leftOpenness = Math.Max(0.18, leftBaseOpen * squintFactor * blinkScale);
+        var rightOpenness = Math.Max(0.18, rightBaseOpen * squintFactor * blinkScale);
+        var eyeScaleX = 1 + (_smoothedStress * 0.05) + (_expressionState.Squint * 0.08);
 
-        LeftEyeScale.ScaleX = 1 + (_smoothedStress * 0.05);
-        LeftEyeScale.ScaleY = openess;
-        RightEyeScale.ScaleX = 1 + (_smoothedStress * 0.05);
-        RightEyeScale.ScaleY = openess;
+        LeftEyeScale.ScaleX = eyeScaleX;
+        LeftEyeScale.ScaleY = leftOpenness;
+        RightEyeScale.ScaleX = eyeScaleX;
+        RightEyeScale.ScaleY = rightOpenness;
 
-        LeftEyeOffset.X = -8 + _eyeOffset.X;
-        LeftEyeOffset.Y = _eyeOffset.Y;
-        RightEyeOffset.X = 8 + _eyeOffset.X;
-        RightEyeOffset.Y = _eyeOffset.Y;
+        var sizeScale = Math.Clamp(ActualWidth / 220d, 0.7, 1.4);
+        var maxOffset = Math.Clamp(sizeScale * 3.5, 1d, 4d);
+        var gazeOffset = new Point(_expressionState.GazeX * maxOffset, _expressionState.GazeY * maxOffset);
 
-        EyesOffset.X = _eyeOffset.X * 0.35;
-        EyesOffset.Y = _eyeOffset.Y * 0.35;
+        LeftEyeOffset.X = -8 + gazeOffset.X;
+        LeftEyeOffset.Y = gazeOffset.Y;
+        RightEyeOffset.X = 8 + gazeOffset.X;
+        RightEyeOffset.Y = gazeOffset.Y;
+
+        EyesOffset.X = gazeOffset.X * 0.35;
+        EyesOffset.Y = gazeOffset.Y * 0.35;
     }
 
     private static Color ComputeAccentColor(double stress)

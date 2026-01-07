@@ -24,6 +24,18 @@ public partial class AvatarControl : UserControl
         set => SetValue(UseNewAvatarProperty, value);
     }
 
+    public static readonly DependencyProperty IsWorkingProperty = DependencyProperty.Register(
+        nameof(IsWorking),
+        typeof(bool),
+        typeof(AvatarControl),
+        new PropertyMetadata(false));
+
+    public bool IsWorking
+    {
+        get => (bool)GetValue(IsWorkingProperty);
+        set => SetValue(IsWorkingProperty, value);
+    }
+
     private static void OnUseNewAvatarChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is AvatarControl control)
