@@ -111,7 +111,8 @@ public sealed class ExpressionEngine
             return;
         }
 
-        _asymmetry = RandomRange(-0.08, 0.08);
+        var direction = _random.NextDouble() < 0.5 ? -1 : 1;
+        _asymmetry = direction * RandomRange(0.1, 0.16);
         _timeToNextAsymmetry = RandomRange(2.5, 5.5);
     }
 
