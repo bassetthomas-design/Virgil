@@ -318,20 +318,89 @@ namespace Virgil.App.ViewModels
 
         private void ApplySnapshot(SystemMonitorSnapshot snapshot)
         {
-            CpuUsage = snapshot.CpuUsage;
-            GpuUsage = snapshot.GpuUsage;
-            RamUsage = snapshot.RamUsage;
-            DiskUsage = snapshot.DiskUsage;
-            CpuTemp = snapshot.CpuTemperature;
-            GpuTemp = snapshot.GpuTemperature;
-            DiskTemp = snapshot.DiskTemperature;
-            CpuUsageIsStale = false;
-            GpuUsageIsStale = false;
-            RamUsageIsStale = false;
-            DiskUsageIsStale = false;
-            CpuTempIsStale = false;
-            GpuTempIsStale = false;
-            DiskTempIsStale = false;
+            var cpuUsage = snapshot.CpuUsage;
+            if (float.IsNaN(cpuUsage))
+            {
+                CpuUsageIsStale = true;
+                cpuUsage = (float)CpuUsage;
+            }
+            else
+            {
+                CpuUsage = cpuUsage;
+                CpuUsageIsStale = false;
+            }
+
+            var gpuUsage = snapshot.GpuUsage;
+            if (float.IsNaN(gpuUsage))
+            {
+                GpuUsageIsStale = true;
+                gpuUsage = (float)GpuUsage;
+            }
+            else
+            {
+                GpuUsage = gpuUsage;
+                GpuUsageIsStale = false;
+            }
+
+            var ramUsage = snapshot.RamUsage;
+            if (float.IsNaN(ramUsage))
+            {
+                RamUsageIsStale = true;
+                ramUsage = (float)RamUsage;
+            }
+            else
+            {
+                RamUsage = ramUsage;
+                RamUsageIsStale = false;
+            }
+
+            var diskUsage = snapshot.DiskUsage;
+            if (float.IsNaN(diskUsage))
+            {
+                DiskUsageIsStale = true;
+                diskUsage = (float)DiskUsage;
+            }
+            else
+            {
+                DiskUsage = diskUsage;
+                DiskUsageIsStale = false;
+            }
+
+            var cpuTemp = snapshot.CpuTemperature;
+            if (float.IsNaN(cpuTemp))
+            {
+                CpuTempIsStale = true;
+                cpuTemp = (float)CpuTemp;
+            }
+            else
+            {
+                CpuTemp = cpuTemp;
+                CpuTempIsStale = false;
+            }
+
+            var gpuTemp = snapshot.GpuTemperature;
+            if (float.IsNaN(gpuTemp))
+            {
+                GpuTempIsStale = true;
+                gpuTemp = (float)GpuTemp;
+            }
+            else
+            {
+                GpuTemp = gpuTemp;
+                GpuTempIsStale = false;
+            }
+
+            var diskTemp = snapshot.DiskTemperature;
+            if (float.IsNaN(diskTemp))
+            {
+                DiskTempIsStale = true;
+                diskTemp = (float)DiskTemp;
+            }
+            else
+            {
+                DiskTemp = diskTemp;
+                DiskTempIsStale = false;
+            }
 
 #if DEBUG
             if (UseDebugStress)
@@ -341,43 +410,112 @@ namespace Virgil.App.ViewModels
             else
             {
                 AvatarTelemetry.UpdateFromMetrics(
-                    snapshot.CpuUsage,
-                    snapshot.GpuUsage,
-                    snapshot.RamUsage,
-                    snapshot.CpuTemperature,
-                    snapshot.GpuTemperature,
-                    snapshot.DiskTemperature);
+                    cpuUsage,
+                    gpuUsage,
+                    ramUsage,
+                    cpuTemp,
+                    gpuTemp,
+                    diskTemp);
             }
 #else
             AvatarTelemetry.UpdateFromMetrics(
-                snapshot.CpuUsage,
-                snapshot.GpuUsage,
-                snapshot.RamUsage,
-                snapshot.CpuTemperature,
-                snapshot.GpuTemperature,
-                snapshot.DiskTemperature);
+                cpuUsage,
+                gpuUsage,
+                ramUsage,
+                cpuTemp,
+                gpuTemp,
+                diskTemp);
 #endif
 
-            UpdateMood(snapshot.CpuUsage, snapshot.GpuUsage, snapshot.RamUsage, snapshot.DiskUsage,
-                snapshot.CpuTemperature, snapshot.GpuTemperature, snapshot.DiskTemperature);
+            UpdateMood(cpuUsage, gpuUsage, ramUsage, diskUsage,
+                cpuTemp, gpuTemp, diskTemp);
         }
 
         private void ApplySnapshot(MetricsEventArgs metrics)
         {
-            CpuUsage = metrics.CpuUsage;
-            GpuUsage = metrics.GpuUsage;
-            RamUsage = metrics.RamUsage;
-            DiskUsage = metrics.DiskUsage;
-            CpuTemp = metrics.CpuTemp;
-            GpuTemp = metrics.GpuTemp;
-            DiskTemp = metrics.DiskTemp;
-            CpuUsageIsStale = metrics.CpuUsageIsStale;
-            GpuUsageIsStale = metrics.GpuUsageIsStale;
-            RamUsageIsStale = metrics.RamUsageIsStale;
-            DiskUsageIsStale = metrics.DiskUsageIsStale;
-            CpuTempIsStale = metrics.CpuTempIsStale;
-            GpuTempIsStale = metrics.GpuTempIsStale;
-            DiskTempIsStale = metrics.DiskTempIsStale;
+            var cpuUsage = metrics.CpuUsage;
+            if (double.IsNaN(cpuUsage))
+            {
+                CpuUsageIsStale = true;
+                cpuUsage = CpuUsage;
+            }
+            else
+            {
+                CpuUsage = cpuUsage;
+                CpuUsageIsStale = metrics.CpuUsageIsStale;
+            }
+
+            var gpuUsage = metrics.GpuUsage;
+            if (double.IsNaN(gpuUsage))
+            {
+                GpuUsageIsStale = true;
+                gpuUsage = GpuUsage;
+            }
+            else
+            {
+                GpuUsage = gpuUsage;
+                GpuUsageIsStale = metrics.GpuUsageIsStale;
+            }
+
+            var ramUsage = metrics.RamUsage;
+            if (double.IsNaN(ramUsage))
+            {
+                RamUsageIsStale = true;
+                ramUsage = RamUsage;
+            }
+            else
+            {
+                RamUsage = ramUsage;
+                RamUsageIsStale = metrics.RamUsageIsStale;
+            }
+
+            var diskUsage = metrics.DiskUsage;
+            if (double.IsNaN(diskUsage))
+            {
+                DiskUsageIsStale = true;
+                diskUsage = DiskUsage;
+            }
+            else
+            {
+                DiskUsage = diskUsage;
+                DiskUsageIsStale = metrics.DiskUsageIsStale;
+            }
+
+            var cpuTemp = metrics.CpuTemp;
+            if (double.IsNaN(cpuTemp))
+            {
+                CpuTempIsStale = true;
+                cpuTemp = CpuTemp;
+            }
+            else
+            {
+                CpuTemp = cpuTemp;
+                CpuTempIsStale = metrics.CpuTempIsStale;
+            }
+
+            var gpuTemp = metrics.GpuTemp;
+            if (double.IsNaN(gpuTemp))
+            {
+                GpuTempIsStale = true;
+                gpuTemp = GpuTemp;
+            }
+            else
+            {
+                GpuTemp = gpuTemp;
+                GpuTempIsStale = metrics.GpuTempIsStale;
+            }
+
+            var diskTemp = metrics.DiskTemp;
+            if (double.IsNaN(diskTemp))
+            {
+                DiskTempIsStale = true;
+                diskTemp = DiskTemp;
+            }
+            else
+            {
+                DiskTemp = diskTemp;
+                DiskTempIsStale = metrics.DiskTempIsStale;
+            }
 
 #if DEBUG
             if (UseDebugStress)
@@ -387,25 +525,25 @@ namespace Virgil.App.ViewModels
             else
             {
                 AvatarTelemetry.UpdateFromMetrics(
-                    metrics.CpuUsage,
-                    metrics.GpuUsage,
-                    metrics.RamUsage,
-                    metrics.CpuTemp,
-                    metrics.GpuTemp,
-                    metrics.DiskTemp);
+                    cpuUsage,
+                    gpuUsage,
+                    ramUsage,
+                    cpuTemp,
+                    gpuTemp,
+                    diskTemp);
             }
 #else
             AvatarTelemetry.UpdateFromMetrics(
-                metrics.CpuUsage,
-                metrics.GpuUsage,
-                metrics.RamUsage,
-                metrics.CpuTemp,
-                metrics.GpuTemp,
-                metrics.DiskTemp);
+                cpuUsage,
+                gpuUsage,
+                ramUsage,
+                cpuTemp,
+                gpuTemp,
+                diskTemp);
 #endif
 
-            UpdateMood(metrics.CpuUsage, metrics.GpuUsage, metrics.RamUsage, metrics.DiskUsage,
-                metrics.CpuTemp, metrics.GpuTemp, metrics.DiskTemp);
+            UpdateMood(cpuUsage, gpuUsage, ramUsage, diskUsage,
+                cpuTemp, gpuTemp, diskTemp);
         }
 
         private void UpdateMood(double cpu, double gpu, double ram, double disk, double cpuTemp, double gpuTemp, double diskTemp)

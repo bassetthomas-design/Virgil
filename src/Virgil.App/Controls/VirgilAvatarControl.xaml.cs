@@ -52,7 +52,11 @@ public partial class VirgilAvatarControl : UserControl
     public double Stress
     {
         get => (double)GetValue(StressProperty);
-        set => SetValue(StressProperty, Math.Clamp(value, 0d, 1d));
+        set
+        {
+            var sanitized = SanitizeStress(value);
+            SetValue(StressProperty, Math.Clamp(sanitized, 0d, 1d));
+        }
     }
 
     public static readonly DependencyProperty IsAnimatedProperty = DependencyProperty.Register(
@@ -95,7 +99,8 @@ public partial class VirgilAvatarControl : UserControl
     {
         if (d is VirgilAvatarControl control)
         {
-            control._targetStress = Math.Clamp((double)e.NewValue, 0d, 1d);
+            var sanitized = SanitizeStress((double)e.NewValue);
+            control._targetStress = Math.Clamp(sanitized, 0d, 1d);
             if (!control.IsAnimated)
             {
                 control._smoothedStress = control._targetStress;
