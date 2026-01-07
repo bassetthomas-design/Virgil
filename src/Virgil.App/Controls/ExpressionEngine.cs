@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using Virgil.App.Utils;
 
 namespace Virgil.App.Controls;
 
@@ -27,7 +28,7 @@ public sealed class ExpressionEngine
 
     public ExpressionState Update(double deltaSeconds, double stress, bool isWorking)
     {
-        stress = Math.Clamp(stress, 0d, 1d);
+        stress = ValueSanitizer.Sanitize01(stress, 0d);
 
         UpdateGaze(deltaSeconds, stress, isWorking);
         UpdateAsymmetry(deltaSeconds, isWorking);

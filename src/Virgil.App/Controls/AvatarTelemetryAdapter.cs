@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Virgil.App.Utils;
 
 namespace Virgil.App.Controls;
 
@@ -13,7 +14,7 @@ public sealed class AvatarTelemetryAdapter : INotifyPropertyChanged
         get => _stress;
         private set
         {
-            var clamped = Math.Clamp(value, 0d, 1d);
+            var clamped = ValueSanitizer.Sanitize01(value, 0d);
             if (Math.Abs(_stress - clamped) < 0.0001)
             {
                 return;
@@ -38,12 +39,8 @@ public sealed class AvatarTelemetryAdapter : INotifyPropertyChanged
         var usageStress = Math.Max(safeCpuUsage, Math.Max(safeGpuUsage, safeRamUsage)) / 100d;
         var tempStress = Math.Max(safeCpuTemp, Math.Max(safeGpuTemp, safeDiskTemp)) / 100d;
         var stress = Math.Max(usageStress, tempStress);
-        if (double.IsNaN(stress) || double.IsInfinity(stress))
-        {
-            stress = 0d;
-        }
 
-        SetStress(Math.Clamp(stress, 0d, 1d));
+        SetStress(ValueSanitizer.Sanitize01(stress, 0d));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

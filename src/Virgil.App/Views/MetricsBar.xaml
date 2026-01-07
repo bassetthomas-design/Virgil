@@ -5,17 +5,17 @@
     <StackPanel Orientation="Vertical" Margin="0,0,0,8">
         <WrapPanel ItemHeight="24" ItemWidth="Auto">
             <TextBlock Text="CPU:" FontWeight="SemiBold" Margin="0,0,6,0"/>
-            <TextBlock Text="{Binding CpuUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+            <TextBlock Text="{Binding CpuUsage, Converter={StaticResource DoubleToDisplayString}, ConverterParameter={}{0:F0}%}" Margin="0,0,12,0"/>
             <TextBlock Text="Temp:" FontWeight="SemiBold" Margin="0,0,6,0"/>
-            <TextBlock Text="{Binding CpuTemp, StringFormat={}{0:F0}°C}" Margin="0,0,12,0"/>
+            <TextBlock Text="{Binding CpuTemp, Converter={StaticResource DoubleToDisplayString}, ConverterParameter={}{0:F0}°C}" Margin="0,0,12,0"/>
             <TextBlock Text="GPU:" FontWeight="SemiBold" Margin="0,0,6,0"/>
-            <TextBlock Text="{Binding GpuUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+            <TextBlock Text="{Binding GpuUsage, Converter={StaticResource DoubleToDisplayString}, ConverterParameter={}{0:F0}%}" Margin="0,0,12,0"/>
             <TextBlock Text="Temp:" FontWeight="SemiBold" Margin="0,0,6,0"/>
-            <TextBlock Text="{Binding GpuTemp, StringFormat={}{0:F0}°C}" Margin="0,0,12,0"/>
+            <TextBlock Text="{Binding GpuTemp, Converter={StaticResource DoubleToDisplayString}, ConverterParameter={}{0:F0}°C}" Margin="0,0,12,0"/>
             <TextBlock Text="RAM:" FontWeight="SemiBold" Margin="0,0,6,0"/>
-            <TextBlock Text="{Binding RamUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+            <TextBlock Text="{Binding RamUsage, Converter={StaticResource DoubleToDisplayString}, ConverterParameter={}{0:F0}%}" Margin="0,0,12,0"/>
             <TextBlock Text="Disk:" FontWeight="SemiBold" Margin="0,0,6,0"/>
-            <TextBlock Text="{Binding DiskUsage, StringFormat={}{0:F0}%}" Margin="0,0,12,0"/>
+            <TextBlock Text="{Binding DiskUsage, Converter={StaticResource DoubleToDisplayString}, ConverterParameter={}{0:F0}%}" Margin="0,0,12,0"/>
         </WrapPanel>
         <!-- Mood state label for quick read -->
         <TextBlock Text="{Binding Mood}" Opacity="0.8" FontSize="12"/>
