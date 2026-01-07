@@ -10,6 +10,16 @@
         <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50" />
         <SolidColorBrush x:Key="AccentStrokeBrush" Color="#804CAF50" />
         <SolidColorBrush x:Key="FaceFillBrush" Color="#0F181A" />
+        <RadialGradientBrush x:Key="EyeFillBrush"
+                             Center="0.4,0.35"
+                             GradientOrigin="0.35,0.3"
+                             RadiusX="0.85"
+                             RadiusY="0.85">
+            <GradientStop Color="#F4FBFF" Offset="0" />
+            <GradientStop Color="#DCECF8" Offset="0.55" />
+            <GradientStop Color="#BCD0E2" Offset="1" />
+        </RadialGradientBrush>
+        <SolidColorBrush x:Key="EyeHighlightBrush" Color="#CCFFFFFF" />
     </UserControl.Resources>
 
     <Grid x:Name="Root" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -53,39 +63,79 @@
                         </TransformGroup>
                     </Grid.RenderTransform>
 
-                    <Path x:Name="LeftEye"
-                          Fill="White"
-                          Stretch="Uniform"
-                          Data="M5,15 C5,5 35,5 35,15 C35,25 5,25 5,15 Z"
+                    <Grid x:Name="LeftEye"
                           RenderTransformOrigin="0.5,0.5"
-                          Width="48"
-                          Height="26"
+                          Width="30"
+                          Height="30"
                           HorizontalAlignment="Left"
-                          Margin="6,0,0,0">
-                        <Path.RenderTransform>
+                          Margin="12,0,0,0">
+                        <Grid.RenderTransform>
                             <TransformGroup>
                                 <ScaleTransform x:Name="LeftEyeScale" />
                                 <TranslateTransform x:Name="LeftEyeOffset" X="-8" />
                             </TransformGroup>
-                        </Path.RenderTransform>
-                    </Path>
+                        </Grid.RenderTransform>
+                        <Ellipse Fill="{StaticResource EyeFillBrush}"
+                                 Stroke="#66FFFFFF"
+                                 StrokeThickness="1">
+                            <Ellipse.Effect>
+                                <DropShadowEffect BlurRadius="10"
+                                                  ShadowDepth="0"
+                                                  Opacity="0.35"
+                                                  Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" />
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <Ellipse Width="18"
+                                 Height="18"
+                                 Fill="{StaticResource AccentBrush}"
+                                 Opacity="0.12"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                        <Ellipse Width="10"
+                                 Height="10"
+                                 Fill="{StaticResource EyeHighlightBrush}"
+                                 Opacity="0.55"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Top"
+                                 Margin="5,5,0,0" />
+                    </Grid>
 
-                    <Path x:Name="RightEye"
-                          Fill="White"
-                          Stretch="Uniform"
-                          Data="M5,15 C5,5 35,5 35,15 C35,25 5,25 5,15 Z"
+                    <Grid x:Name="RightEye"
                           RenderTransformOrigin="0.5,0.5"
-                          Width="48"
-                          Height="26"
+                          Width="30"
+                          Height="30"
                           HorizontalAlignment="Right"
-                          Margin="0,0,6,0">
-                        <Path.RenderTransform>
+                          Margin="0,0,12,0">
+                        <Grid.RenderTransform>
                             <TransformGroup>
                                 <ScaleTransform x:Name="RightEyeScale" />
                                 <TranslateTransform x:Name="RightEyeOffset" X="8" />
                             </TransformGroup>
-                        </Path.RenderTransform>
-                    </Path>
+                        </Grid.RenderTransform>
+                        <Ellipse Fill="{StaticResource EyeFillBrush}"
+                                 Stroke="#66FFFFFF"
+                                 StrokeThickness="1">
+                            <Ellipse.Effect>
+                                <DropShadowEffect BlurRadius="10"
+                                                  ShadowDepth="0"
+                                                  Opacity="0.35"
+                                                  Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" />
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <Ellipse Width="18"
+                                 Height="18"
+                                 Fill="{StaticResource AccentBrush}"
+                                 Opacity="0.12"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                        <Ellipse Width="10"
+                                 Height="10"
+                                 Fill="{StaticResource EyeHighlightBrush}"
+                                 Opacity="0.55"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Top"
+                                 Margin="5,5,0,0" />
+                    </Grid>
                 </Grid>
             </Grid>
         </Viewbox>
