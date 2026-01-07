@@ -8,10 +8,11 @@ namespace Virgil.App.Chat
     /// </summary>
     public sealed class ChatClearEventArgs : EventArgs
     {
-        public ChatClearEventArgs(bool applyEffect, int effectDurationMs)
+        public ChatClearEventArgs(bool applyEffect, int effectDurationMs, bool animateOverlay = false)
         {
             ApplyEffect = applyEffect;
             EffectDurationMs = effectDurationMs;
+            AnimateOverlay = animateOverlay;
         }
 
         /// <summary>
@@ -23,5 +24,10 @@ namespace Virgil.App.Chat
         /// Gets the duration of the effect in milliseconds.
         /// </summary>
         public int EffectDurationMs { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether the UI should animate a snapshot overlay.
+        /// </summary>
+        public bool AnimateOverlay { get; }
     }
 }

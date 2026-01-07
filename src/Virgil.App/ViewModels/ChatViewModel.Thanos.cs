@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using Virgil.App.Chat;
@@ -8,6 +7,8 @@ namespace Virgil.App.ViewModels
 {
     public partial class ChatViewModel
     {
+        public event Func<int, Task>? SnapRequested;
+
         public void SnapAll() => _ = SnapAllAsync();
 
         public async Task SnapAllAsync()
@@ -25,23 +26,19 @@ namespace Virgil.App.ViewModels
                     return;
                 }
 
-                var removable = Messages.Reverse().ToList();
-                int delay = e.EffectDurationMs / Math.Max(1, removable.Count);
-                foreach (var item in removable)
+                if (e.AnimateOverlay && SnapRequested is not null)
                 {
-                    item.IsExpired = true;
-                    OnPropertyChanged(nameof(Messages));
-
-                    var remover = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
-                    remover.Tick += (_, __) =>
+                    try
                     {
-                        remover.Stop();
-                        Messages.Remove(item);
-                    };
-                    remover.Start();
-
-                    await Task.Delay(delay).ConfigureAwait(false);
+                        await SnapRequested.Invoke(e.EffectDurationMs);
+                    }
+                    catch (Exception)
+                    {
+                        // Ignore animation errors to ensure cleanup completes.
+                    }
                 }
+
+                Messages.Clear();
             }, DispatcherPriority.Background);
         }
     }

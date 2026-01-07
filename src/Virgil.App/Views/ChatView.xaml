@@ -58,45 +58,51 @@
         </Border>
 
         <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="10" Padding="8" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0.5">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding Messages}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border>
-                                <Border.Style>
-                                    <Style TargetType="Border" BasedOn="{StaticResource BubbleBorder}">
-                                        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
-                                        <Setter Property="HorizontalAlignment" Value="Left" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsUser}" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                                <Setter Property="HorizontalAlignment" Value="Right" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Grid>
+                <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Messages}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border>
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource BubbleBorder}">
+                                            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+                                            <Setter Property="HorizontalAlignment" Value="Left" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsUser}" Value="True">
-                                                    <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}" />
+                                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                                    <Setter Property="HorizontalAlignment" Value="Right" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <Grid x:Name="SnapOverlay" Visibility="Collapsed" IsHitTestVisible="False">
+                    <Image x:Name="SnapImage" HorizontalAlignment="Left" VerticalAlignment="Top" Stretch="None" />
+                    <Canvas x:Name="SnapDustLayer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                </Grid>
+            </Grid>
         </Border>
 
         <Border Grid.Row="2" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="10" Padding="10" Margin="0,8,0,0" BorderBrush="{DynamicResource PanelBackgroundBrush}" BorderThickness="1">
