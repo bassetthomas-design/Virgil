@@ -281,19 +281,19 @@ public sealed class PerformanceService : IPerformanceService
                 ? "Aucune app de fond candidate à fermer."
                 : $"Jeu actif détecté ({foregroundGame}) : rien à toucher.";
             var ignoredDetails = string.Join("\n", ignored.Distinct());
-            var summary = string.IsNullOrWhiteSpace(ignoredDetails) ? nothingMessage : $"{nothingMessage}\n{ignoredDetails}";
-            return ActionExecutionResult.NotAvailable("Fermeture session gaming", summary);
+            var unavailableSummary = string.IsNullOrWhiteSpace(ignoredDetails) ? nothingMessage : $"{nothingMessage}\n{ignoredDetails}";
+            return ActionExecutionResult.NotAvailable("Fermeture session gaming", unavailableSummary);
         }
 
         var proposal = BuildProposal(candidates);
         var confirmed = await _sessionConfirmation.ConfirmAsync(proposal, ct).ConfigureAwait(false);
         if (!confirmed)
         {
-            var details = string.Join("\n", ignored.Distinct());
-            var summary = string.IsNullOrWhiteSpace(details)
+            var ignoredSummary = string.Join("\n", ignored.Distinct());
+            var declineSummary = string.IsNullOrWhiteSpace(ignoredSummary)
                 ? "Aucune app fermée : l'utilisateur a dit non."
-                : $"Aucune app fermée : l'utilisateur a dit non.\n{details}";
-            return ActionExecutionResult.Failure("Fermeture session gaming", summary);
+                : $"Aucune app fermée : l'utilisateur a dit non.\n{ignoredSummary}";
+            return ActionExecutionResult.Failure("Fermeture session gaming", declineSummary);
         }
 
         var closed = new List<string>();

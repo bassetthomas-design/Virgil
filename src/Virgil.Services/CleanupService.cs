@@ -127,8 +127,8 @@ public sealed class CleanupService : ICleanupService
         if (_isWindows() && !_isAdministrator())
         {
             const string adminMessage = "Nettoyage disque avancé indisponible : droits administrateur requis";
-            const string details = "Action avancée, peut prendre du temps — mais sans admin, c’est niet (sécurité + accès système).";
-            return ActionExecutionResult.NotAvailable("Nettoyage disque avancé", $"{adminMessage}. {details}");
+            const string adminDetails = "Action avancée, peut prendre du temps — mais sans admin, c’est niet (sécurité + accès système).";
+            return ActionExecutionResult.NotAvailable("Nettoyage disque avancé", $"{adminMessage}. {adminDetails}");
         }
 
         var categories = _advancedPlanFactory();
@@ -213,8 +213,8 @@ public sealed class CleanupService : ICleanupService
         if (cleanedSummaries.Count == 0)
         {
             var message = "Nettoyage disque avancé : Échec — aucune catégorie nettoyée";
-            var details = ignored.Count == 0 ? null : string.Join("\n", ignored);
-            return ActionExecutionResult.Failure("Nettoyage disque avancé", $"{message}\n{details}".Trim());
+            var ignoredDetails = ignored.Count == 0 ? null : string.Join("\n", ignored);
+            return ActionExecutionResult.Failure("Nettoyage disque avancé", $"{message}\n{ignoredDetails}".Trim());
         }
 
         var status = ignored.Count > 0 ? "Partiel" : "OK";
