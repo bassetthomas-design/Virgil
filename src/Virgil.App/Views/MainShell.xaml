@@ -47,6 +47,7 @@
                 <controls:AvatarControl Width="220"
                                         Height="220"
                                         DataContext="{Binding Monitoring}"
+                                        IsWorking="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=Window}}"
                                         UseNewAvatar="True" />
                 <views:MetricsBar Width="220" DataContext="{Binding Monitoring}" Margin="0,8,0,0" />
                 <StackPanel x:Name="AvatarDebugPanel"

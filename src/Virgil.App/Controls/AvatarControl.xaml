@@ -15,7 +15,8 @@
                                        Width="220"
                                        Height="220"
                                        Visibility="Collapsed"
-                                       Stress="{Binding AvatarTelemetry.Stress}" />
+                                       Stress="{Binding AvatarTelemetry.Stress}"
+                                       IsWorking="{Binding IsWorking, RelativeSource={RelativeSource AncestorType=controls:AvatarControl}}" />
 
         <Image x:Name="LegacyAvatar"
                Stretch="Uniform"
