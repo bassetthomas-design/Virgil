@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Virgil.App.Utils;
 
 namespace Virgil.App.Controls;
 
@@ -52,8 +53,7 @@ public partial class VirgilAvatarControl : UserControl
         get => (double)GetValue(StressProperty);
         set
         {
-            var sanitized = SanitizeStress(value);
-            SetValue(StressProperty, Math.Clamp(sanitized, 0d, 1d));
+            SetValue(StressProperty, ValueSanitizer.Sanitize01(value, 0d));
         }
     }
 
@@ -97,8 +97,7 @@ public partial class VirgilAvatarControl : UserControl
     {
         if (d is VirgilAvatarControl control)
         {
-            var sanitized = SanitizeStress((double)e.NewValue);
-            control._targetStress = Math.Clamp(sanitized, 0d, 1d);
+            control._targetStress = ValueSanitizer.Sanitize01((double)e.NewValue, 0d);
             if (!control.IsAnimated)
             {
                 control._smoothedStress = control._targetStress;
@@ -150,7 +149,10 @@ public partial class VirgilAvatarControl : UserControl
     private void OnAnimationTick(object? sender, EventArgs e)
     {
         const double smoothing = 0.12;
+        _targetStress = ValueSanitizer.Sanitize01(_targetStress, 0d);
+        _smoothedStress = ValueSanitizer.Sanitize01(_smoothedStress, _targetStress);
         _smoothedStress += (_targetStress - _smoothedStress) * smoothing;
+        _smoothedStress = ValueSanitizer.Sanitize01(_smoothedStress, _targetStress);
 
         UpdateBlink(_animationTimer.Interval.TotalSeconds);
         _expressionState = _expressionEngine.Update(_animationTimer.Interval.TotalSeconds, _smoothedStress, IsWorking);
@@ -188,7 +190,8 @@ public partial class VirgilAvatarControl : UserControl
 
     private double ComputeNextBlinkTime()
     {
-        var baseDelay = 2.9 - (_smoothedStress * 1.3) - (IsWorking ? 0.35 : 0d);
+        var sanitizedStress = ValueSanitizer.Sanitize01(_smoothedStress, 0d);
+        var baseDelay = 2.9 - (sanitizedStress * 1.3) - (IsWorking ? 0.35 : 0d);
         return Math.Max(0.9, baseDelay) + (_random.NextDouble() * 0.9);
     }
 
@@ -203,13 +206,19 @@ public partial class VirgilAvatarControl : UserControl
             _ => 0
         };
 
-        var intensity = Math.Clamp(0.6 + (_smoothedStress * 0.6) + glowBoost, 0.3, 1.2);
+        var sanitizedStress = ValueSanitizer.Sanitize01(_smoothedStress, 0d);
+        var intensity = Math.Clamp(0.6 + (sanitizedStress * 0.6) + glowBoost, 0.3, 1.2);
         RingGlow.Opacity = intensity;
-        FaceGlow.Opacity = 0.6 + (_smoothedStress * 0.4);
+        FaceGlow.Opacity = 0.6 + (sanitizedStress * 0.4);
     }
 
     private void UpdateVisuals(bool force = false)
     {
+        if (!_expressionState.IsValid)
+        {
+            _expressionState = ExpressionState.Neutral;
+        }
+
         var accent = ComputeAccentColor(_smoothedStress);
         if (force || AccentBrush.Color != accent)
         {
@@ -229,7 +238,7 @@ public partial class VirgilAvatarControl : UserControl
         var squintFactor = 1 - (_expressionState.Squint * 0.35);
         var leftOpenness = Math.Max(0.18, leftBaseOpen * squintFactor * blinkScale);
         var rightOpenness = Math.Max(0.18, rightBaseOpen * squintFactor * blinkScale);
-        var eyeScaleX = 1 + (_smoothedStress * 0.05) + (_expressionState.Squint * 0.08);
+        var eyeScaleX = 1 + (ValueSanitizer.Sanitize01(_smoothedStress, 0d) * 0.05) + (_expressionState.Squint * 0.08);
 
         LeftEyeScale.ScaleX = eyeScaleX;
         LeftEyeScale.ScaleY = leftOpenness;
@@ -251,7 +260,7 @@ public partial class VirgilAvatarControl : UserControl
 
     private static Color ComputeAccentColor(double stress)
     {
-        stress = Math.Clamp(stress, 0d, 1d);
+        stress = ValueSanitizer.Sanitize01(stress, 0d);
         var gradient = stress switch
         {
             <= 0.5 => Interpolate(Color.FromRgb(46, 204, 113), Color.FromRgb(255, 214, 10), stress / 0.5),
@@ -264,7 +273,7 @@ public partial class VirgilAvatarControl : UserControl
 
     private static Color Interpolate(Color a, Color b, double t)
     {
-        t = Math.Clamp(t, 0d, 1d);
+        t = ValueSanitizer.Sanitize01(t, 0d);
         byte Lerp(byte from, byte to) => (byte)(from + (to - from) * t);
         return Color.FromRgb(Lerp(a.R, b.R), Lerp(a.G, b.G), Lerp(a.B, b.B));
     }
@@ -281,8 +290,6 @@ public partial class VirgilAvatarControl : UserControl
         brush.BeginAnimation(SolidColorBrush.ColorProperty, animation, HandoffBehavior.SnapshotAndReplace);
     }
 
-    private static double SanitizeStress(double value)
-        => double.IsNaN(value) || double.IsInfinity(value) ? 0d : value;
 }
 
 public enum VirgilAvatarState

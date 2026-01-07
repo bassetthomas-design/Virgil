@@ -26,6 +26,13 @@ public readonly struct ExpressionState
 
     public ExpressionMood Mood { get; }
 
+    public bool IsValid =>
+        !(double.IsNaN(GazeX) || double.IsInfinity(GazeX)
+          || double.IsNaN(GazeY) || double.IsInfinity(GazeY)
+          || double.IsNaN(EyeOpenLeft) || double.IsInfinity(EyeOpenLeft)
+          || double.IsNaN(EyeOpenRight) || double.IsInfinity(EyeOpenRight)
+          || double.IsNaN(Squint) || double.IsInfinity(Squint));
+
     public static ExpressionState Neutral => new(0d, 0d, 1d, 1d, 0d, ExpressionMood.Neutral);
 
     public ExpressionState With(

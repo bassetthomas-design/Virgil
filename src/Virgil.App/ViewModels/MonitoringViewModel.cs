@@ -319,7 +319,7 @@ namespace Virgil.App.ViewModels
         private void ApplySnapshot(SystemMonitorSnapshot snapshot)
         {
             var cpuUsage = snapshot.CpuUsage;
-            if (float.IsNaN(cpuUsage))
+            if (IsInvalid(cpuUsage))
             {
                 CpuUsageIsStale = true;
                 cpuUsage = (float)CpuUsage;
@@ -331,7 +331,7 @@ namespace Virgil.App.ViewModels
             }
 
             var gpuUsage = snapshot.GpuUsage;
-            if (float.IsNaN(gpuUsage))
+            if (IsInvalid(gpuUsage))
             {
                 GpuUsageIsStale = true;
                 gpuUsage = (float)GpuUsage;
@@ -343,7 +343,7 @@ namespace Virgil.App.ViewModels
             }
 
             var ramUsage = snapshot.RamUsage;
-            if (float.IsNaN(ramUsage))
+            if (IsInvalid(ramUsage))
             {
                 RamUsageIsStale = true;
                 ramUsage = (float)RamUsage;
@@ -355,7 +355,7 @@ namespace Virgil.App.ViewModels
             }
 
             var diskUsage = snapshot.DiskUsage;
-            if (float.IsNaN(diskUsage))
+            if (IsInvalid(diskUsage))
             {
                 DiskUsageIsStale = true;
                 diskUsage = (float)DiskUsage;
@@ -367,7 +367,7 @@ namespace Virgil.App.ViewModels
             }
 
             var cpuTemp = snapshot.CpuTemperature;
-            if (float.IsNaN(cpuTemp))
+            if (IsInvalid(cpuTemp))
             {
                 CpuTempIsStale = true;
                 cpuTemp = (float)CpuTemp;
@@ -379,7 +379,7 @@ namespace Virgil.App.ViewModels
             }
 
             var gpuTemp = snapshot.GpuTemperature;
-            if (float.IsNaN(gpuTemp))
+            if (IsInvalid(gpuTemp))
             {
                 GpuTempIsStale = true;
                 gpuTemp = (float)GpuTemp;
@@ -391,7 +391,7 @@ namespace Virgil.App.ViewModels
             }
 
             var diskTemp = snapshot.DiskTemperature;
-            if (float.IsNaN(diskTemp))
+            if (IsInvalid(diskTemp))
             {
                 DiskTempIsStale = true;
                 diskTemp = (float)DiskTemp;
@@ -434,7 +434,7 @@ namespace Virgil.App.ViewModels
         private void ApplySnapshot(MetricsEventArgs metrics)
         {
             var cpuUsage = metrics.CpuUsage;
-            if (double.IsNaN(cpuUsage))
+            if (IsInvalid(cpuUsage))
             {
                 CpuUsageIsStale = true;
                 cpuUsage = CpuUsage;
@@ -446,7 +446,7 @@ namespace Virgil.App.ViewModels
             }
 
             var gpuUsage = metrics.GpuUsage;
-            if (double.IsNaN(gpuUsage))
+            if (IsInvalid(gpuUsage))
             {
                 GpuUsageIsStale = true;
                 gpuUsage = GpuUsage;
@@ -458,7 +458,7 @@ namespace Virgil.App.ViewModels
             }
 
             var ramUsage = metrics.RamUsage;
-            if (double.IsNaN(ramUsage))
+            if (IsInvalid(ramUsage))
             {
                 RamUsageIsStale = true;
                 ramUsage = RamUsage;
@@ -470,7 +470,7 @@ namespace Virgil.App.ViewModels
             }
 
             var diskUsage = metrics.DiskUsage;
-            if (double.IsNaN(diskUsage))
+            if (IsInvalid(diskUsage))
             {
                 DiskUsageIsStale = true;
                 diskUsage = DiskUsage;
@@ -482,7 +482,7 @@ namespace Virgil.App.ViewModels
             }
 
             var cpuTemp = metrics.CpuTemp;
-            if (double.IsNaN(cpuTemp))
+            if (IsInvalid(cpuTemp))
             {
                 CpuTempIsStale = true;
                 cpuTemp = CpuTemp;
@@ -494,7 +494,7 @@ namespace Virgil.App.ViewModels
             }
 
             var gpuTemp = metrics.GpuTemp;
-            if (double.IsNaN(gpuTemp))
+            if (IsInvalid(gpuTemp))
             {
                 GpuTempIsStale = true;
                 gpuTemp = GpuTemp;
@@ -506,7 +506,7 @@ namespace Virgil.App.ViewModels
             }
 
             var diskTemp = metrics.DiskTemp;
-            if (double.IsNaN(diskTemp))
+            if (IsInvalid(diskTemp))
             {
                 DiskTempIsStale = true;
                 diskTemp = DiskTemp;
@@ -556,5 +556,11 @@ namespace Virgil.App.ViewModels
 
         private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        private static bool IsInvalid(double value)
+            => double.IsNaN(value) || double.IsInfinity(value);
+
+        private static bool IsInvalid(float value)
+            => float.IsNaN(value) || float.IsInfinity(value);
     }
 }
