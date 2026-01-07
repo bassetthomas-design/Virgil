@@ -12,10 +12,12 @@ using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Domain.Actions;
 using Virgil.Core.Models;
-using Virgil.Services;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Chat;
 using Virgil.Services.SelfTest;
+using ServiceActionExecutionResult = Virgil.Services.ActionExecutionResult;
+using ServiceChatFormatter = Virgil.Services.ActionResultToChatFormatter;
+using ServiceChatSeverity = Virgil.Services.ChatSeverity;
 
 namespace Virgil.App.ViewModels
 {
@@ -279,7 +281,7 @@ namespace Virgil.App.ViewModels
         {
             if (!descriptor.IsImplemented)
             {
-                var unavailableResult = ActionExecutionResult.NotImplemented(
+                var unavailableResult = ServiceActionExecutionResult.NotImplemented(
                     descriptor.DisplayName,
                     $"Action non implémentée ({descriptor.Service})");
 
@@ -376,17 +378,17 @@ namespace Virgil.App.ViewModels
             return ActionResult.Completed("Diagnostic câblage terminé");
         }
 
-        private static ActionResult MapResult(ActionExecutionResult result)
+        private static ActionResult MapResult(ServiceActionExecutionResult result)
             => new(result.Status, result.Title, result.Summary, result.Steps, result.Recommendations, result.DebugInfo);
 
-        private void PostActionResultToChat(ActionExecutionResult result)
+        private void PostActionResultToChat(ServiceActionExecutionResult result)
         {
-            var formatter = new ActionResultToChatFormatter();
+            var formatter = new ServiceChatFormatter();
             var formatted = formatter.Format(result);
             var (type, kind) = formatted.Severity switch
             {
-                ChatSeverity.Error => (MessageType.Error, ChatKind.Error),
-                ChatSeverity.Warning => (MessageType.Warning, ChatKind.Warning),
+                ServiceChatSeverity.Error => (MessageType.Error, ChatKind.Error),
+                ServiceChatSeverity.Warning => (MessageType.Warning, ChatKind.Warning),
                 _ => (MessageType.Info, ChatKind.Info)
             };
 

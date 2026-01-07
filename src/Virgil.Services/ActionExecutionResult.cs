@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Virgil.Core.Models;
 
@@ -34,6 +35,16 @@ public sealed record ActionExecutionResult
     public string? DebugInfo { get; }
 
     public bool Success => Status is ActionResultStatus.Success or ActionResultStatus.PartialSuccess;
+
+    public string Message => string.IsNullOrWhiteSpace(Summary) ? Title : Summary;
+
+    public string? Details => Summary;
+
+    public bool TryGetDetails([NotNullWhen(true)] out string? details)
+    {
+        details = Details;
+        return !string.IsNullOrWhiteSpace(details);
+    }
 
     public static ActionExecutionResult Ok(string title, string? summary = null, IEnumerable<ActionStepResult>? steps = null, IEnumerable<string>? recommendations = null)
         => new(ActionResultStatus.Success, title, summary ?? string.Empty, steps?.ToList(), recommendations?.ToList());
