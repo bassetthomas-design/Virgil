@@ -141,6 +141,18 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private bool _cpuUsageIsStale;
+        public bool CpuUsageIsStale
+        {
+            get => _cpuUsageIsStale;
+            private set
+            {
+                if (_cpuUsageIsStale == value) return;
+                _cpuUsageIsStale = value;
+                OnPropertyChanged();
+            }
+        }
+
         private double _gpuUsage;
         public double GpuUsage
         {
@@ -149,6 +161,18 @@ namespace Virgil.App.ViewModels
             {
                 if (Math.Abs(_gpuUsage - value) < 0.1) return;
                 _gpuUsage = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private bool _gpuUsageIsStale;
+        public bool GpuUsageIsStale
+        {
+            get => _gpuUsageIsStale;
+            private set
+            {
+                if (_gpuUsageIsStale == value) return;
+                _gpuUsageIsStale = value;
                 OnPropertyChanged();
             }
         }
@@ -165,6 +189,18 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private bool _ramUsageIsStale;
+        public bool RamUsageIsStale
+        {
+            get => _ramUsageIsStale;
+            private set
+            {
+                if (_ramUsageIsStale == value) return;
+                _ramUsageIsStale = value;
+                OnPropertyChanged();
+            }
+        }
+
         private double _diskUsage;
         public double DiskUsage
         {
@@ -173,6 +209,18 @@ namespace Virgil.App.ViewModels
             {
                 if (Math.Abs(_diskUsage - value) < 0.1) return;
                 _diskUsage = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private bool _diskUsageIsStale;
+        public bool DiskUsageIsStale
+        {
+            get => _diskUsageIsStale;
+            private set
+            {
+                if (_diskUsageIsStale == value) return;
+                _diskUsageIsStale = value;
                 OnPropertyChanged();
             }
         }
@@ -189,6 +237,18 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private bool _cpuTempIsStale;
+        public bool CpuTempIsStale
+        {
+            get => _cpuTempIsStale;
+            private set
+            {
+                if (_cpuTempIsStale == value) return;
+                _cpuTempIsStale = value;
+                OnPropertyChanged();
+            }
+        }
+
         private double _gpuTemp;
         public double GpuTemp
         {
@@ -201,6 +261,18 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private bool _gpuTempIsStale;
+        public bool GpuTempIsStale
+        {
+            get => _gpuTempIsStale;
+            private set
+            {
+                if (_gpuTempIsStale == value) return;
+                _gpuTempIsStale = value;
+                OnPropertyChanged();
+            }
+        }
+
         private double _diskTemp;
         public double DiskTemp
         {
@@ -209,6 +281,18 @@ namespace Virgil.App.ViewModels
             {
                 if (Math.Abs(_diskTemp - value) < 0.1) return;
                 _diskTemp = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private bool _diskTempIsStale;
+        public bool DiskTempIsStale
+        {
+            get => _diskTempIsStale;
+            private set
+            {
+                if (_diskTempIsStale == value) return;
+                _diskTempIsStale = value;
                 OnPropertyChanged();
             }
         }
@@ -241,6 +325,13 @@ namespace Virgil.App.ViewModels
             CpuTemp = snapshot.CpuTemperature;
             GpuTemp = snapshot.GpuTemperature;
             DiskTemp = snapshot.DiskTemperature;
+            CpuUsageIsStale = false;
+            GpuUsageIsStale = false;
+            RamUsageIsStale = false;
+            DiskUsageIsStale = false;
+            CpuTempIsStale = false;
+            GpuTempIsStale = false;
+            DiskTempIsStale = false;
 
 #if DEBUG
             if (UseDebugStress)
@@ -280,6 +371,13 @@ namespace Virgil.App.ViewModels
             CpuTemp = metrics.CpuTemp;
             GpuTemp = metrics.GpuTemp;
             DiskTemp = metrics.DiskTemp;
+            CpuUsageIsStale = metrics.CpuUsageIsStale;
+            GpuUsageIsStale = metrics.GpuUsageIsStale;
+            RamUsageIsStale = metrics.RamUsageIsStale;
+            DiskUsageIsStale = metrics.DiskUsageIsStale;
+            CpuTempIsStale = metrics.CpuTempIsStale;
+            GpuTempIsStale = metrics.GpuTempIsStale;
+            DiskTempIsStale = metrics.DiskTempIsStale;
 
 #if DEBUG
             if (UseDebugStress)
