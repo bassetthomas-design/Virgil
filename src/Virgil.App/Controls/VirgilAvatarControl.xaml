@@ -10,6 +10,8 @@
         <SolidColorBrush x:Key="AccentBrush" Color="#4CAF50" />
         <SolidColorBrush x:Key="AccentStrokeBrush" Color="#804CAF50" />
         <SolidColorBrush x:Key="FaceFillBrush" Color="#0F181A" />
+        <SolidColorBrush x:Key="EyeTintBrush" Color="#F2FBF5" />
+        <SolidColorBrush x:Key="EyeOutlineBrush" Color="#66FFFFFF" />
     </UserControl.Resources>
 
     <Grid x:Name="Root" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -43,8 +45,8 @@
                 </Ellipse>
 
                 <Grid x:Name="EyesLayer"
-                      Width="130"
-                      Height="56"
+                      Width="140"
+                      Height="64"
                       HorizontalAlignment="Center"
                       VerticalAlignment="Center">
                     <Grid.RenderTransform>
@@ -53,39 +55,77 @@
                         </TransformGroup>
                     </Grid.RenderTransform>
 
-                    <Path x:Name="LeftEye"
-                          Fill="White"
-                          Stretch="Uniform"
-                          Data="M5,15 C5,5 35,5 35,15 C35,25 5,25 5,15 Z"
-                          RenderTransformOrigin="0.5,0.5"
-                          Width="48"
-                          Height="26"
+                    <Grid x:Name="LeftEye"
+                          Width="58"
+                          Height="32"
                           HorizontalAlignment="Left"
-                          Margin="6,0,0,0">
-                        <Path.RenderTransform>
+                          Margin="6,0,0,0"
+                          RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
                             <TransformGroup>
                                 <ScaleTransform x:Name="LeftEyeScale" />
                                 <TranslateTransform x:Name="LeftEyeOffset" X="-8" />
                             </TransformGroup>
-                        </Path.RenderTransform>
-                    </Path>
+                        </Grid.RenderTransform>
+                        <Grid.Clip>
+                            <RectangleGeometry x:Name="LeftEyeClip" Rect="0,0,58,32" />
+                        </Grid.Clip>
+                        <Path Stretch="Fill"
+                              Data="M2,16 C7,5 26,2 40,3 C50,4 56,9 56,16 C56,23 50,28 40,29 C26,30 7,27 2,16 Z">
+                            <Path.Fill>
+                                <LinearGradientBrush StartPoint="0.1,0.1" EndPoint="0.9,0.9">
+                                    <GradientStop Color="#FFFDFD" Offset="0" />
+                                    <GradientStop Color="{Binding Color, Source={StaticResource EyeTintBrush}}" Offset="1" />
+                                </LinearGradientBrush>
+                            </Path.Fill>
+                        </Path>
+                        <Ellipse Width="12"
+                                 Height="8"
+                                 Fill="#CCFFFFFF"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Top"
+                                 Margin="10,6,0,0" />
+                        <Path Stretch="Fill"
+                              Data="M2,16 C7,5 26,2 40,3 C50,4 56,9 56,16 C56,23 50,28 40,29 C26,30 7,27 2,16 Z"
+                              Stroke="{StaticResource EyeOutlineBrush}"
+                              StrokeThickness="1.6" />
+                    </Grid>
 
-                    <Path x:Name="RightEye"
-                          Fill="White"
-                          Stretch="Uniform"
-                          Data="M5,15 C5,5 35,5 35,15 C35,25 5,25 5,15 Z"
-                          RenderTransformOrigin="0.5,0.5"
-                          Width="48"
-                          Height="26"
+                    <Grid x:Name="RightEye"
+                          Width="58"
+                          Height="32"
                           HorizontalAlignment="Right"
-                          Margin="0,0,6,0">
-                        <Path.RenderTransform>
+                          Margin="0,0,6,0"
+                          RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
                             <TransformGroup>
                                 <ScaleTransform x:Name="RightEyeScale" />
                                 <TranslateTransform x:Name="RightEyeOffset" X="8" />
                             </TransformGroup>
-                        </Path.RenderTransform>
-                    </Path>
+                        </Grid.RenderTransform>
+                        <Grid.Clip>
+                            <RectangleGeometry x:Name="RightEyeClip" Rect="0,0,58,32" />
+                        </Grid.Clip>
+                        <Path Stretch="Fill"
+                              Data="M2,16 C7,5 26,2 40,3 C50,4 56,9 56,16 C56,23 50,28 40,29 C26,30 7,27 2,16 Z">
+                            <Path.Fill>
+                                <LinearGradientBrush StartPoint="0.1,0.1" EndPoint="0.9,0.9">
+                                    <GradientStop Color="#FFFDFD" Offset="0" />
+                                    <GradientStop Color="{Binding Color, Source={StaticResource EyeTintBrush}}" Offset="1" />
+                                </LinearGradientBrush>
+                            </Path.Fill>
+                        </Path>
+                        <Ellipse Width="12"
+                                 Height="8"
+                                 Fill="#CCFFFFFF"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Top"
+                                 Margin="10,6,0,0" />
+                        <Path Stretch="Fill"
+                              Data="M2,16 C7,5 26,2 40,3 C50,4 56,9 56,16 C56,23 50,28 40,29 C26,30 7,27 2,16 Z"
+                              Stroke="{StaticResource EyeOutlineBrush}"
+                              StrokeThickness="1.6" />
+                    </Grid>
                 </Grid>
             </Grid>
         </Viewbox>

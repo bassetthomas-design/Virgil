@@ -16,6 +16,8 @@ public partial class VirgilAvatarControl : UserControl
     private SolidColorBrush AccentBrush => (SolidColorBrush)FindResource("AccentBrush");
     private SolidColorBrush AccentStrokeBrush => (SolidColorBrush)FindResource("AccentStrokeBrush");
     private SolidColorBrush FaceFillBrush => (SolidColorBrush)FindResource("FaceFillBrush");
+    private SolidColorBrush EyeTintBrush => (SolidColorBrush)FindResource("EyeTintBrush");
+    private SolidColorBrush EyeOutlineBrush => (SolidColorBrush)FindResource("EyeOutlineBrush");
 
     private double _smoothedStress;
     private double _targetStress;
@@ -211,6 +213,9 @@ public partial class VirgilAvatarControl : UserControl
             AnimateColor(AccentBrush, accent, TimeSpan.FromMilliseconds(force ? 1 : 260));
             AnimateColor(AccentStrokeBrush, Color.FromArgb(128, accent.R, accent.G, accent.B), TimeSpan.FromMilliseconds(force ? 1 : 260));
             AnimateColor(FaceFillBrush, Color.FromArgb(255, (byte)(12 + accent.R / 6), (byte)(18 + accent.G / 6), (byte)(20 + accent.B / 6)), TimeSpan.FromMilliseconds(force ? 1 : 260));
+            var eyeTint = Interpolate(Color.FromRgb(255, 255, 255), accent, 0.14);
+            AnimateColor(EyeTintBrush, eyeTint, TimeSpan.FromMilliseconds(force ? 1 : 260));
+            AnimateColor(EyeOutlineBrush, Color.FromArgb(110, accent.R, accent.G, accent.B), TimeSpan.FromMilliseconds(force ? 1 : 260));
             RingGlow.Color = Color.FromArgb(160, accent.R, accent.G, accent.B);
             FaceGlow.Color = Color.FromArgb(140, accent.R, accent.G, accent.B);
         }
@@ -227,9 +232,10 @@ public partial class VirgilAvatarControl : UserControl
         var eyeScaleX = 1 + (_smoothedStress * 0.05) + (_expressionState.Squint * 0.08);
 
         LeftEyeScale.ScaleX = eyeScaleX;
-        LeftEyeScale.ScaleY = leftOpenness;
         RightEyeScale.ScaleX = eyeScaleX;
-        RightEyeScale.ScaleY = rightOpenness;
+
+        UpdateEyelid(LeftEyeClip, LeftEye.ActualWidth, LeftEye.ActualHeight, leftOpenness);
+        UpdateEyelid(RightEyeClip, RightEye.ActualWidth, RightEye.ActualHeight, rightOpenness);
 
         var sizeScale = Math.Clamp(ActualWidth / 220d, 0.7, 1.4);
         var maxOffset = Math.Clamp(sizeScale * 3.5, 1d, 4d);
@@ -274,6 +280,15 @@ public partial class VirgilAvatarControl : UserControl
         };
 
         brush.BeginAnimation(SolidColorBrush.ColorProperty, animation, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private static void UpdateEyelid(RectangleGeometry clip, double width, double height, double openness)
+    {
+        var resolvedWidth = width > 0 ? width : 58;
+        var resolvedHeight = height > 0 ? height : 32;
+        var openHeight = Math.Max(1, resolvedHeight * openness);
+        var top = (resolvedHeight - openHeight) * 0.5;
+        clip.Rect = new Rect(0, top, resolvedWidth, openHeight);
     }
 }
 
