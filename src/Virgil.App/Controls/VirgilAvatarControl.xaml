@@ -19,6 +19,7 @@
             <GradientStop Color="#CC4CAF50" Offset="0.32" />
             <GradientStop Color="#994CAF50" Offset="1" />
         </RadialGradientBrush>
+        <SolidColorBrush x:Key="EyeHighlightBrush" Color="#E6FFFFFF" />
     </UserControl.Resources>
 
     <Grid x:Name="Root" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -90,6 +91,13 @@
                                                   Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" />
                             </Ellipse.Effect>
                         </Ellipse>
+                        <Ellipse Width="8"
+                                 Height="8"
+                                 Fill="{StaticResource EyeHighlightBrush}"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Top"
+                                 Margin="7,6,0,0"
+                                 IsHitTestVisible="False" />
                     </Grid>
 
                     <Grid x:Name="RightEyeContainer"
@@ -116,6 +124,13 @@
                                                   Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" />
                             </Ellipse.Effect>
                         </Ellipse>
+                        <Ellipse Width="8"
+                                 Height="8"
+                                 Fill="{StaticResource EyeHighlightBrush}"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Top"
+                                 Margin="7,6,0,0"
+                                 IsHitTestVisible="False" />
                     </Grid>
                 </Grid>
             </Grid>
