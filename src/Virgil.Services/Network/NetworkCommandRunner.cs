@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,6 +23,8 @@ public sealed class NetworkCommandRunner : INetworkCommandRunner
                     UseShellExecute = false,
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8,
                     CreateNoWindow = true
                 },
                 EnableRaisingEvents = true

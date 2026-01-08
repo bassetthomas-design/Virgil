@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,8 +52,71 @@ public sealed class NetworkService : INetworkService
         _speedProbe = speedProbe ?? new HttpInternetSpeedProbe(_pingClient);
     }
 
-    public Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Diagnostic réseau rapide", "Service NetworkService indisponible"));
+    public async Task<ActionExecutionResult> RunQuickDiagnosticAsync(CancellationToken ct = default)
+    {
+        if (!_platformInfo.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Diagnostic réseau", "Diagnostic réseau non disponible: service NetworkService absent.");
+        }
+
+        if (_runner is null || _networkInfoProvider is null || _pingClient is null)
+        {
+            return ActionExecutionResult.NotAvailable("Diagnostic réseau", "Diagnostic réseau non disponible: service NetworkService absent.");
+        }
+
+        var activeInterfaces = GetActiveNetworkInterfaces();
+        var steps = new List<ActionStepResult>();
+        var summaryLines = new List<string>();
+
+        if (activeInterfaces.Count == 0)
+        {
+            steps.Add(new ActionStepResult(ActionResultStatus.Skipped, "Interfaces actives", "Aucune interface active détectée."));
+            summaryLines.Add("Interfaces actives: aucune.");
+        }
+        else
+        {
+            steps.Add(new ActionStepResult(ActionResultStatus.Success, "Interfaces actives", $"{activeInterfaces.Count} interface(s) active(s)."));
+            summaryLines.Add($"Interfaces actives: {FormatInterfaces(activeInterfaces)}.");
+        }
+
+        var gateway = _networkInfoProvider.GetDefaultGateway();
+        if (string.IsNullOrWhiteSpace(gateway))
+        {
+            steps.Add(new ActionStepResult(ActionResultStatus.Skipped, "Passerelle par défaut", "Passerelle non détectée."));
+            summaryLines.Add("Passerelle: non détectée.");
+        }
+        else
+        {
+            steps.Add(new ActionStepResult(ActionResultStatus.Success, "Passerelle par défaut", gateway));
+            summaryLines.Add($"Passerelle: {gateway}.");
+        }
+
+        var dnsServers = GetDnsServers(activeInterfaces);
+        if (dnsServers.Count == 0)
+        {
+            steps.Add(new ActionStepResult(ActionResultStatus.Skipped, "DNS", "Aucun serveur DNS détecté."));
+            summaryLines.Add("DNS: non détectés.");
+        }
+        else
+        {
+            steps.Add(new ActionStepResult(ActionResultStatus.Success, "DNS", string.Join(", ", dnsServers)));
+            summaryLines.Add($"DNS: {string.Join(", ", dnsServers)}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(gateway))
+        {
+            steps.Add(new ActionStepResult(ActionResultStatus.Skipped, "Ping passerelle", "Passerelle indisponible."));
+            summaryLines.Add("Ping passerelle: non applicable.");
+        }
+        else
+        {
+            var pingStep = await BuildGatewayPingStepAsync(gateway, ct).ConfigureAwait(false);
+            steps.Add(pingStep);
+            summaryLines.Add($"Ping passerelle: {pingStep.Summary}.");
+        }
+
+        return BuildDiagnosticResult(steps, summaryLines);
+    }
 
     public async Task<ActionExecutionResult> SoftResetAsync(CancellationToken ct = default)
     {
@@ -62,14 +126,19 @@ public sealed class NetworkService : INetworkService
         }
 
         var isAdmin = _privilegeChecker.IsAdministrator();
+        var activeInterfaces = GetActiveNetworkInterfaces();
+        var noActiveInterfaceReason = activeInterfaces.Count == 0 ? "Non applicable: pas de connexion active." : null;
+
         var steps = new List<NetworkStep>
         {
             NetworkStep.AdminOptional("Flush DNS", "ipconfig", "/flushdns", "Purge le cache DNS."),
-            NetworkStep.AdminOptional("Renew IP", "ipconfig", "/renew", "Renouvelle la configuration DHCP."),
-            NetworkStep.AdminRequired("Reset Winsock léger", "netsh", "winsock reset catalog", "Réinitialise Winsock sans purge complète."),
-            NetworkStep.AdminRequired("Réinitialiser DNS custom", "netsh", "interface ip set dns name=\"*\" source=dhcp", "Rebasculer les interfaces en DNS automatique."),
-            NetworkStep.AdminRequired("Réinitialiser adaptateurs (soft)", "powershell", "-Command \"Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Restart-NetAdapter -Confirm:$false\"", "Redémarre les adaptateurs réseau actifs."),
+            NetworkStep.AdminOptional("Renew IP", "ipconfig", "/renew", "Renouvelle la configuration DHCP.", noActiveInterfaceReason),
+            NetworkStep.AdminRequired("Reset Winsock léger", "netsh", "winsock reset", "Réinitialise Winsock sans purge complète."),
+            NetworkStep.AdminRequired("Reset pile TCP/IP (soft)", "netsh", "int ip reset", "Réinitialise la pile TCP/IP."),
+            NetworkStep.AdminRequired("Réinitialiser adaptateurs (soft)", "powershell", BuildPowerShellCommand("Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Restart-NetAdapter -Confirm:$false"), "Redémarre les adaptateurs réseau actifs.", noActiveInterfaceReason),
         };
+
+        steps.AddRange(BuildDnsResetSteps(activeInterfaces));
 
         var results = await ExecuteStepsAsync(steps, isAdmin, ct).ConfigureAwait(false);
         var globalStatus = DeriveGlobalStatus(results);
@@ -101,12 +170,13 @@ public sealed class NetworkService : INetworkService
         {
             NetworkStep.AdminRequired("Reset complet Winsock", "netsh", "winsock reset", "Réinitialise la configuration Winsock."),
             NetworkStep.AdminRequired("Reset pile TCP/IP", "netsh", "int ip reset", "Réinitialise la pile TCP/IP."),
-            NetworkStep.AdminRequired("Réinitialisation adaptateurs réseau", "powershell", "-Command \"Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Restart-NetAdapter -Confirm:$false\"", "Redémarre les interfaces actives."),
-            NetworkStep.AdminRequired("Suppression configs IP custom", "netsh", "interface ip set dns name=\"*\" source=dhcp", "Supprime les DNS statiques / IP custom."),
+            NetworkStep.AdminRequired("Réinitialisation adaptateurs réseau", "powershell", BuildPowerShellCommand("Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Restart-NetAdapter -Confirm:$false"), "Redémarre les interfaces actives."),
             NetworkStep.AdminRequired("Suppression profils Wi-Fi", "netsh", "wlan delete profile name=*", "Purge les profils Wi-Fi enregistrés."),
             NetworkStep.AdminRequired("Suppression réseaux Ethernet mémorisés", "netsh", "lan delete profile name=* interface=*", "Supprime les profils LAN mémorisés."),
-            NetworkStep.AdminRequired("Redémarrage services réseau", "powershell", "-Command \"'Dnscache','Dhcp','NlaSvc' | ForEach-Object { Stop-Service $_ -ErrorAction SilentlyContinue; Start-Service $_ -ErrorAction SilentlyContinue }\"", "Relance les services réseau principaux."),
+            NetworkStep.AdminRequired("Redémarrage services réseau", "powershell", BuildPowerShellCommand("'Dnscache','Dhcp','NlaSvc' | ForEach-Object { Stop-Service $_ -ErrorAction SilentlyContinue; Start-Service $_ -ErrorAction SilentlyContinue }"), "Relance les services réseau principaux."),
         };
+
+        steps.AddRange(BuildDnsResetSteps(GetActiveNetworkInterfaces()));
 
         var results = await ExecuteStepsAsync(steps, isAdmin: true, ct).ConfigureAwait(false);
         var rebootRequired = results.Any(r => ContainsRestartHint(r.Summary));
@@ -199,9 +269,18 @@ public sealed class NetworkService : INetworkService
                 continue;
             }
 
-            if (step.AdminOnly && !isAdmin)
+            if (!string.IsNullOrWhiteSpace(step.SkipReason))
             {
-                results.Add(new ActionStepResult(ActionResultStatus.Skipped, step.Label, "Droits admin requis"));
+                results.Add(new ActionStepResult(ActionResultStatus.Skipped, step.Label, step.SkipReason));
+                continue;
+            }
+
+            if (step.AdminRequirement != AdminRequirement.Optional && !isAdmin)
+            {
+                var status = step.AdminRequirement == AdminRequirement.RequiredFail
+                    ? ActionResultStatus.Failed
+                    : ActionResultStatus.Skipped;
+                results.Add(new ActionStepResult(status, step.Label, "Droits admin requis"));
                 continue;
             }
 
@@ -425,6 +504,96 @@ public sealed class NetworkService : INetworkService
         return list;
     }
 
+    private IReadOnlyList<NetworkInterface> GetActiveNetworkInterfaces()
+    {
+        return NetworkInterface
+            .GetAllNetworkInterfaces()
+            .Where(nic => nic.OperationalStatus == OperationalStatus.Up)
+            .Where(nic => nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+            .Where(nic => nic.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> GetDnsServers(IEnumerable<NetworkInterface> interfaces)
+    {
+        return interfaces
+            .SelectMany(nic => nic.GetIPProperties().DnsAddresses)
+            .Select(address => address.ToString())
+            .Where(address => !string.IsNullOrWhiteSpace(address))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string FormatInterfaces(IEnumerable<NetworkInterface> interfaces)
+    {
+        var summaries = interfaces.Select(nic =>
+        {
+            var ips = nic.GetIPProperties()
+                .UnicastAddresses
+                .Select(addr => addr.Address.ToString())
+                .Where(address => !string.IsNullOrWhiteSpace(address))
+                .ToList();
+            var ipLabel = ips.Count == 0 ? "IP inconnue" : string.Join(", ", ips);
+            return $"{nic.Name} ({ipLabel})";
+        });
+
+        return string.Join("; ", summaries);
+    }
+
+    private async Task<ActionStepResult> BuildGatewayPingStepAsync(string gateway, CancellationToken ct)
+    {
+        var ping = await _pingClient.SendAsync(gateway, PingTimeoutMs, ct).ConfigureAwait(false);
+        return ping.Status switch
+        {
+            PingAttemptStatus.Success => new ActionStepResult(ActionResultStatus.Success, "Ping passerelle", $"OK ({ping.RoundtripTimeMs} ms)"),
+            PingAttemptStatus.Timeout => new ActionStepResult(ActionResultStatus.Skipped, "Ping passerelle", "Indisponible (timeout)"),
+            PingAttemptStatus.DnsError => new ActionStepResult(ActionResultStatus.Skipped, "Ping passerelle", "Indisponible (erreur DNS)"),
+            _ => new ActionStepResult(ActionResultStatus.Skipped, "Ping passerelle", "Indisponible")
+        };
+    }
+
+    private static ActionExecutionResult BuildDiagnosticResult(IReadOnlyList<ActionStepResult> steps, IReadOnlyList<string> summaryLines)
+    {
+        var hasSuccess = steps.Any(step => step.Status == ActionResultStatus.Success);
+        var summary = summaryLines.Count == 0 ? "Aucune donnée réseau disponible." : string.Join(Environment.NewLine, summaryLines);
+
+        if (!hasSuccess)
+        {
+            return ActionExecutionResult.NotAvailable("Diagnostic réseau", summary, steps);
+        }
+
+        return ActionExecutionResult.Ok("Diagnostic réseau", summary, steps);
+    }
+
+    private static IReadOnlyList<NetworkStep> BuildDnsResetSteps(IReadOnlyList<NetworkInterface> interfaces)
+    {
+        if (interfaces.Count == 0)
+        {
+            return new[] { NetworkStep.Skipped("Réinitialiser DNS custom", "Aucune interface cible.") };
+        }
+
+        var steps = new List<NetworkStep>();
+        foreach (var networkInterface in interfaces)
+        {
+            var name = networkInterface.Name.Replace("\"", string.Empty);
+            steps.Add(NetworkStep.AdminRequiredFail(
+                $"Réinitialiser DNS custom (IPv4 - {name})",
+                "netsh",
+                $"interface ipv4 set dnsservers name=\"{name}\" source=dhcp",
+                "Réinitialise les DNS IPv4 sur DHCP."));
+            steps.Add(NetworkStep.AdminRequiredFail(
+                $"Réinitialiser DNS custom (IPv6 - {name})",
+                "netsh",
+                $"interface ipv6 set dnsservers name=\"{name}\" source=dhcp",
+                "Réinitialise les DNS IPv6 sur DHCP."));
+        }
+
+        return steps;
+    }
+
+    private static string BuildPowerShellCommand(string command)
+        => $"-NoProfile -ExecutionPolicy Bypass -Command \"[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; {command}\"";
+
     private static string TrimMessage(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -436,13 +605,26 @@ public sealed class NetworkService : INetworkService
         return normalized.Length > 220 ? normalized[..220] + "…" : normalized;
     }
 
-    private sealed record NetworkStep(string Label, string FileName, string Arguments, string Description, bool AdminOnly)
+    private sealed record NetworkStep(string Label, string FileName, string Arguments, string Description, AdminRequirement AdminRequirement, string? SkipReason)
     {
-        public static NetworkStep AdminRequired(string label, string fileName, string arguments, string description)
-            => new(label, fileName, arguments, description, true);
+        public static NetworkStep AdminRequired(string label, string fileName, string arguments, string description, string? skipReason = null)
+            => new(label, fileName, arguments, description, AdminRequirement.RequiredSkip, skipReason);
 
-        public static NetworkStep AdminOptional(string label, string fileName, string arguments, string description)
-            => new(label, fileName, arguments, description, false);
+        public static NetworkStep AdminRequiredFail(string label, string fileName, string arguments, string description, string? skipReason = null)
+            => new(label, fileName, arguments, description, AdminRequirement.RequiredFail, skipReason);
+
+        public static NetworkStep Skipped(string label, string reason)
+            => new(label, string.Empty, string.Empty, reason, AdminRequirement.Optional, reason);
+
+        public static NetworkStep AdminOptional(string label, string fileName, string arguments, string description, string? skipReason = null)
+            => new(label, fileName, arguments, description, AdminRequirement.Optional, skipReason);
+    }
+
+    private enum AdminRequirement
+    {
+        Optional,
+        RequiredSkip,
+        RequiredFail
     }
 
     private sealed record LatencyMetrics(int Min, int Avg, int Max, int Jitter, double LossPercent);
