@@ -74,7 +74,7 @@ public sealed class PerformanceService : IPerformanceService
     {
         if (!_platformInfo.IsWindows())
         {
-            return ActionExecutionResult.NotAvailable("Mode performance disponible uniquement sur Windows");
+            return ActionExecutionResult.NotAvailable("Mode performance", "Disponible uniquement sur Windows");
         }
 
         var state = _stateStore.Load();
@@ -108,15 +108,27 @@ public sealed class PerformanceService : IPerformanceService
         summary.Append(" Désactiver le mode performance ?");
 
         var details = BuildDetails(steps, gpuStatus, includeGpu: true, performanceEnabled: true);
-        var success = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial) && steps.All(s => s.Status != StepOutcome.Fail);
-        return new ActionExecutionResult(success, summary.ToString(), details);
+        var anyOk = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial);
+        var anyFail = steps.Any(s => s.Status == StepOutcome.Fail);
+        var overallSummary = summary.ToString();
+        if (anyOk && anyFail)
+        {
+            return ActionExecutionResult.Partial("Mode performance activé", $"{overallSummary}\n{details}");
+        }
+
+        if (anyFail)
+        {
+            return ActionExecutionResult.Failure("Mode performance activé", $"{overallSummary}\n{details}");
+        }
+
+        return ActionExecutionResult.Ok("Mode performance activé", $"{overallSummary}\n{details}");
     }
 
     public async Task<ActionExecutionResult> RestoreNormalModeAsync(CancellationToken ct = default)
     {
         if (!_platformInfo.IsWindows())
         {
-            return ActionExecutionResult.NotAvailable("Retour au mode normal uniquement disponible sur Windows");
+            return ActionExecutionResult.NotAvailable("Retour au mode normal", "Uniquement disponible sur Windows");
         }
 
         var state = _stateStore.Load();
@@ -132,7 +144,7 @@ public sealed class PerformanceService : IPerformanceService
             var missingSnapshotSummary =
                 $"Mode performance: DÉSACTIVÉ. Alimentation: {missingPowerStatus}. Système: {missingSystemStatus}. GPU: {missingGpuStatus}. Impossible de restaurer complètement: état initial non enregistré.";
             var missingDetails = BuildDetails(steps, missingGpuStatus, includeGpu: true, performanceEnabled: false);
-            return new ActionExecutionResult(false, missingSnapshotSummary, missingDetails);
+            return ActionExecutionResult.Partial("Retour au mode normal", $"{missingSnapshotSummary}\n{missingDetails}");
         }
 
         steps.Add(await RestorePowerPlanAsync(state, ct).ConfigureAwait(false));
@@ -146,15 +158,27 @@ public sealed class PerformanceService : IPerformanceService
         var gpuStatus = "Ignoré (aucun réglage GPU enregistré)";
         var summary = $"Mode performance: DÉSACTIVÉ. Alimentation: {powerStatus}. Système: {systemStatus}. GPU: {gpuStatus}. Retour au mode \"je fais moins d'efforts\".";
         var details = BuildDetails(steps, gpuStatus, includeGpu: true, performanceEnabled: false);
-        var success = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial) && steps.All(s => s.Status != StepOutcome.Fail);
-        return new ActionExecutionResult(success, summary, details);
+        var anyOkRestore = steps.Any(s => s.Status is StepOutcome.Ok or StepOutcome.Partial);
+        var anyFailRestore = steps.Any(s => s.Status == StepOutcome.Fail);
+        var combined = $"{summary}\n{details}";
+        if (anyOkRestore && anyFailRestore)
+        {
+            return ActionExecutionResult.Partial("Retour au mode normal terminé", combined);
+        }
+
+        if (anyFailRestore)
+        {
+            return ActionExecutionResult.Failure("Retour au mode normal terminé", combined);
+        }
+
+        return ActionExecutionResult.Ok("Retour au mode normal terminé", combined);
     }
 
     public Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default)
     {
         if (!_platformInfo.IsWindows())
         {
-            return Task.FromResult(ActionExecutionResult.NotAvailable("Analyse du démarrage uniquement disponible sur Windows."));
+            return Task.FromResult(ActionExecutionResult.NotAvailable("Analyse du démarrage", "Uniquement disponible sur Windows."));
         }
 
         try
@@ -162,15 +186,15 @@ public sealed class PerformanceService : IPerformanceService
             var report = _startupAnalyzer.Analyze(ct);
             if (!report.Items.Any())
             {
-                return Task.FromResult(ActionExecutionResult.NotAvailable("Aucun élément de démarrage détecté ou accessible."));
+                return Task.FromResult(ActionExecutionResult.NotAvailable("Analyse du démarrage", "Aucun élément de démarrage détecté ou accessible."));
             }
 
             var message = StartupAnalysisFormatter.BuildMessage(report);
-            return Task.FromResult(ActionExecutionResult.Ok(message));
+            return Task.FromResult(ActionExecutionResult.Ok("Analyse du démarrage terminée", message));
         }
         catch (Exception ex)
         {
-            return Task.FromResult(ActionExecutionResult.Failure($"Analyse du démarrage impossible : {ex.Message}"));
+            return Task.FromResult(ActionExecutionResult.Failure("Analyse du démarrage", $"Impossible : {ex.Message}"));
         }
     }
 
@@ -178,7 +202,7 @@ public sealed class PerformanceService : IPerformanceService
     {
         if (!_platformInfo.IsWindows())
         {
-            return ActionExecutionResult.NotAvailable("Action gaming disponible uniquement sur Windows");
+            return ActionExecutionResult.NotAvailable("Fermeture session gaming", "Uniquement disponible sur Windows");
         }
 
         var policy = _policyProvider.GetPolicy();
@@ -256,14 +280,20 @@ public sealed class PerformanceService : IPerformanceService
             var nothingMessage = foregroundGame is null
                 ? "Aucune app de fond candidate à fermer."
                 : $"Jeu actif détecté ({foregroundGame}) : rien à toucher.";
-            return ActionExecutionResult.NotAvailable(nothingMessage, string.Join("\n", ignored.Distinct()));
+            var ignoredDetails = string.Join("\n", ignored.Distinct());
+            var unavailableSummary = string.IsNullOrWhiteSpace(ignoredDetails) ? nothingMessage : $"{nothingMessage}\n{ignoredDetails}";
+            return ActionExecutionResult.NotAvailable("Fermeture session gaming", unavailableSummary);
         }
 
         var proposal = BuildProposal(candidates);
         var confirmed = await _sessionConfirmation.ConfirmAsync(proposal, ct).ConfigureAwait(false);
         if (!confirmed)
         {
-            return ActionExecutionResult.Failure("Aucune app fermée : l'utilisateur a dit non.", string.Join("\n", ignored.Distinct()));
+            var ignoredSummary = string.Join("\n", ignored.Distinct());
+            var declineSummary = string.IsNullOrWhiteSpace(ignoredSummary)
+                ? "Aucune app fermée : l'utilisateur a dit non."
+                : $"Aucune app fermée : l'utilisateur a dit non.\n{ignoredSummary}";
+            return ActionExecutionResult.Failure("Fermeture session gaming", declineSummary);
         }
 
         var closed = new List<string>();
@@ -328,14 +358,15 @@ public sealed class PerformanceService : IPerformanceService
 
         details.Append("Pas de crash, pas de redémarrage. Tu peux retourner frag sans culpabilité.");
 
-        return ActionExecutionResult.Ok(summary.ToString(), details.ToString().TrimEnd());
+        var finalSummary = $"{summary}\n{details.ToString().TrimEnd()}";
+        return ActionExecutionResult.Ok("Fermeture session gaming terminée", finalSummary);
     }
 
     public async Task<ActionExecutionResult> SoftRamFlushAsync(CancellationToken ct = default)
     {
         if (!_memoryReader.IsSupportedPlatform)
         {
-            return ActionExecutionResult.NotAvailable("Libération RAM uniquement supportée sur Windows");
+            return ActionExecutionResult.NotAvailable("Libération RAM", "Uniquement supportée sur Windows");
         }
 
         var whitelist = _whitelistProvider.GetNormalizedWhitelist();
@@ -420,15 +451,15 @@ public sealed class PerformanceService : IPerformanceService
 
             details += "\nWindows reprendra ce qu’il veut. Profite du moment.";
 
-            return ActionExecutionResult.Ok(summary, details);
+        return ActionExecutionResult.Ok("Libération RAM terminée", $"{summary}\n{details}");
         }
         catch (OperationCanceledException)
         {
-            return ActionExecutionResult.Failure("Libération RAM annulée");
+            return ActionExecutionResult.Failure("Libération RAM", "Libération RAM annulée");
         }
         catch (Exception ex)
         {
-            return ActionExecutionResult.Failure($"Libération RAM impossible : {ex.Message}");
+            return ActionExecutionResult.Failure("Libération RAM", $"Impossible : {ex.Message}");
         }
     }
 

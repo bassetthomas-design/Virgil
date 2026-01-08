@@ -36,17 +36,19 @@ public sealed class UpdateService : IUpdateService
         }
         catch (Exception ex)
         {
-            return ActionExecutionResult.Failure($"Erreur gestion mises à jour auto: {ex.Message}");
+            return ActionExecutionResult.Failure("Gestion des mises à jour automatiques", $"Erreur gestion mises à jour auto: {ex.Message}");
         }
 
         var message = BuildAutomaticUpdateMessage(snapshot);
         if (!snapshot.Supported)
         {
-            return ActionExecutionResult.NotAvailable(message);
+            return ActionExecutionResult.NotAvailable("Gestion des mises à jour automatiques", message);
         }
 
         var success = snapshot.ChangeApplied || !intent.Toggle.HasValue || !snapshot.AdminRequiredForChanges || snapshot.HasAdministrativeAccess;
-        return new ActionExecutionResult(success, message);
+        return success
+            ? ActionExecutionResult.Ok("Gestion des mises à jour automatiques", message)
+            : ActionExecutionResult.Partial("Gestion des mises à jour automatiques", message);
     }
 
     public async Task<ActionExecutionResult> UpdateAppsAsync(CancellationToken ct = default)
@@ -58,7 +60,7 @@ public sealed class UpdateService : IUpdateService
         }
         catch (Exception ex)
         {
-            return ActionExecutionResult.Failure($"Erreur mise à jour applications: {ex.Message}");
+            return ActionExecutionResult.Failure("Mise à jour des applications", $"Erreur mise à jour applications: {ex.Message}");
         }
     }
 
@@ -74,12 +76,12 @@ public sealed class UpdateService : IUpdateService
         }
         catch (Exception ex)
         {
-            return ActionExecutionResult.Failure($"Erreur Windows Update: {ex.Message}");
+            return ActionExecutionResult.Failure("Windows Update", $"Erreur Windows Update: {ex.Message}");
         }
     }
 
     public Task<ActionExecutionResult> CheckGpuDriversAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification des pilotes GPU non disponible"));
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification des pilotes GPU", "Service UpdateService indisponible"));
 
     private static string BuildAutomaticUpdateMessage(AutomaticUpdateSnapshot snapshot)
     {

@@ -93,7 +93,11 @@ public sealed class ActionWiringTester
                 return new ActionSelfTestItem(actionNumber, actionId, descriptor.ActionKey, ActionSelfTestStatus.Ok, null);
             }
 
-            var reason = string.IsNullOrWhiteSpace(result.Message) ? "Echec dry-run" : result.Message;
+            var reason = string.IsNullOrWhiteSpace(result.Summary) ? result.Title : result.Summary;
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                reason = "Echec dry-run";
+            }
             var status = reason.Contains("non gérée", StringComparison.OrdinalIgnoreCase)
                 ? ActionSelfTestStatus.NonCablee
                 : ActionSelfTestStatus.Erreur;
