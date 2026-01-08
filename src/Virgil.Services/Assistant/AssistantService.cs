@@ -18,21 +18,25 @@ public sealed class AssistantService : IAssistantService
     public async Task<AssistantReply> AskAsync(string userMessage, AssistantContext ctx, CancellationToken ct = default)
     {
         var reply = await _provider.AskAsync(userMessage, ctx, ct).ConfigureAwait(false);
-        return ValidateReply(reply, ctx);
+        return ValidateReply(reply, ctx, userMessage);
     }
 
-    private static AssistantReply ValidateReply(AssistantReply reply, AssistantContext ctx)
+    private static AssistantReply ValidateReply(AssistantReply reply, AssistantContext ctx, string userMessage)
     {
         if (reply is null)
         {
             return AssistantReply.Empty;
         }
 
+        var routed = IntentRouter.SuggestActions(userMessage, ctx.ActionCatalog);
+        var combined = (reply.ProposedActions ?? Array.Empty<ProposedAction>())
+            .Concat(routed)
+            .ToList();
         var allowedIds = new HashSet<string>(ctx.ActionCatalog.Select(item => item.Id), StringComparer.OrdinalIgnoreCase);
-        var proposed = reply.ProposedActions ?? Array.Empty<ProposedAction>();
-
-        var validated = proposed
+        var validated = combined
             .Where(action => action is not null && allowedIds.Contains(action.ActionId))
+            .GroupBy(action => action.ActionId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
             .Select(action => action with
             {
                 RequiresConfirmation = true,

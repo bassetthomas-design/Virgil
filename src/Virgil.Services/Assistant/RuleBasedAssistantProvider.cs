@@ -11,7 +11,7 @@ public sealed class RuleBasedAssistantProvider : IAssistantProvider
     public Task<AssistantReply> AskAsync(string userMessage, AssistantContext ctx, CancellationToken ct = default)
     {
         var responseText = BuildResponseText(ctx);
-        var actions = SuggestActions(userMessage, ctx.ActionCatalog);
+        var actions = IntentRouter.SuggestActions(userMessage, ctx.ActionCatalog);
         return Task.FromResult(new AssistantReply(responseText, actions));
     }
 
@@ -44,61 +44,5 @@ public sealed class RuleBasedAssistantProvider : IAssistantProvider
         return string.Join(Environment.NewLine, parts);
     }
 
-    private static IReadOnlyList<ProposedAction> SuggestActions(string userMessage, IReadOnlyList<AssistantActionCatalogItem> catalog)
-    {
-        if (string.IsNullOrWhiteSpace(userMessage) || catalog.Count == 0)
-        {
-            return Array.Empty<ProposedAction>();
-        }
-
-        var lower = userMessage.ToLowerInvariant();
-        var suggestions = new List<ProposedAction>();
-
-        if (ContainsAny(lower, "nettoyage", "clean"))
-        {
-            AddIfAvailable(suggestions, catalog, "quick_clean");
-            AddIfAvailable(suggestions, catalog, "system_temp_clean");
-        }
-
-        if (ContainsAny(lower, "navigateur", "browser"))
-        {
-            AddIfAvailable(suggestions, catalog, "browser_soft_clean");
-        }
-
-        if (ContainsAny(lower, "analyse", "scan", "diagnostic", "statut"))
-        {
-            AddIfAvailable(suggestions, catalog, "status");
-            AddIfAvailable(suggestions, catalog, "quick_scan");
-        }
-
-        if (ContainsAny(lower, "mise à jour", "update"))
-        {
-            AddIfAvailable(suggestions, catalog, "apps_update_all");
-            AddIfAvailable(suggestions, catalog, "windows_update");
-        }
-
-        return suggestions.Count == 0
-            ? Array.Empty<ProposedAction>()
-            : suggestions;
-    }
-
-    private static void AddIfAvailable(ICollection<ProposedAction> list, IReadOnlyList<AssistantActionCatalogItem> catalog, string id)
-    {
-        var item = catalog.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
-        if (item is null)
-        {
-            return;
-        }
-
-        var warning = item.RequiresAdmin
-            ? "Admin requis"
-            : item.DestructiveFlag ? "Destructif" : null;
-
-        list.Add(new ProposedAction(item.Id, item.Label, null, true, warning));
-    }
-
     private static string FormatStale(bool isStale) => isStale ? " (stale)" : string.Empty;
-
-    private static bool ContainsAny(string text, params string[] keywords)
-        => keywords.Any(keyword => text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
 }
