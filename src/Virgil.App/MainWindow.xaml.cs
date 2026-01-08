@@ -52,7 +52,10 @@ namespace Virgil.App
                 new DiagnosticService(),
                 new SpecialService(reloader, confirmationPrompt, uiChat),
                 uiChat);
-            var assistantProvider = new RuleBasedAssistantProvider();
+            var assistantProvider = new OllamaAssistantProvider(
+                _settingsService.Settings.OllamaBaseUrl,
+                _settingsService.Settings.OllamaModel,
+                TimeSpan.FromSeconds(_settingsService.Settings.OllamaTimeoutSeconds));
             var assistantService = new AssistantService(assistantProvider);
 
             var mainVm = new MainViewModel(
