@@ -198,8 +198,8 @@ public partial class VirgilAvatarControl : UserControl
     private double ComputeNextBlinkTime()
     {
         var sanitizedStress = TelemetrySanitizer.Clamp01(_smoothedStress, 0d);
-        var baseDelay = 2.9 - (sanitizedStress * 1.3) - (IsWorking ? 0.35 : 0d);
-        return Math.Max(0.9, baseDelay) + (_random.NextDouble() * 0.9);
+        var baseDelay = 2.7 - (sanitizedStress * 1.5) + (IsWorking ? 0.65 : 0d);
+        return Math.Max(0.8, baseDelay) + (_random.NextDouble() * 0.9);
     }
 
     private void UpdateGlowIntensity()
@@ -237,7 +237,7 @@ public partial class VirgilAvatarControl : UserControl
         }
 
         var blinkScale = _isBlinking
-            ? 1 - 0.9 * Math.Sin(Math.Min(_blinkProgress, 1) * Math.PI)
+            ? 1 - 0.85 * Math.Sin(Math.Min(_blinkProgress, 1) * Math.PI)
             : 1.0;
 
         var leftBaseOpen = TelemetrySanitizer.OrFallback(0.35 + (0.65 * _expressionState.EyeOpenLeft), 0.35);

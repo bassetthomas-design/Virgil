@@ -30,13 +30,22 @@ public sealed class ExpressionEngine
     {
         stress = ValueSanitizer.Sanitize01(stress, 0d);
 
-        UpdateGaze(deltaSeconds, stress, isWorking);
+        var mood = ResolveMood(stress, isWorking);
+
+        UpdateGaze(deltaSeconds, stress, isWorking, mood);
         UpdateAsymmetry(deltaSeconds, isWorking);
         UpdateWink(deltaSeconds);
 
-        var mood = ResolveMood(stress, isWorking);
         var squint = ComputeSquint(stress, isWorking, mood);
-        var baseOpen = Math.Clamp(1d - (stress * 0.32) - (isWorking ? 0.06 : 0d), 0.55, 1d);
+        var moodOpenOffset = mood switch
+        {
+            ExpressionMood.Happy => 0.05,
+            ExpressionMood.Focused => -0.02,
+            ExpressionMood.Concerned => -0.05,
+            ExpressionMood.Annoyed => -0.1,
+            _ => 0
+        };
+        var baseOpen = Math.Clamp(1d - (stress * 0.28) - (isWorking ? 0.04 : 0d) + moodOpenOffset, 0.55, 1d);
 
         var leftOpen = Math.Clamp(baseOpen + _asymmetry, 0.3, 1d);
         var rightOpen = Math.Clamp(baseOpen - _asymmetry, 0.3, 1d);
@@ -63,7 +72,15 @@ public sealed class ExpressionEngine
             squint,
             mood);
 
-        var smoothingTime = 0.2 + (stress * 0.35) + (isWorking ? 0.05 : 0d);
+        var moodSmoothing = mood switch
+        {
+            ExpressionMood.Happy => 0.05,
+            ExpressionMood.Focused => 0.08,
+            ExpressionMood.Concerned => 0.12,
+            ExpressionMood.Annoyed => 0.16,
+            _ => 0
+        };
+        var smoothingTime = 0.2 + (stress * 0.35) + (isWorking ? 0.05 : 0d) + moodSmoothing;
         var t = 1d - Math.Exp(-deltaSeconds / smoothingTime);
 
         _current = new ExpressionState(
@@ -77,7 +94,7 @@ public sealed class ExpressionEngine
         return _current;
     }
 
-    private void UpdateGaze(double deltaSeconds, double stress, bool isWorking)
+    private void UpdateGaze(double deltaSeconds, double stress, bool isWorking, ExpressionMood mood)
     {
         _timeToNextGazeShift -= deltaSeconds;
         if (_timeToNextGazeShift > 0)
@@ -86,7 +103,14 @@ public sealed class ExpressionEngine
         }
 
         var baseRange = isWorking ? 0.55 : 0.45;
-        baseRange -= stress * 0.3;
+        baseRange -= stress * 0.35;
+        baseRange *= mood switch
+        {
+            ExpressionMood.Happy => 1.05,
+            ExpressionMood.Concerned => 0.85,
+            ExpressionMood.Annoyed => 0.7,
+            _ => 1d
+        };
         baseRange = Math.Clamp(baseRange, 0.18, 0.6);
 
         var yRange = baseRange * 0.55;
