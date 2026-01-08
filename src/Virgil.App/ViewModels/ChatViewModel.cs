@@ -11,6 +11,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Virgil.App.Chat;
 using Virgil.App.Commands;
+using Virgil.App.Models;
 using Virgil.Services.Assistant;
 
 namespace Virgil.App.ViewModels
