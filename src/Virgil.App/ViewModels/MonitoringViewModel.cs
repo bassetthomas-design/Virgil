@@ -402,6 +402,18 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private bool _isKeyMetricStale;
+        public bool IsKeyMetricStale
+        {
+            get => _isKeyMetricStale;
+            private set
+            {
+                if (_isKeyMetricStale == value) return;
+                _isKeyMetricStale = value;
+                OnPropertyChanged();
+            }
+        }
+
         private DateTime? _diskTempLastUpdatedUtc;
         public DateTime? DiskTempLastUpdatedUtc
         {
@@ -532,6 +544,8 @@ namespace Virgil.App.ViewModels
                 DiskTempLastUpdatedUtc = now;
             }
 
+            UpdateKeyMetricStaleness();
+
 #if DEBUG
             if (UseDebugStress)
             {
@@ -655,6 +669,8 @@ namespace Virgil.App.ViewModels
                 DiskTempLastUpdatedUtc = now;
             }
 
+            UpdateKeyMetricStaleness();
+
 #if DEBUG
             if (UseDebugStress)
             {
@@ -688,6 +704,17 @@ namespace Virgil.App.ViewModels
         {
             var stats = new SystemStats(cpu, gpu, ram, disk, cpuTemp, gpuTemp, diskTemp);
             CurrentMood = MoodEngine.FromStats(stats);
+        }
+
+        private void UpdateKeyMetricStaleness()
+        {
+            IsKeyMetricStale = CpuUsageIsStale
+                || GpuUsageIsStale
+                || RamUsageIsStale
+                || DiskUsageIsStale
+                || CpuTempIsStale
+                || GpuTempIsStale
+                || DiskTempIsStale;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

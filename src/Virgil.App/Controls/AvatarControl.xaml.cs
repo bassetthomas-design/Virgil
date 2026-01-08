@@ -36,6 +36,18 @@ public partial class AvatarControl : UserControl
         set => SetValue(IsWorkingProperty, value);
     }
 
+    public static readonly DependencyProperty IsSignalWeakProperty = DependencyProperty.Register(
+        nameof(IsSignalWeak),
+        typeof(bool),
+        typeof(AvatarControl),
+        new PropertyMetadata(false));
+
+    public bool IsSignalWeak
+    {
+        get => (bool)GetValue(IsSignalWeakProperty);
+        set => SetValue(IsSignalWeakProperty, value);
+    }
+
     private static void OnUseNewAvatarChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is AvatarControl control)
