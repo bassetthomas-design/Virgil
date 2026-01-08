@@ -69,12 +69,12 @@ public partial class AvatarControl : UserControl
 
     private void UpdateAvatarVisibility()
     {
-        if (VectorAvatar is null || LegacyAvatar is null)
+        if (VectorAvatar is null)
         {
             return;
         }
 
-        VectorAvatar.Visibility = UseNewAvatar ? Visibility.Visible : Visibility.Collapsed;
-        LegacyAvatar.Visibility = UseNewAvatar ? Visibility.Collapsed : Visibility.Visible;
+        // LEGACY_DISABLED: legacy PNG avatar is no longer instantiated.
+        VectorAvatar.Visibility = Visibility.Visible;
     }
 }
