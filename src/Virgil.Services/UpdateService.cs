@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Virgil.Core.Models;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Network;
 
@@ -66,13 +67,29 @@ public sealed class UpdateService : IUpdateService
 
     public async Task<ActionExecutionResult> RunWindowsUpdateAsync(CancellationToken ct = default)
     {
-        var sb = new StringBuilder();
         try
         {
-            sb.AppendLine(await _windows.StartScanAsync().ConfigureAwait(false));
-            sb.AppendLine(await _windows.StartDownloadAsync().ConfigureAwait(false));
-            sb.AppendLine(await _windows.StartInstallAsync().ConfigureAwait(false));
-            return ActionExecutionResult.Ok("Windows Update exécuté", sb.ToString());
+            var scanResult = await _windows.StartScanAsync().ConfigureAwait(false);
+            var downloadResult = await _windows.StartDownloadAsync().ConfigureAwait(false);
+            var installResult = await _windows.StartInstallAsync().ConfigureAwait(false);
+
+            var steps = new List<ActionStepResult>();
+            var outcomes = new List<WindowsUpdateStepOutcome>();
+
+            outcomes.Add(BuildWindowsUpdateOutcome("Scan Windows Update", scanResult, steps));
+            outcomes.Add(BuildWindowsUpdateOutcome("Téléchargement Windows Update", downloadResult, steps));
+            outcomes.Add(BuildWindowsUpdateOutcome("Installation Windows Update", installResult, steps));
+
+            var globalStatus = DeriveGlobalStatus(outcomes);
+            var summary = BuildWindowsUpdateSummary(globalStatus, outcomes);
+
+            return globalStatus switch
+            {
+                ActionResultStatus.Success => ActionExecutionResult.Ok("Windows Update", summary, steps),
+                ActionResultStatus.PartialSuccess => ActionExecutionResult.Partial("Windows Update", summary, steps),
+                ActionResultStatus.Failed => ActionExecutionResult.Failure("Windows Update", summary, steps),
+                _ => ActionExecutionResult.Failure("Windows Update", summary, steps)
+            };
         }
         catch (Exception ex)
         {
@@ -81,7 +98,7 @@ public sealed class UpdateService : IUpdateService
     }
 
     public Task<ActionExecutionResult> CheckGpuDriversAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification des pilotes GPU", "Service UpdateService indisponible"));
+        => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification des pilotes GPU", "Vérification des drivers GPU non disponible (service absent)."));
 
     private static string BuildAutomaticUpdateMessage(AutomaticUpdateSnapshot snapshot)
     {
@@ -140,6 +157,112 @@ public sealed class UpdateService : IUpdateService
 
         return sb.ToString().Trim();
     }
+
+    private sealed record WindowsUpdateStepOutcome(ActionResultStatus Status, string Summary, bool RebootRequired);
+
+    private sealed record WindowsUpdateExitCodeInfo(ActionResultStatus Status, string Message, bool RebootRequired);
+
+    private static readonly Dictionary<int, WindowsUpdateExitCodeInfo> WindowsUpdateExitCodes = new()
+    {
+        [0] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Système à jour.", false),
+        [3010] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Mise à jour appliquée, redémarrage requis.", true),
+        [1641] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Redémarrage en cours après mise à jour.", true),
+        [2359302] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Mise à jour déjà installée.", false),
+        [1602] = new WindowsUpdateExitCodeInfo(ActionResultStatus.PartialSuccess, "Opération annulée par l’utilisateur.", false),
+        [1618] = new WindowsUpdateExitCodeInfo(ActionResultStatus.PartialSuccess, "Une autre installation est déjà en cours.", false),
+        [5] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Failed, "Accès refusé (droits administrateur requis).", false),
+        [87] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Failed, "Paramètre invalide.", false),
+        [1603] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Failed, "Erreur fatale pendant l’installation.", false)
+    };
+
+    private static WindowsUpdateStepOutcome BuildWindowsUpdateOutcome(
+        string stepLabel,
+        Core.Services.WindowsUpdateCommandResult commandResult,
+        ICollection<ActionStepResult> steps)
+    {
+        var outcome = EvaluateWindowsUpdateResult(commandResult);
+        var summary = outcome.Summary;
+        var details = commandResult.Output?.Trim();
+        if (!string.IsNullOrWhiteSpace(details))
+        {
+            summary = $"{summary} {details}";
+        }
+
+        steps.Add(new ActionStepResult(outcome.Status, stepLabel, summary));
+        return outcome;
+    }
+
+    private static WindowsUpdateStepOutcome EvaluateWindowsUpdateResult(Core.Services.WindowsUpdateCommandResult commandResult)
+    {
+        if (commandResult.ExitCode is null)
+        {
+            return new WindowsUpdateStepOutcome(
+                ActionResultStatus.Failed,
+                "Impossible de lancer Windows Update (droits administrateur requis ou service indisponible).",
+                false);
+        }
+
+        if (WindowsUpdateExitCodes.TryGetValue(commandResult.ExitCode.Value, out var info))
+        {
+            return new WindowsUpdateStepOutcome(info.Status, info.Message, info.RebootRequired);
+        }
+
+        return new WindowsUpdateStepOutcome(
+            ActionResultStatus.Failed,
+            "Résultat inattendu de Windows Update.",
+            false);
+    }
+
+    private static ActionResultStatus DeriveGlobalStatus(IEnumerable<WindowsUpdateStepOutcome> outcomes)
+    {
+        var hasFailed = false;
+        var hasPartial = false;
+
+        foreach (var outcome in outcomes)
+        {
+            if (outcome.Status == ActionResultStatus.Failed)
+            {
+                hasFailed = true;
+            }
+            else if (outcome.Status == ActionResultStatus.PartialSuccess)
+            {
+                hasPartial = true;
+            }
+        }
+
+        if (hasFailed)
+        {
+            return ActionResultStatus.Failed;
+        }
+
+        if (hasPartial)
+        {
+            return ActionResultStatus.PartialSuccess;
+        }
+
+        return ActionResultStatus.Success;
+    }
+
+    private static string BuildWindowsUpdateSummary(ActionResultStatus globalStatus, IEnumerable<WindowsUpdateStepOutcome> outcomes)
+    {
+        if (globalStatus == ActionResultStatus.Success)
+        {
+            var rebootRequired = false;
+            foreach (var outcome in outcomes)
+            {
+                rebootRequired |= outcome.RebootRequired;
+            }
+
+            return rebootRequired
+                ? "Mise à jour appliquée, redémarrage requis."
+                : "Système à jour.";
+        }
+
+        return globalStatus == ActionResultStatus.PartialSuccess
+            ? "Windows Update terminé partiellement."
+            : "Windows Update a échoué.";
+    }
+
 }
 
 public sealed class RuntimeAutomaticUpdateDataSource : IAutomaticUpdateDataSource
@@ -172,7 +295,7 @@ public sealed class RuntimeAutomaticUpdateDataSource : IAutomaticUpdateDataSourc
 
         try
         {
-            scanDetails = await _windows.StartScanAsync().ConfigureAwait(false);
+            scanDetails = (await _windows.StartScanAsync().ConfigureAwait(false)).GetDisplayMessage();
             if (scanDetails.IndexOf("update", StringComparison.OrdinalIgnoreCase) >= 0
                 || scanDetails.IndexOf("kb", StringComparison.OrdinalIgnoreCase) >= 0)
             {

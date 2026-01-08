@@ -25,7 +25,7 @@ public sealed class SpecialService : ISpecialService
     }
 
     public Task<ActionExecutionResult> RamboModeAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Mode RAMBO", "Service SpecialService indisponible"));
+        => Task.FromResult(ActionExecutionResult.NotImplemented("Mode RAMBO", "Mode Rambo non encore implémenté."));
 
     public async Task<ActionExecutionResult> ReloadConfigurationAsync(CancellationToken ct = default)
     {
