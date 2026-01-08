@@ -164,8 +164,8 @@ namespace Virgil.App.ViewModels
             {
                 if (_assistantService is not null && _assistantContextProvider is not null && _actionExecutor is not null)
                 {
-                    var context = _assistantContextProvider();
-                    var reply = await _assistantService.AskAsync(message, context).ConfigureAwait(false);
+                    var assistantContext = _assistantContextProvider();
+                    var reply = await _assistantService.AskAsync(message, assistantContext).ConfigureAwait(false);
                     AppendAssistantReply(reply);
                     return;
                 }
