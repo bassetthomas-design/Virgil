@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using Virgil.Core;
+using Virgil.App.Utils;
 using Virgil.App.Views;
 
 namespace Virgil.App
