@@ -1,11 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using Virgil.App.ViewModels;
@@ -52,10 +51,10 @@ namespace Virgil.App.Views
 
         private Task OnSnapRequestedAsync(int durationMs)
         {
-            return PlaySnapAsync(Math.Max(600, Math.Min(durationMs, 900)));
+            return SnapWithParticlesAsync(Math.Max(700, Math.Min(durationMs, 1200)));
         }
 
-        private async Task PlaySnapAsync(int durationMs)
+        private async Task SnapWithParticlesAsync(int durationMs)
         {
             if (ChatScroll is null || SnapOverlay is null || SnapImage is null || SnapDustLayer is null)
             {
@@ -78,110 +77,172 @@ namespace Virgil.App.Views
             SnapImage.Height = height;
 
             SnapOverlay.Visibility = Visibility.Visible;
+            ChatScroll.Opacity = 0;
 
             SnapDustLayer.Children.Clear();
 
-            var blur = new BlurEffect { Radius = 0 };
-            SnapImage.Effect = blur;
-            var scale = new ScaleTransform(1, 1);
-            SnapImage.RenderTransformOrigin = new Point(0.5, 0.5);
-            SnapImage.RenderTransform = scale;
             SnapImage.Opacity = 1;
 
-            var duration = TimeSpan.FromMilliseconds(durationMs);
-            var storyboard = new Storyboard { Duration = duration };
-
-            var opacityAnimation = new DoubleAnimation(1, 0, duration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(opacityAnimation, SnapImage);
-            Storyboard.SetTargetProperty(opacityAnimation, new PropertyPath(UIElement.OpacityProperty));
-            storyboard.Children.Add(opacityAnimation);
-
-            var blurAnimation = new DoubleAnimation(0, 10, duration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(blurAnimation, blur);
-            Storyboard.SetTargetProperty(blurAnimation, new PropertyPath(BlurEffect.RadiusProperty));
-            storyboard.Children.Add(blurAnimation);
-
-            var scaleXAnimation = new DoubleAnimation(1, 0.98, duration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(scaleXAnimation, scale);
-            Storyboard.SetTargetProperty(scaleXAnimation, new PropertyPath(ScaleTransform.ScaleXProperty));
-            storyboard.Children.Add(scaleXAnimation);
-
-            var scaleYAnimation = new DoubleAnimation(1, 0.98, duration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(scaleYAnimation, scale);
-            Storyboard.SetTargetProperty(scaleYAnimation, new PropertyPath(ScaleTransform.ScaleYProperty));
-            storyboard.Children.Add(scaleYAnimation);
-
-            AddDustParticles(width, height, duration, storyboard);
-
             var tcs = new TaskCompletionSource<bool>();
-            void OnCompleted(object? sender, EventArgs args)
+            var particles = CreateParticles(rtb, width, height);
+            var duration = TimeSpan.FromMilliseconds(durationMs);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var lastTick = stopwatch.Elapsed;
+            var gravity = _snapRandom.Next(250, 451);
+
+            void OnRendering(object? sender, EventArgs args)
             {
-                storyboard.Completed -= OnCompleted;
-                tcs.TrySetResult(true);
+                var elapsed = stopwatch.Elapsed;
+                var delta = elapsed - lastTick;
+                lastTick = elapsed;
+
+                double dt = Math.Max(0.0, delta.TotalSeconds);
+                double progress = Math.Min(1.0, elapsed.TotalMilliseconds / durationMs);
+                double opacity = 1.0 - progress;
+
+                SnapImage.Opacity = opacity;
+
+                foreach (var particle in particles)
+                {
+                    particle.Update(dt, gravity, progress);
+                }
+
+                if (elapsed >= duration)
+                {
+                    CompositionTarget.Rendering -= OnRendering;
+                    tcs.TrySetResult(true);
+                }
             }
 
-            storyboard.Completed += OnCompleted;
-            storyboard.Begin();
+            CompositionTarget.Rendering += OnRendering;
 
             await tcs.Task;
 
             SnapOverlay.Visibility = Visibility.Collapsed;
+            ChatScroll.Opacity = 1;
             SnapImage.Source = null;
-            SnapImage.Effect = null;
             SnapDustLayer.Children.Clear();
         }
 
-        private void AddDustParticles(int width, int height, TimeSpan duration, Storyboard storyboard)
+        private List<DustParticle> CreateParticles(RenderTargetBitmap rtb, int width, int height)
         {
-            int particleCount = _snapRandom.Next(80, 161);
+            int particleCount = Math.Clamp((int)(width * height / 1400.0), 180, 450);
+            particleCount = Math.Min(particleCount, 600);
+
+            int stride = width * 4;
+            var pixels = new byte[height * stride];
+            rtb.CopyPixels(pixels, stride, 0);
+
+            int gridColumns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(particleCount * (width / (double)Math.Max(1, height)))));
+            int gridRows = Math.Max(1, (int)Math.Ceiling(particleCount / (double)gridColumns));
+            double cellWidth = width / (double)gridColumns;
+            double cellHeight = height / (double)gridRows;
+
+            var particles = new List<DustParticle>(particleCount);
+
             for (int i = 0; i < particleCount; i++)
             {
-                double size = _snapRandom.Next(2, 5);
-                double left = _snapRandom.NextDouble() * Math.Max(1, width - size);
-                double top = _snapRandom.NextDouble() * Math.Max(1, height - size);
+                int col = i % gridColumns;
+                int row = i / gridColumns;
+                double x = Math.Min(width - 1, col * cellWidth + _snapRandom.NextDouble() * cellWidth);
+                double y = Math.Min(height - 1, row * cellHeight + _snapRandom.NextDouble() * cellHeight);
 
-                var ellipse = new Ellipse
+                int px = Math.Clamp((int)x, 0, width - 1);
+                int py = Math.Clamp((int)y, 0, height - 1);
+                int index = py * stride + px * 4;
+
+                byte b = pixels[index];
+                byte g = pixels[index + 1];
+                byte r = pixels[index + 2];
+                byte a = pixels[index + 3];
+
+                if (a > 0)
+                {
+                    r = (byte)Math.Min(255, r * 255 / a);
+                    g = (byte)Math.Min(255, g * 255 / a);
+                    b = (byte)Math.Min(255, b * 255 / a);
+                }
+
+                double size = _snapRandom.Next(2, 7);
+                double baseOpacity = 0.4 + _snapRandom.NextDouble() * 0.5;
+                double vx = _snapRandom.NextDouble() * 240 - 120;
+                double vy = _snapRandom.NextDouble() * 160 - 140;
+                double drag = _snapRandom.NextDouble() * 0.02 + 0.97;
+                double rotationSpeed = _snapRandom.NextDouble() * 120 - 60;
+
+                var rect = new Rectangle
                 {
                     Width = size,
                     Height = size,
-                    Fill = new SolidColorBrush(Colors.White),
-                    Opacity = 0.6
+                    Fill = new SolidColorBrush(Color.FromArgb(Math.Max((byte)40, a), r, g, b)),
+                    Opacity = baseOpacity,
+                    RadiusX = 0.5,
+                    RadiusY = 0.5
                 };
 
-                Canvas.SetLeft(ellipse, left);
-                Canvas.SetTop(ellipse, top);
+                var scale = new ScaleTransform(1, 1);
+                var rotate = new RotateTransform(_snapRandom.NextDouble() * 360);
+                var translate = new TranslateTransform(x, y);
+                var group = new TransformGroup();
+                group.Children.Add(scale);
+                group.Children.Add(rotate);
+                group.Children.Add(translate);
+                rect.RenderTransform = group;
 
-                var translate = new TranslateTransform();
-                ellipse.RenderTransform = translate;
+                SnapDustLayer.Children.Add(rect);
+                particles.Add(new DustParticle(rect, scale, rotate, translate, baseOpacity, x, y, vx, vy, drag, rotationSpeed));
+            }
 
-                SnapDustLayer.Children.Add(ellipse);
+            return particles;
+        }
 
-                var dustOpacity = new DoubleAnimation(0.6, 0, duration);
-                Storyboard.SetTarget(dustOpacity, ellipse);
-                Storyboard.SetTargetProperty(dustOpacity, new PropertyPath(UIElement.OpacityProperty));
-                storyboard.Children.Add(dustOpacity);
+        private sealed class DustParticle
+        {
+            private readonly Rectangle _element;
+            private readonly ScaleTransform _scale;
+            private readonly RotateTransform _rotate;
+            private readonly TranslateTransform _translate;
+            private readonly double _baseOpacity;
+            private readonly double _drag;
+            private readonly double _rotationSpeed;
 
-                var moveX = new DoubleAnimation(0, _snapRandom.NextDouble() * 12 - 6, duration);
-                Storyboard.SetTarget(moveX, translate);
-                Storyboard.SetTargetProperty(moveX, new PropertyPath(TranslateTransform.XProperty));
-                storyboard.Children.Add(moveX);
+            private double _x;
+            private double _y;
+            private double _vx;
+            private double _vy;
+            private double _rotation;
 
-                var moveY = new DoubleAnimation(0, _snapRandom.NextDouble() * 16 - 8, duration);
-                Storyboard.SetTarget(moveY, translate);
-                Storyboard.SetTargetProperty(moveY, new PropertyPath(TranslateTransform.YProperty));
-                storyboard.Children.Add(moveY);
+            public DustParticle(Rectangle element, ScaleTransform scale, RotateTransform rotate, TranslateTransform translate, double baseOpacity, double x, double y, double vx, double vy, double drag, double rotationSpeed)
+            {
+                _element = element;
+                _scale = scale;
+                _rotate = rotate;
+                _translate = translate;
+                _baseOpacity = baseOpacity;
+                _x = x;
+                _y = y;
+                _vx = vx;
+                _vy = vy;
+                _drag = drag;
+                _rotationSpeed = rotationSpeed;
+                _rotation = _rotate.Angle;
+            }
+
+            public void Update(double dt, double gravity, double progress)
+            {
+                _vx *= _drag;
+                _vy = (_vy * _drag) + gravity * dt;
+                _x += _vx * dt;
+                _y += _vy * dt;
+                _rotation += _rotationSpeed * dt;
+
+                double scale = 1.0 - 0.2 * progress;
+                _scale.ScaleX = scale;
+                _scale.ScaleY = scale;
+                _rotate.Angle = _rotation;
+                _translate.X = _x;
+                _translate.Y = _y;
+                _element.Opacity = _baseOpacity * (1.0 - progress);
             }
         }
     }
