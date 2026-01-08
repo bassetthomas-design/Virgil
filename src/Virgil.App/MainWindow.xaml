@@ -37,18 +37,18 @@
                 <StackPanel>
                     <TextBlock Text="CPU" Foreground="{DynamicResource App.SubtleBrush}"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="10" Value="{Binding Monitoring.CpuUsage, Mode=OneWay}"/>
-                    <TextBlock Text="{Binding Monitoring.CpuTemp, Converter={StaticResource DoubleToDisplayString}, ConverterParameter=Temp: {0}°C}"/>
+                    <TextBlock Text="{Binding Monitoring.CpuTempDisplay}"/>
 
                     <TextBlock Text="GPU" Foreground="{DynamicResource App.SubtleBrush}" Margin="0,8,0,0"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="10" Value="{Binding Monitoring.GpuUsage, Mode=OneWay}"/>
-                    <TextBlock Text="{Binding Monitoring.GpuTemp, Converter={StaticResource DoubleToDisplayString}, ConverterParameter=Temp: {0}°C}"/>
+                    <TextBlock Text="{Binding Monitoring.GpuTempDisplay}"/>
 
                     <TextBlock Text="RAM" Foreground="{DynamicResource App.SubtleBrush}" Margin="0,8,0,0"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="10" Value="{Binding Monitoring.RamUsage, Mode=OneWay}"/>
 
                     <TextBlock Text="DISQUE" Foreground="{DynamicResource App.SubtleBrush}" Margin="0,8,0,0"/>
                     <ProgressBar Minimum="0" Maximum="100" Height="10" Value="{Binding Monitoring.DiskUsage, Mode=OneWay}"/>
-                    <TextBlock Text="{Binding Monitoring.DiskTemp, Converter={StaticResource DoubleToDisplayString}, ConverterParameter=Temp: {0}°C}"/>
+                    <TextBlock Text="{Binding Monitoring.DiskTempDisplay}"/>
                 </StackPanel>
             </GroupBox>
         </StackPanel>
