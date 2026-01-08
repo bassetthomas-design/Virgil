@@ -5,6 +5,7 @@ using System.Threading;
 using Virgil.App.Controls;
 using Virgil.App.Models;
 using Virgil.App.Services;
+using Virgil.App.Utils;
 using Virgil.Core;
 using Virgil.Domain;
 using MonitoringService = Virgil.App.Services.MonitoringService;
@@ -138,6 +139,7 @@ namespace Virgil.App.ViewModels
                 if (Math.Abs(_cpuUsage - value) < 0.1) return;
                 _cpuUsage = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(CpuUsageText));
             }
         }
 
@@ -153,6 +155,21 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private DateTime? _cpuUsageLastUpdatedUtc;
+        public DateTime? CpuUsageLastUpdatedUtc
+        {
+            get => _cpuUsageLastUpdatedUtc;
+            private set
+            {
+                if (_cpuUsageLastUpdatedUtc == value) return;
+                _cpuUsageLastUpdatedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CpuUsageText));
+            }
+        }
+
+        public string CpuUsageText => FormatMetric(CpuUsage, CpuUsageLastUpdatedUtc, "%");
+
         private double _gpuUsage;
         public double GpuUsage
         {
@@ -162,6 +179,7 @@ namespace Virgil.App.ViewModels
                 if (Math.Abs(_gpuUsage - value) < 0.1) return;
                 _gpuUsage = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(GpuUsageText));
             }
         }
 
@@ -177,6 +195,21 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private DateTime? _gpuUsageLastUpdatedUtc;
+        public DateTime? GpuUsageLastUpdatedUtc
+        {
+            get => _gpuUsageLastUpdatedUtc;
+            private set
+            {
+                if (_gpuUsageLastUpdatedUtc == value) return;
+                _gpuUsageLastUpdatedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(GpuUsageText));
+            }
+        }
+
+        public string GpuUsageText => FormatMetric(GpuUsage, GpuUsageLastUpdatedUtc, "%");
+
         private double _ramUsage;
         public double RamUsage
         {
@@ -186,6 +219,7 @@ namespace Virgil.App.ViewModels
                 if (Math.Abs(_ramUsage - value) < 0.1) return;
                 _ramUsage = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(RamUsageText));
             }
         }
 
@@ -201,6 +235,21 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private DateTime? _ramUsageLastUpdatedUtc;
+        public DateTime? RamUsageLastUpdatedUtc
+        {
+            get => _ramUsageLastUpdatedUtc;
+            private set
+            {
+                if (_ramUsageLastUpdatedUtc == value) return;
+                _ramUsageLastUpdatedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(RamUsageText));
+            }
+        }
+
+        public string RamUsageText => FormatMetric(RamUsage, RamUsageLastUpdatedUtc, "%");
+
         private double _diskUsage;
         public double DiskUsage
         {
@@ -210,6 +259,7 @@ namespace Virgil.App.ViewModels
                 if (Math.Abs(_diskUsage - value) < 0.1) return;
                 _diskUsage = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(DiskUsageText));
             }
         }
 
@@ -225,6 +275,21 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private DateTime? _diskUsageLastUpdatedUtc;
+        public DateTime? DiskUsageLastUpdatedUtc
+        {
+            get => _diskUsageLastUpdatedUtc;
+            private set
+            {
+                if (_diskUsageLastUpdatedUtc == value) return;
+                _diskUsageLastUpdatedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DiskUsageText));
+            }
+        }
+
+        public string DiskUsageText => FormatMetric(DiskUsage, DiskUsageLastUpdatedUtc, "%");
+
         private double _cpuTemp;
         public double CpuTemp
         {
@@ -234,6 +299,8 @@ namespace Virgil.App.ViewModels
                 if (Math.Abs(_cpuTemp - value) < 0.1) return;
                 _cpuTemp = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(CpuTempText));
+                OnPropertyChanged(nameof(CpuTempDisplay));
             }
         }
 
@@ -249,6 +316,23 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private DateTime? _cpuTempLastUpdatedUtc;
+        public DateTime? CpuTempLastUpdatedUtc
+        {
+            get => _cpuTempLastUpdatedUtc;
+            private set
+            {
+                if (_cpuTempLastUpdatedUtc == value) return;
+                _cpuTempLastUpdatedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CpuTempText));
+                OnPropertyChanged(nameof(CpuTempDisplay));
+            }
+        }
+
+        public string CpuTempText => FormatMetric(CpuTemp, CpuTempLastUpdatedUtc, "°C");
+        public string CpuTempDisplay => $"Temp: {CpuTempText}";
+
         private double _gpuTemp;
         public double GpuTemp
         {
@@ -258,6 +342,8 @@ namespace Virgil.App.ViewModels
                 if (Math.Abs(_gpuTemp - value) < 0.1) return;
                 _gpuTemp = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(GpuTempText));
+                OnPropertyChanged(nameof(GpuTempDisplay));
             }
         }
 
@@ -273,6 +359,23 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private DateTime? _gpuTempLastUpdatedUtc;
+        public DateTime? GpuTempLastUpdatedUtc
+        {
+            get => _gpuTempLastUpdatedUtc;
+            private set
+            {
+                if (_gpuTempLastUpdatedUtc == value) return;
+                _gpuTempLastUpdatedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(GpuTempText));
+                OnPropertyChanged(nameof(GpuTempDisplay));
+            }
+        }
+
+        public string GpuTempText => FormatMetric(GpuTemp, GpuTempLastUpdatedUtc, "°C");
+        public string GpuTempDisplay => $"Temp: {GpuTempText}";
+
         private double _diskTemp;
         public double DiskTemp
         {
@@ -282,6 +385,8 @@ namespace Virgil.App.ViewModels
                 if (Math.Abs(_diskTemp - value) < 0.1) return;
                 _diskTemp = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(DiskTempText));
+                OnPropertyChanged(nameof(DiskTempDisplay));
             }
         }
 
@@ -296,6 +401,23 @@ namespace Virgil.App.ViewModels
                 OnPropertyChanged();
             }
         }
+
+        private DateTime? _diskTempLastUpdatedUtc;
+        public DateTime? DiskTempLastUpdatedUtc
+        {
+            get => _diskTempLastUpdatedUtc;
+            private set
+            {
+                if (_diskTempLastUpdatedUtc == value) return;
+                _diskTempLastUpdatedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DiskTempText));
+                OnPropertyChanged(nameof(DiskTempDisplay));
+            }
+        }
+
+        public string DiskTempText => FormatMetric(DiskTemp, DiskTempLastUpdatedUtc, "°C");
+        public string DiskTempDisplay => $"Temp: {DiskTempText}";
 
         private void OnSystemMetricsUpdated(object? sender, SystemMonitorSnapshot snapshot)
             => DispatchMetrics(() => ApplySnapshot(snapshot));
@@ -318,6 +440,7 @@ namespace Virgil.App.ViewModels
 
         private void ApplySnapshot(SystemMonitorSnapshot snapshot)
         {
+            var now = DateTime.UtcNow;
             var cpuUsage = snapshot.CpuUsage;
             if (IsInvalid(cpuUsage))
             {
@@ -328,6 +451,7 @@ namespace Virgil.App.ViewModels
             {
                 CpuUsage = cpuUsage;
                 CpuUsageIsStale = false;
+                CpuUsageLastUpdatedUtc = now;
             }
 
             var gpuUsage = snapshot.GpuUsage;
@@ -340,6 +464,7 @@ namespace Virgil.App.ViewModels
             {
                 GpuUsage = gpuUsage;
                 GpuUsageIsStale = false;
+                GpuUsageLastUpdatedUtc = now;
             }
 
             var ramUsage = snapshot.RamUsage;
@@ -352,6 +477,7 @@ namespace Virgil.App.ViewModels
             {
                 RamUsage = ramUsage;
                 RamUsageIsStale = false;
+                RamUsageLastUpdatedUtc = now;
             }
 
             var diskUsage = snapshot.DiskUsage;
@@ -364,6 +490,7 @@ namespace Virgil.App.ViewModels
             {
                 DiskUsage = diskUsage;
                 DiskUsageIsStale = false;
+                DiskUsageLastUpdatedUtc = now;
             }
 
             var cpuTemp = snapshot.CpuTemperature;
@@ -376,6 +503,7 @@ namespace Virgil.App.ViewModels
             {
                 CpuTemp = cpuTemp;
                 CpuTempIsStale = false;
+                CpuTempLastUpdatedUtc = now;
             }
 
             var gpuTemp = snapshot.GpuTemperature;
@@ -388,6 +516,7 @@ namespace Virgil.App.ViewModels
             {
                 GpuTemp = gpuTemp;
                 GpuTempIsStale = false;
+                GpuTempLastUpdatedUtc = now;
             }
 
             var diskTemp = snapshot.DiskTemperature;
@@ -400,6 +529,7 @@ namespace Virgil.App.ViewModels
             {
                 DiskTemp = diskTemp;
                 DiskTempIsStale = false;
+                DiskTempLastUpdatedUtc = now;
             }
 
 #if DEBUG
@@ -433,6 +563,7 @@ namespace Virgil.App.ViewModels
 
         private void ApplySnapshot(MetricsEventArgs metrics)
         {
+            var now = DateTime.UtcNow;
             var cpuUsage = metrics.CpuUsage;
             if (IsInvalid(cpuUsage))
             {
@@ -443,6 +574,7 @@ namespace Virgil.App.ViewModels
             {
                 CpuUsage = cpuUsage;
                 CpuUsageIsStale = metrics.CpuUsageIsStale;
+                CpuUsageLastUpdatedUtc = now;
             }
 
             var gpuUsage = metrics.GpuUsage;
@@ -455,6 +587,7 @@ namespace Virgil.App.ViewModels
             {
                 GpuUsage = gpuUsage;
                 GpuUsageIsStale = metrics.GpuUsageIsStale;
+                GpuUsageLastUpdatedUtc = now;
             }
 
             var ramUsage = metrics.RamUsage;
@@ -467,6 +600,7 @@ namespace Virgil.App.ViewModels
             {
                 RamUsage = ramUsage;
                 RamUsageIsStale = metrics.RamUsageIsStale;
+                RamUsageLastUpdatedUtc = now;
             }
 
             var diskUsage = metrics.DiskUsage;
@@ -479,6 +613,7 @@ namespace Virgil.App.ViewModels
             {
                 DiskUsage = diskUsage;
                 DiskUsageIsStale = metrics.DiskUsageIsStale;
+                DiskUsageLastUpdatedUtc = now;
             }
 
             var cpuTemp = metrics.CpuTemp;
@@ -491,6 +626,7 @@ namespace Virgil.App.ViewModels
             {
                 CpuTemp = cpuTemp;
                 CpuTempIsStale = metrics.CpuTempIsStale;
+                CpuTempLastUpdatedUtc = now;
             }
 
             var gpuTemp = metrics.GpuTemp;
@@ -503,6 +639,7 @@ namespace Virgil.App.ViewModels
             {
                 GpuTemp = gpuTemp;
                 GpuTempIsStale = metrics.GpuTempIsStale;
+                GpuTempLastUpdatedUtc = now;
             }
 
             var diskTemp = metrics.DiskTemp;
@@ -515,6 +652,7 @@ namespace Virgil.App.ViewModels
             {
                 DiskTemp = diskTemp;
                 DiskTempIsStale = metrics.DiskTempIsStale;
+                DiskTempLastUpdatedUtc = now;
             }
 
 #if DEBUG
@@ -558,9 +696,15 @@ namespace Virgil.App.ViewModels
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
         private static bool IsInvalid(double value)
-            => double.IsNaN(value) || double.IsInfinity(value);
+            => !TelemetrySanitizer.IsValid(value);
 
         private static bool IsInvalid(float value)
-            => float.IsNaN(value) || float.IsInfinity(value);
+            => !TelemetrySanitizer.IsValid(value);
+
+        private static string FormatMetric(double value, DateTime? lastUpdatedUtc, string unit)
+        {
+            var displayValue = lastUpdatedUtc.HasValue ? value : double.NaN;
+            return TelemetrySanitizer.FormatOptional(displayValue, unit);
+        }
     }
 }

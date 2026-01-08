@@ -53,7 +53,7 @@ public partial class VirgilAvatarControl : UserControl
         get => (double)GetValue(StressProperty);
         set
         {
-            SetValue(StressProperty, ValueSanitizer.Sanitize01(value, 0d));
+            SetValue(StressProperty, TelemetrySanitizer.Clamp01(value, 0d));
         }
     }
 
@@ -97,7 +97,7 @@ public partial class VirgilAvatarControl : UserControl
     {
         if (d is VirgilAvatarControl control)
         {
-            control._targetStress = ValueSanitizer.Sanitize01((double)e.NewValue, 0d);
+            control._targetStress = TelemetrySanitizer.Clamp01((double)e.NewValue, 0d);
             if (!control.IsAnimated)
             {
                 control._smoothedStress = control._targetStress;
@@ -149,10 +149,17 @@ public partial class VirgilAvatarControl : UserControl
     private void OnAnimationTick(object? sender, EventArgs e)
     {
         const double smoothing = 0.12;
-        _targetStress = ValueSanitizer.Sanitize01(_targetStress, 0d);
-        _smoothedStress = ValueSanitizer.Sanitize01(_smoothedStress, _targetStress);
+        if (!TelemetrySanitizer.IsValid(_targetStress))
+        {
+            _targetStress = _smoothedStress;
+        }
+
+        _targetStress = TelemetrySanitizer.Clamp01(_targetStress, 0d);
+        _smoothedStress = TelemetrySanitizer.IsValid(_smoothedStress)
+            ? _smoothedStress
+            : _targetStress;
         _smoothedStress += (_targetStress - _smoothedStress) * smoothing;
-        _smoothedStress = ValueSanitizer.Sanitize01(_smoothedStress, _targetStress);
+        _smoothedStress = TelemetrySanitizer.Clamp01(_smoothedStress, _targetStress);
 
         UpdateBlink(_animationTimer.Interval.TotalSeconds);
         _expressionState = _expressionEngine.Update(_animationTimer.Interval.TotalSeconds, _smoothedStress, IsWorking);
@@ -190,7 +197,7 @@ public partial class VirgilAvatarControl : UserControl
 
     private double ComputeNextBlinkTime()
     {
-        var sanitizedStress = ValueSanitizer.Sanitize01(_smoothedStress, 0d);
+        var sanitizedStress = TelemetrySanitizer.Clamp01(_smoothedStress, 0d);
         var baseDelay = 2.9 - (sanitizedStress * 1.3) - (IsWorking ? 0.35 : 0d);
         return Math.Max(0.9, baseDelay) + (_random.NextDouble() * 0.9);
     }
@@ -206,7 +213,7 @@ public partial class VirgilAvatarControl : UserControl
             _ => 0
         };
 
-        var sanitizedStress = ValueSanitizer.Sanitize01(_smoothedStress, 0d);
+        var sanitizedStress = TelemetrySanitizer.Clamp01(_smoothedStress, 0d);
         var intensity = Math.Clamp(0.6 + (sanitizedStress * 0.6) + glowBoost, 0.3, 1.2);
         RingGlow.Opacity = intensity;
         FaceGlow.Opacity = 0.6 + (sanitizedStress * 0.4);
@@ -233,21 +240,27 @@ public partial class VirgilAvatarControl : UserControl
             ? 1 - 0.9 * Math.Sin(Math.Min(_blinkProgress, 1) * Math.PI)
             : 1.0;
 
-        var leftBaseOpen = 0.35 + (0.65 * _expressionState.EyeOpenLeft);
-        var rightBaseOpen = 0.35 + (0.65 * _expressionState.EyeOpenRight);
+        var leftBaseOpen = TelemetrySanitizer.OrFallback(0.35 + (0.65 * _expressionState.EyeOpenLeft), 0.35);
+        var rightBaseOpen = TelemetrySanitizer.OrFallback(0.35 + (0.65 * _expressionState.EyeOpenRight), 0.35);
         var squintFactor = 1 - (_expressionState.Squint * 0.35);
+        squintFactor = TelemetrySanitizer.OrFallback(squintFactor, 1d);
+        blinkScale = TelemetrySanitizer.OrFallback(blinkScale, 1d);
         var leftOpenness = Math.Max(0.18, leftBaseOpen * squintFactor * blinkScale);
         var rightOpenness = Math.Max(0.18, rightBaseOpen * squintFactor * blinkScale);
-        var eyeScaleX = 1 + (ValueSanitizer.Sanitize01(_smoothedStress, 0d) * 0.05) + (_expressionState.Squint * 0.08);
+        var sanitizedStress = TelemetrySanitizer.Clamp01(_smoothedStress, 0d);
+        var eyeScaleX = 1 + (sanitizedStress * 0.05) + (_expressionState.Squint * 0.08);
+        eyeScaleX = TelemetrySanitizer.OrFallback(eyeScaleX, 1d);
 
         LeftEyeScale.ScaleX = eyeScaleX;
-        LeftEyeScale.ScaleY = leftOpenness;
+        LeftEyeScale.ScaleY = TelemetrySanitizer.OrFallback(leftOpenness, 0.35);
         RightEyeScale.ScaleX = eyeScaleX;
-        RightEyeScale.ScaleY = rightOpenness;
+        RightEyeScale.ScaleY = TelemetrySanitizer.OrFallback(rightOpenness, 0.35);
 
         var sizeScale = Math.Clamp(ActualWidth / 220d, 0.7, 1.4);
         var maxOffset = Math.Clamp(sizeScale * 3.5, 1d, 4d);
-        var gazeOffset = new Point(_expressionState.GazeX * maxOffset, _expressionState.GazeY * maxOffset);
+        var gazeOffset = new Point(
+            TelemetrySanitizer.OrFallback(_expressionState.GazeX * maxOffset, 0d),
+            TelemetrySanitizer.OrFallback(_expressionState.GazeY * maxOffset, 0d));
 
         LeftEyeOffset.X = -8 + gazeOffset.X;
         LeftEyeOffset.Y = gazeOffset.Y;
@@ -260,7 +273,12 @@ public partial class VirgilAvatarControl : UserControl
 
     private static Color ComputeAccentColor(double stress)
     {
-        stress = ValueSanitizer.Sanitize01(stress, 0d);
+        if (!TelemetrySanitizer.IsValid(stress))
+        {
+            return Color.FromRgb(46, 204, 113);
+        }
+
+        stress = TelemetrySanitizer.Clamp01(stress, 0d);
         var gradient = stress switch
         {
             <= 0.5 => Interpolate(Color.FromRgb(46, 204, 113), Color.FromRgb(255, 214, 10), stress / 0.5),
@@ -273,7 +291,7 @@ public partial class VirgilAvatarControl : UserControl
 
     private static Color Interpolate(Color a, Color b, double t)
     {
-        t = ValueSanitizer.Sanitize01(t, 0d);
+        t = TelemetrySanitizer.Clamp01(t, 0d);
         byte Lerp(byte from, byte to) => (byte)(from + (to - from) * t);
         return Color.FromRgb(Lerp(a.R, b.R), Lerp(a.G, b.G), Lerp(a.B, b.B));
     }
