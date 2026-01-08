@@ -11,13 +11,13 @@
         <SolidColorBrush x:Key="AccentStrokeBrush" Color="#804CAF50" />
         <SolidColorBrush x:Key="FaceFillBrush" Color="#0F181A" />
         <RadialGradientBrush x:Key="EyeFillBrush"
-                             Center="0.4,0.35"
-                             GradientOrigin="0.35,0.3"
-                             RadiusX="0.85"
-                             RadiusY="0.85">
-            <GradientStop Color="#F4FBFF" Offset="0" />
-            <GradientStop Color="#DCECF8" Offset="0.55" />
-            <GradientStop Color="#BCD0E2" Offset="1" />
+                             Center="0.45,0.35"
+                             GradientOrigin="0.42,0.32"
+                             RadiusX="0.9"
+                             RadiusY="0.9">
+            <GradientStop Color="#F6FFFF" Offset="0" />
+            <GradientStop Color="#D9EFFB" Offset="0.55" />
+            <GradientStop Color="#ABC8DA" Offset="1" />
         </RadialGradientBrush>
         <SolidColorBrush x:Key="EyeHighlightBrush" Color="#CCFFFFFF" />
     </UserControl.Resources>
@@ -63,10 +63,10 @@
                         </TransformGroup>
                     </Grid.RenderTransform>
 
-                    <Grid x:Name="LeftEye"
+                    <Grid x:Name="LeftEyeContainer"
                           RenderTransformOrigin="0.5,0.5"
-                          Width="30"
-                          Height="30"
+                          Width="32"
+                          Height="32"
                           HorizontalAlignment="Left"
                           Margin="12,0,0,0">
                         <Grid.RenderTransform>
@@ -75,35 +75,46 @@
                                 <TranslateTransform x:Name="LeftEyeOffset" X="-8" />
                             </TransformGroup>
                         </Grid.RenderTransform>
-                        <Ellipse Fill="{StaticResource EyeFillBrush}"
+                        <Grid.Clip>
+                            <EllipseGeometry Center="16,16"
+                                             RadiusX="16"
+                                             RadiusY="16" />
+                        </Grid.Clip>
+                        <Ellipse x:Name="LeftEye"
+                                 Fill="{StaticResource EyeFillBrush}"
                                  Stroke="#66FFFFFF"
-                                 StrokeThickness="1">
+                                 StrokeThickness="1.1">
                             <Ellipse.Effect>
-                                <DropShadowEffect BlurRadius="10"
+                                <DropShadowEffect BlurRadius="12"
                                                   ShadowDepth="0"
-                                                  Opacity="0.35"
+                                                  Opacity="0.3"
                                                   Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" />
                             </Ellipse.Effect>
                         </Ellipse>
+                        <Ellipse Width="32"
+                                 Height="32"
+                                 Stroke="{StaticResource AccentBrush}"
+                                 StrokeThickness="1.4"
+                                 Opacity="0.18" />
                         <Ellipse Width="18"
                                  Height="18"
                                  Fill="{StaticResource AccentBrush}"
-                                 Opacity="0.12"
+                                 Opacity="0.14"
                                  HorizontalAlignment="Center"
                                  VerticalAlignment="Center" />
-                        <Ellipse Width="10"
-                                 Height="10"
+                        <Ellipse Width="7"
+                                 Height="7"
                                  Fill="{StaticResource EyeHighlightBrush}"
                                  Opacity="0.55"
                                  HorizontalAlignment="Left"
                                  VerticalAlignment="Top"
-                                 Margin="5,5,0,0" />
+                                 Margin="6,6,0,0" />
                     </Grid>
 
-                    <Grid x:Name="RightEye"
+                    <Grid x:Name="RightEyeContainer"
                           RenderTransformOrigin="0.5,0.5"
-                          Width="30"
-                          Height="30"
+                          Width="32"
+                          Height="32"
                           HorizontalAlignment="Right"
                           Margin="0,0,12,0">
                         <Grid.RenderTransform>
@@ -112,29 +123,40 @@
                                 <TranslateTransform x:Name="RightEyeOffset" X="8" />
                             </TransformGroup>
                         </Grid.RenderTransform>
-                        <Ellipse Fill="{StaticResource EyeFillBrush}"
+                        <Grid.Clip>
+                            <EllipseGeometry Center="16,16"
+                                             RadiusX="16"
+                                             RadiusY="16" />
+                        </Grid.Clip>
+                        <Ellipse x:Name="RightEye"
+                                 Fill="{StaticResource EyeFillBrush}"
                                  Stroke="#66FFFFFF"
-                                 StrokeThickness="1">
+                                 StrokeThickness="1.1">
                             <Ellipse.Effect>
-                                <DropShadowEffect BlurRadius="10"
+                                <DropShadowEffect BlurRadius="12"
                                                   ShadowDepth="0"
-                                                  Opacity="0.35"
+                                                  Opacity="0.3"
                                                   Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" />
                             </Ellipse.Effect>
                         </Ellipse>
+                        <Ellipse Width="32"
+                                 Height="32"
+                                 Stroke="{StaticResource AccentBrush}"
+                                 StrokeThickness="1.4"
+                                 Opacity="0.18" />
                         <Ellipse Width="18"
                                  Height="18"
                                  Fill="{StaticResource AccentBrush}"
-                                 Opacity="0.12"
+                                 Opacity="0.14"
                                  HorizontalAlignment="Center"
                                  VerticalAlignment="Center" />
-                        <Ellipse Width="10"
-                                 Height="10"
+                        <Ellipse Width="7"
+                                 Height="7"
                                  Fill="{StaticResource EyeHighlightBrush}"
                                  Opacity="0.55"
                                  HorizontalAlignment="Left"
                                  VerticalAlignment="Top"
-                                 Margin="5,5,0,0" />
+                                 Margin="6,6,0,0" />
                     </Grid>
                 </Grid>
             </Grid>
