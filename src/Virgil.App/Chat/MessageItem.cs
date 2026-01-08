@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Virgil.App.Models;
 
 namespace Virgil.App.Chat
 {
@@ -12,5 +14,7 @@ namespace Virgil.App.Chat
         public int TtlMs { get; set; } = 60000;
         public bool IsExpired { get; set; }
         public bool IsUser => Role.Equals("user", StringComparison.OrdinalIgnoreCase);
+        public IReadOnlyList<ProposedActionItem> ProposedActions { get; set; } = Array.Empty<ProposedActionItem>();
+        public bool HasProposedActions => ProposedActions.Count > 0;
     }
 }

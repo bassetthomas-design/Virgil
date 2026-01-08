@@ -13,6 +13,7 @@ using Virgil.App.Services;
 using Virgil.Domain.Actions;
 using Virgil.Core.Models;
 using Virgil.Services.Abstractions;
+using Virgil.Services.Assistant;
 using Virgil.Services.Chat;
 using Virgil.Services.SelfTest;
 using ServiceActionExecutionResult = Virgil.Services.ActionExecutionResult;
@@ -36,6 +37,7 @@ namespace Virgil.App.ViewModels
         private string? _busyText;
         private bool _lastActionSuccess;
         private string? _lastActionMessage;
+        private ActionResult? _lastActionResult;
         private bool _isHudVisible;
         private bool _isMonitoringEnabled;
 
@@ -93,6 +95,12 @@ namespace Virgil.App.ViewModels
             private set => Set(ref _lastActionMessage, value);
         }
 
+        public ActionResult? LastActionResult
+        {
+            get => _lastActionResult;
+            private set => Set(ref _lastActionResult, value);
+        }
+
         public string StatusDisplay => IsBusy && !string.IsNullOrWhiteSpace(BusyText)
             ? BusyText!
             : StatusText;
@@ -110,7 +118,8 @@ namespace Virgil.App.ViewModels
             IUiInteractionService uiInteractions,
             IConfirmationService confirmationService,
             ChatActionBridge? chatActionBridge = null,
-            IChatEngine? chatEngine = null)
+            IChatEngine? chatEngine = null,
+            IAssistantService? assistantService = null)
         {
             _chat = chat ?? throw new ArgumentNullException(nameof(chat));
             Monitoring = monitoring ?? throw new ArgumentNullException(nameof(monitoring));
@@ -125,7 +134,13 @@ namespace Virgil.App.ViewModels
 
             _actionRegistry = BuildRegistry();
 
-            Chat = new ChatViewModel(chat, chatActionBridge, chatEngine);
+            Chat = new ChatViewModel(
+                chat,
+                chatActionBridge,
+                chatEngine,
+                assistantService,
+                BuildAssistantContext,
+                RunActionAsync);
 
             RunActionCommand = new AsyncRelayCommand(async param =>
             {
@@ -190,6 +205,7 @@ namespace Virgil.App.ViewModels
         {
             LastActionMessage = null;
             LastActionSuccess = false;
+            LastActionResult = null;
             StatusText = "Virgil est prêt";
         }
 
@@ -203,6 +219,7 @@ namespace Virgil.App.ViewModels
                 StatusText = missing.Message;
                 LastActionSuccess = false;
                 LastActionMessage = missing.Message;
+                LastActionResult = missing;
                 return missing;
             }
 
@@ -219,6 +236,7 @@ namespace Virgil.App.ViewModels
                     StatusText = cancelled.Message;
                     LastActionSuccess = cancelled.Status != ActionResultStatus.Failed;
                     LastActionMessage = cancelled.Message;
+                    LastActionResult = cancelled;
                     return cancelled;
                 }
             }
@@ -231,6 +249,7 @@ namespace Virgil.App.ViewModels
                 var result = await definition.ExecuteAsync(args ?? new Dictionary<string, string>(), ct).ConfigureAwait(false);
                 LastActionSuccess = result.Status != ActionResultStatus.Failed;
                 LastActionMessage = result.Message;
+                LastActionResult = result;
                 StatusText = string.IsNullOrWhiteSpace(result.Message)
                     ? definition.DisplayName
                     : result.Message;
@@ -241,6 +260,7 @@ namespace Virgil.App.ViewModels
                 var failure = ActionResult.Failure($"Erreur pendant {definition.DisplayName}: {ex.Message}");
                 LastActionSuccess = false;
                 LastActionMessage = failure.Message;
+                LastActionResult = failure;
                 StatusText = failure.Message;
                 Utils.StartupLog.Write($"Action {key} a échoué", ex);
                 return failure;
@@ -272,6 +292,69 @@ namespace Virgil.App.ViewModels
             });
 
             return new ActionRegistry(definitions);
+        }
+
+        private AssistantContext BuildAssistantContext()
+        {
+            var telemetry = new AssistantTelemetrySummary(
+                Monitoring.CpuUsageText,
+                Monitoring.CpuUsageIsStale,
+                Monitoring.RamUsageText,
+                Monitoring.RamUsageIsStale,
+                $"CPU {Monitoring.CpuTempText}, GPU {Monitoring.GpuTempText}",
+                Monitoring.CpuTempIsStale || Monitoring.GpuTempIsStale,
+                Monitoring.DiskUsageText,
+                Monitoring.DiskUsageIsStale);
+
+            var lastActionSummary = BuildAssistantLastActionSummary();
+            var catalog = BuildAssistantCatalog();
+
+            return new AssistantContext(telemetry, lastActionSummary, catalog);
+        }
+
+        private AssistantActionSummary? BuildAssistantLastActionSummary()
+        {
+            if (LastActionResult is null)
+            {
+                return null;
+            }
+
+            var lines = new List<string>();
+            if (!string.IsNullOrWhiteSpace(LastActionResult.Summary))
+            {
+                lines.AddRange(LastActionResult.Summary.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries));
+            }
+
+            var trimmed = lines.Take(3).Select(line => line.Trim()).ToList();
+            return new AssistantActionSummary(LastActionResult.Status.ToString(), LastActionResult.Title, trimmed);
+        }
+
+        private IReadOnlyList<AssistantActionCatalogItem> BuildAssistantCatalog()
+        {
+            var catalog = new List<AssistantActionCatalogItem>();
+
+            foreach (var definition in _actionRegistry.All)
+            {
+                var description = "Interface utilisateur";
+                var requiresAdmin = definition.IsDestructive;
+                var destructive = definition.IsDestructive;
+
+                if (ActionCatalog.TryGet(definition.Key, out var descriptor))
+                {
+                    description = $"Service: {descriptor.Service}";
+                    destructive = descriptor.IsDestructive;
+                    requiresAdmin = descriptor.IsDestructive;
+                }
+
+                catalog.Add(new AssistantActionCatalogItem(
+                    definition.Key,
+                    definition.DisplayName,
+                    description,
+                    requiresAdmin,
+                    destructive));
+            }
+
+            return catalog;
         }
 
         private ActionDefinition MapAction(string key, string displayName, bool isDestructive, Func<Dictionary<string, string>?, CancellationToken, Task<ActionResult>> callback)

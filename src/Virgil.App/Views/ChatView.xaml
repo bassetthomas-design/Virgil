@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:conv="clr-namespace:Virgil.App.Converters"
+             xmlns:views="clr-namespace:Virgil.App.Views"
              mc:Ignorable="d"
              Padding="12">
     <UserControl.Resources>
@@ -68,32 +69,52 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border>
-                                    <Border.Style>
-                                        <Style TargetType="Border" BasedOn="{StaticResource BubbleBorder}">
-                                            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
-                                            <Setter Property="HorizontalAlignment" Value="Left" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsUser}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                                    <Setter Property="HorizontalAlignment" Value="Right" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                <StackPanel>
+                                    <Border>
+                                        <Border.Style>
+                                            <Style TargetType="Border" BasedOn="{StaticResource BubbleBorder}">
+                                                <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+                                                <Setter Property="HorizontalAlignment" Value="Left" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsUser}" Value="True">
-                                                        <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}" />
+                                                        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                                        <Setter Property="HorizontalAlignment" Value="Right" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Border>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                    <ItemsControl ItemsSource="{Binding ProposedActions}"
+                                                  Visibility="{Binding HasProposedActions, Converter={StaticResource BoolToVisibility}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Margin="6,0,0,6" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Content="{Binding ButtonLabel}"
+                                                        Command="{Binding DataContext.ExecuteProposedActionCommand, RelativeSource={RelativeSource AncestorType=views:ChatView}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="{Binding Warning}"
+                                                        Margin="0,4,6,0"
+                                                        Padding="10,4" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

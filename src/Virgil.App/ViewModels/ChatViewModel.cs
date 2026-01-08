@@ -1,13 +1,17 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Virgil.App.Chat;
 using Virgil.App.Commands;
+using Virgil.App.Models;
+using Virgil.Services.Assistant;
 
 namespace Virgil.App.ViewModels
 {
@@ -17,22 +21,36 @@ namespace Virgil.App.ViewModels
         private readonly ChatService _chat;
         private readonly Virgil.Services.Chat.ChatActionBridge? _actionBridge;
         private readonly Virgil.Services.Chat.IChatEngine? _chatEngine;
+        private readonly IAssistantService? _assistantService;
+        private readonly Func<AssistantContext>? _assistantContextProvider;
+        private readonly Func<string, Dictionary<string, string>?, CancellationToken, Task<ActionResult>>? _actionExecutor;
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
         private string _inputText = string.Empty;
         private bool _isBusy;
         private int _defaultTtlMs = 60000;
 
-        public ChatViewModel(ChatService chat, Virgil.Services.Chat.ChatActionBridge? bridge = null, Virgil.Services.Chat.IChatEngine? engine = null)
+        public ChatViewModel(
+            ChatService chat,
+            Virgil.Services.Chat.ChatActionBridge? bridge = null,
+            Virgil.Services.Chat.IChatEngine? engine = null,
+            IAssistantService? assistantService = null,
+            Func<AssistantContext>? assistantContextProvider = null,
+            Func<string, Dictionary<string, string>?, CancellationToken, Task<ActionResult>>? actionExecutor = null)
         {
             _chat = chat;
             _actionBridge = bridge;
             _chatEngine = engine;
+            _assistantService = assistantService;
+            _assistantContextProvider = assistantContextProvider;
+            _actionExecutor = actionExecutor;
             _chat.MessagePosted += OnMessagePosted;
             _chat.HistoryCleared += OnHistoryCleared;
             SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
+            ExecuteProposedActionCommand = new AsyncRelayCommand(ExecuteProposedActionAsync);
         }
 
         public ICommand SendCommand { get; }
+        public ICommand ExecuteProposedActionCommand { get; }
 
         public int DefaultTtlMs
         {
@@ -138,10 +156,19 @@ namespace Virgil.App.ViewModels
             };
 
             _dispatcher.Invoke(() => Messages.Add(userItem));
+            _chat.RecordMessage("user", message);
 
             IsBusy = true;
             try
             {
+                if (_assistantService is not null && _assistantContextProvider is not null && _actionExecutor is not null)
+                {
+                    var context = _assistantContextProvider();
+                    var reply = await _assistantService.AskAsync(message, context).ConfigureAwait(false);
+                    AppendAssistantReply(reply);
+                    return;
+                }
+
                 if (_chatEngine is null || _actionBridge is null)
                 {
                     _chat.PostSystemMessage("Aucun moteur de chat configuré", MessageType.Warning, ChatKind.Warning);
@@ -160,6 +187,66 @@ namespace Virgil.App.ViewModels
             {
                 IsBusy = false;
             }
+        }
+
+        private void AppendAssistantReply(AssistantReply reply)
+        {
+            var item = new MessageItem
+            {
+                Text = reply.Text,
+                Type = MessageType.Info,
+                Pinned = true,
+                Created = DateTime.Now,
+                TtlMs = DefaultTtlMs,
+                Role = "assistant",
+                ProposedActions = (reply.ProposedActions ?? Array.Empty<ProposedAction>())
+                    .Select(action => new ProposedActionItem(
+                        action.ActionId,
+                        action.Title,
+                        action.Parameters is null ? null : new Dictionary<string, string>(action.Parameters),
+                        action.Warning))
+                    .ToList()
+            };
+
+            _dispatcher.Invoke(() => Messages.Add(item));
+            _chat.RecordMessage("assistant", reply.Text);
+        }
+
+        private async Task ExecuteProposedActionAsync(object? parameter)
+        {
+            if (parameter is not ProposedActionItem action || _actionExecutor is null)
+            {
+                return;
+            }
+
+            AppendAssistantMessage($"Exécution… {action.Title}", MessageType.Info);
+
+            try
+            {
+                var result = await _actionExecutor(action.ActionId, action.Parameters, CancellationToken.None).ConfigureAwait(false);
+                var summary = string.IsNullOrWhiteSpace(result.Message) ? result.Title : result.Message;
+                AppendAssistantMessage(summary, result.Success ? MessageType.Success : MessageType.Warning);
+            }
+            catch (Exception ex)
+            {
+                AppendAssistantMessage($"Erreur pendant {action.Title} : {ex.Message}", MessageType.Error);
+            }
+        }
+
+        private void AppendAssistantMessage(string text, MessageType type)
+        {
+            var item = new MessageItem
+            {
+                Text = text,
+                Type = type,
+                Pinned = true,
+                Created = DateTime.Now,
+                TtlMs = DefaultTtlMs,
+                Role = "assistant"
+            };
+
+            _dispatcher.Invoke(() => Messages.Add(item));
+            _chat.RecordMessage("assistant", text);
         }
 
         private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(InputText);
