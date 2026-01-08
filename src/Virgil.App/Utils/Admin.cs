@@ -1,4 +1,4 @@
-using System.Security.Principal;
+using Virgil.Core;
 
 namespace Virgil.App.Utils
 {
@@ -6,9 +6,7 @@ namespace Virgil.App.Utils
     {
         public static bool IsElevated()
         {
-            using var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+            return ProcessElevation.IsProcessElevated();
         }
     }
 }
