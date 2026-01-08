@@ -10,6 +10,7 @@ using Virgil.App.Services;
 using Virgil.App.ViewModels;
 using Virgil.Services;
 using Virgil.Services.Abstractions;
+using Virgil.Services.Assistant;
 using ChatUiService = Virgil.App.Chat.ChatService;
 
 namespace Virgil.App
@@ -51,6 +52,8 @@ namespace Virgil.App
                 new DiagnosticService(),
                 new SpecialService(reloader, confirmationPrompt, uiChat),
                 uiChat);
+            var assistantProvider = new RuleBasedAssistantProvider();
+            var assistantService = new AssistantService(assistantProvider);
 
             var mainVm = new MainViewModel(
                 _chatService,
@@ -59,7 +62,8 @@ namespace Virgil.App
                 _monitoringService,
                 _settingsService,
                 this,
-                _confirmationService);
+                _confirmationService,
+                assistantService: assistantService);
 
             reloader.Attach(mainVm);
 

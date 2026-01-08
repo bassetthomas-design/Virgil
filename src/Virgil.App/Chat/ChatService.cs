@@ -94,5 +94,14 @@ namespace Virgil.App.Chat
             RegisterActivity(rearmTimer);
             MessagePosted?.Invoke(this, message.Content, kind, ttlMs);
         }
+
+        public void RecordMessage(string role, string content)
+        {
+            var message = new ChatMessage(role, content);
+            lock (_messages)
+            {
+                _messages.Add(message);
+            }
+        }
     }
 }
