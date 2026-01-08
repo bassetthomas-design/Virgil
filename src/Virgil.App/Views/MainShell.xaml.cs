@@ -40,6 +40,8 @@ namespace Virgil.App.Views
             var networkInsightService = new NetworkInsightService();
             _confirmationService = new ConfirmationService();
             var confirmationPrompt = new UiConfirmationPrompt(_confirmationService);
+            var keyStore = new OpenAiKeyStore();
+            var assistantProviderFactory = new AssistantProviderFactory(_settingsService, keyStore);
             var reloader = new ConfigurationReloader(_settingsService, _monitoringService);
 
             var monitoringVm = new MonitoringViewModel(
@@ -58,11 +60,8 @@ namespace Virgil.App.Views
                 uiChat);
             var chatEngine = new RuleBasedChatEngine();
             var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));
-            var assistantProvider = new OllamaAssistantProvider(
-                _settingsService.Settings.OllamaBaseUrl,
-                _settingsService.Settings.OllamaModel,
-                TimeSpan.FromSeconds(_settingsService.Settings.OllamaTimeoutSeconds));
-            var assistantService = new AssistantService(assistantProvider);
+            var assistantProvider = assistantProviderFactory.CreateProvider();
+            var assistantService = assistantProvider is null ? null : new AssistantService(assistantProvider);
 
             var mainVm = new MainViewModel(
                 _chatService,

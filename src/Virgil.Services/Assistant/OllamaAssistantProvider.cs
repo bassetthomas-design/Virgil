@@ -1,11 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,8 +18,7 @@ public sealed class OllamaAssistantProvider : IAssistantProvider
     private readonly string _model;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        PropertyNameCaseInsensitive = true
     };
 
     public OllamaAssistantProvider(
@@ -60,7 +55,7 @@ public sealed class OllamaAssistantProvider : IAssistantProvider
 
     public async Task<AssistantReply> AskAsync(string userMessage, AssistantContext ctx, CancellationToken ct = default)
     {
-        var prompt = BuildSystemPrompt(ctx);
+        var prompt = AssistantPromptBuilder.BuildSystemPrompt(ctx);
         var payload = new OllamaChatRequest(
             _model,
             new[]
@@ -87,7 +82,7 @@ public sealed class OllamaAssistantProvider : IAssistantProvider
                 return AssistantReply.Empty;
             }
 
-            return ParseAssistantReply(content);
+            return AssistantResponseParser.Parse(content);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -101,56 +96,6 @@ public sealed class OllamaAssistantProvider : IAssistantProvider
         {
             return UnavailableReply();
         }
-    }
-
-    private AssistantReply ParseAssistantReply(string content)
-    {
-        try
-        {
-            var parsed = JsonSerializer.Deserialize<OllamaAssistantResponse>(content, _jsonOptions);
-            if (parsed is null)
-            {
-                return new AssistantReply(content, Array.Empty<ProposedAction>());
-            }
-
-            var actions = parsed.ProposedActions
-                ?.Where(action => !string.IsNullOrWhiteSpace(action.ActionId))
-                .Select(action => new ProposedAction(
-                    action.ActionId!.Trim(),
-                    string.IsNullOrWhiteSpace(action.Title) ? action.ActionId!.Trim() : action.Title!.Trim(),
-                    NormalizeParameters(action.Parameters)))
-                .ToList()
-                ?? new List<ProposedAction>();
-
-            return new AssistantReply(parsed.Text ?? string.Empty, actions);
-        }
-        catch (JsonException)
-        {
-            return new AssistantReply(content, Array.Empty<ProposedAction>());
-        }
-    }
-
-    private static IReadOnlyDictionary<string, string>? NormalizeParameters(Dictionary<string, JsonElement>? parameters)
-    {
-        if (parameters is null || parameters.Count == 0)
-        {
-            return null;
-        }
-
-        var normalized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in parameters)
-        {
-            normalized[key] = value.ValueKind switch
-            {
-                JsonValueKind.String => value.GetString() ?? string.Empty,
-                JsonValueKind.Number => value.ToString(),
-                JsonValueKind.True => "true",
-                JsonValueKind.False => "false",
-                _ => value.ToString()
-            };
-        }
-
-        return normalized;
     }
 
     private static string ExtractAssistantContent(string rawResponse)
@@ -177,44 +122,6 @@ public sealed class OllamaAssistantProvider : IAssistantProvider
         return string.Empty;
     }
 
-    private static string BuildSystemPrompt(AssistantContext ctx)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine("Tu es l'assistant système Virgil.");
-        builder.AppendLine("Réponds uniquement en JSON strict, sans texte additionnel.");
-        builder.AppendLine("Format attendu:");
-        builder.AppendLine("{ \"text\": \"...\", \"proposedActions\": [ { \"actionId\": \"...\", \"title\": \"...\", \"parameters\": { ... } } ] }");
-        builder.AppendLine("Règles:");
-        builder.AppendLine("- Ne propose QUE des actionId présents dans le catalogue.");
-        builder.AppendLine("- Maximum 3 actions proposées.");
-        builder.AppendLine("- Si aucune action pertinente, proposedActions doit être [].");
-        builder.AppendLine();
-        builder.AppendLine("Catalogue d'actions disponibles:");
-
-        foreach (var item in ctx.ActionCatalog)
-        {
-            builder.AppendLine($"- Id: {item.Id} | Label: {item.Label} | Description: {item.Description} | Admin: {(item.RequiresAdmin ? "oui" : "non")} | Destructif: {(item.DestructiveFlag ? "oui" : "non")}");
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("Contexte système:");
-        builder.AppendLine($"CPU: {ctx.Telemetry.Cpu} (stale: {ctx.Telemetry.CpuStale})");
-        builder.AppendLine($"RAM: {ctx.Telemetry.Ram} (stale: {ctx.Telemetry.RamStale})");
-        builder.AppendLine($"Température: {ctx.Telemetry.Temperature} (stale: {ctx.Telemetry.TemperatureStale})");
-        builder.AppendLine($"Disque: {ctx.Telemetry.Disk} (stale: {ctx.Telemetry.DiskStale})");
-
-        if (ctx.LastActionResult is not null)
-        {
-            builder.AppendLine($"Dernière action: {ctx.LastActionResult.Title} ({ctx.LastActionResult.Status})");
-            if (ctx.LastActionResult.Lines is not null && ctx.LastActionResult.Lines.Count > 0)
-            {
-                builder.AppendLine("Résumé: " + string.Join(" | ", ctx.LastActionResult.Lines.Take(3)));
-            }
-        }
-
-        return builder.ToString();
-    }
-
     private static AssistantReply UnavailableReply()
         => new(UnavailableMessage, Array.Empty<ProposedAction>());
 
@@ -222,16 +129,4 @@ public sealed class OllamaAssistantProvider : IAssistantProvider
 
     private sealed record OllamaChatMessage(string Role, string Content);
 
-    private sealed class OllamaAssistantResponse
-    {
-        public string? Text { get; set; }
-        public List<OllamaAssistantAction>? ProposedActions { get; set; }
-    }
-
-    private sealed class OllamaAssistantAction
-    {
-        public string? ActionId { get; set; }
-        public string? Title { get; set; }
-        public Dictionary<string, JsonElement>? Parameters { get; set; }
-    }
 }
