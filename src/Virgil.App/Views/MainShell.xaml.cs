@@ -58,7 +58,10 @@ namespace Virgil.App.Views
                 uiChat);
             var chatEngine = new RuleBasedChatEngine();
             var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));
-            var assistantProvider = new RuleBasedAssistantProvider();
+            var assistantProvider = new OllamaAssistantProvider(
+                _settingsService.Settings.OllamaBaseUrl,
+                _settingsService.Settings.OllamaModel,
+                TimeSpan.FromSeconds(_settingsService.Settings.OllamaTimeoutSeconds));
             var assistantService = new AssistantService(assistantProvider);
 
             var mainVm = new MainViewModel(
