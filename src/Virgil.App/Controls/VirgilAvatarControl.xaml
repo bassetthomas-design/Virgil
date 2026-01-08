@@ -41,7 +41,11 @@
                          StrokeThickness="5"
                          Width="220"
                          Height="220"
-                         x:Name="AccentRing">
+                         x:Name="AccentRing"
+                         RenderTransformOrigin="0.5,0.5">
+                    <Ellipse.RenderTransform>
+                        <ScaleTransform x:Name="RingPulseScale" />
+                    </Ellipse.RenderTransform>
                     <Ellipse.Effect>
                         <DropShadowEffect x:Name="RingGlow"
                                           Color="#884CAF50"
