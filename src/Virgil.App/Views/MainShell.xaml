@@ -48,6 +48,7 @@
                                         Height="220"
                                         DataContext="{Binding Monitoring}"
                                         IsWorking="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        IsSignalWeak="{Binding IsKeyMetricStale}"
                                         UseNewAvatar="True" />
                 <views:MetricsBar Width="220" DataContext="{Binding Monitoring}" Margin="0,8,0,0" />
                 <StackPanel x:Name="AvatarDebugPanel"

@@ -6,7 +6,18 @@
              xmlns:controls="clr-namespace:Virgil.App.Controls"
              mc:Ignorable="d"
              d:DesignWidth="280" d:DesignHeight="180">
-    <Grid>
+    <UserControl.Resources>
+        <Style x:Key="AvatarSignalStyle" TargetType="Grid">
+            <Setter Property="Opacity" Value="1" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSignalWeak, RelativeSource={RelativeSource AncestorType=controls:AvatarControl}}" Value="True">
+                    <Setter Property="Opacity" Value="0.88" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource AvatarSignalStyle}">
         <Border Background="#1A1A22" CornerRadius="140"/>
 
         <controls:VirgilAvatarControl x:Name="VectorAvatar"
