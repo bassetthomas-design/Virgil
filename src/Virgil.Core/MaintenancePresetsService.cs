@@ -20,9 +20,9 @@ namespace Virgil.Core.Services
             log.AppendLine(await apps.UpgradeAllAsync(includeUnknown: true, silent: true).ConfigureAwait(false));
 
             var wu = new WindowsUpdateService();
-            log.AppendLine(await wu.StartScanAsync().ConfigureAwait(false));
-            log.AppendLine(await wu.StartDownloadAsync().ConfigureAwait(false));
-            log.AppendLine(await wu.StartInstallAsync().ConfigureAwait(false));
+            log.AppendLine((await wu.StartScanAsync().ConfigureAwait(false)).GetDisplayMessage());
+            log.AppendLine((await wu.StartDownloadAsync().ConfigureAwait(false)).GetDisplayMessage());
+            log.AppendLine((await wu.StartInstallAsync().ConfigureAwait(false)).GetDisplayMessage());
 
             var drivers = new DriverUpdateService();
             log.AppendLine(await drivers.UpgradeDriversAsync().ConfigureAwait(false));

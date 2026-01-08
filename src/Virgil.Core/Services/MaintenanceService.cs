@@ -64,9 +64,9 @@ namespace Virgil.Core.Services
             progress?.Report("Mise à jour des applications...");
             report.UpdateLogs.Add(await _apps.UpgradeAllAsync(includeUnknown: true, silent: true).ConfigureAwait(false));
             progress?.Report("Vérification et installation des mises à jour Windows...");
-            report.UpdateLogs.Add(await _windows.StartScanAsync().ConfigureAwait(false));
-            report.UpdateLogs.Add(await _windows.StartDownloadAsync().ConfigureAwait(false));
-            report.UpdateLogs.Add(await _windows.StartInstallAsync().ConfigureAwait(false));
+            report.UpdateLogs.Add((await _windows.StartScanAsync().ConfigureAwait(false)).GetDisplayMessage());
+            report.UpdateLogs.Add((await _windows.StartDownloadAsync().ConfigureAwait(false)).GetDisplayMessage());
+            report.UpdateLogs.Add((await _windows.StartInstallAsync().ConfigureAwait(false)).GetDisplayMessage());
             progress?.Report("Mise à jour des pilotes...");
             report.UpdateLogs.Add(await _drivers.UpgradeDriversAsync().ConfigureAwait(false));
             progress?.Report("Mise à jour de Microsoft Defender...");
