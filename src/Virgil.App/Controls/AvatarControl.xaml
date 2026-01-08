@@ -25,13 +25,14 @@
                                        VerticalAlignment="Center"
                                        Width="220"
                                        Height="220"
-                                       Visibility="Collapsed"
+                                       Visibility="Visible"
                                        Stress="{Binding AvatarTelemetry.Stress}"
                                        IsTelemetryStale="{Binding AvatarTelemetryIsStale}"
                                        IsWorking="{Binding IsWorking, RelativeSource={RelativeSource AncestorType=controls:AvatarControl}}" />
 
-        <Image x:Name="LegacyAvatar"
+        <!-- LEGACY_DISABLED: previous PNG avatar is intentionally not instantiated. -->
+        <!-- <Image x:Name="LegacyAvatar"
                Stretch="Uniform"
-               Source="{Binding AvatarSource}"/>
+               Source="{Binding AvatarSource}"/> -->
     </Grid>
 </UserControl>
