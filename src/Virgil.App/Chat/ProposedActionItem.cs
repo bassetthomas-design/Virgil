@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Virgil.App.Models
+namespace Virgil.App.Chat
 {
     public sealed class ProposedActionItem
     {

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Virgil.App.Models;
 
 namespace Virgil.App.Chat
 {

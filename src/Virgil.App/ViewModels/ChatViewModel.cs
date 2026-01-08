@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -10,7 +11,6 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Virgil.App.Chat;
 using Virgil.App.Commands;
-using Virgil.App.Models;
 using Virgil.Services.Assistant;
 
 namespace Virgil.App.ViewModels
