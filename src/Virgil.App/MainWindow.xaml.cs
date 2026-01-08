@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Virgil.App.Chat;
 using Virgil.App.Interfaces;
+using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.App.ViewModels;
 using Virgil.Services;
