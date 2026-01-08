@@ -1,10 +1,10 @@
 using System;
 using System.IO;
-using System.Security.Principal;
 using System.Text;
 using System.Windows;
-using Virgil.App.Views;
+using Virgil.Core;
 using Virgil.App.Utils;
+using Virgil.App.Views;
 
 namespace Virgil.App
 {
@@ -14,7 +14,7 @@ namespace Virgil.App
         {
             AppDomain.CurrentDomain.UnhandledException += (s, ex) => LogAndShow(ex.ExceptionObject as Exception);
             DispatcherUnhandledException += (s, ex) => { LogAndShow(ex.Exception); ex.Handled = true; };
-            if (!IsRunningAsAdministrator())
+            if (!ProcessElevation.IsProcessElevated())
             {
                 StartupLog.Write("Application launched without administrative privileges. Exiting.");
                 MessageBox.Show("Virgil requiert des droits administrateur pour démarrer.", "Virgil", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -39,12 +39,5 @@ namespace Virgil.App
             return sb.ToString();
         }
 
-        private static bool IsRunningAsAdministrator()
-        {
-            using var identity = WindowsIdentity.GetCurrent();
-            if(identity==null){ return false; }
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
     }
 }

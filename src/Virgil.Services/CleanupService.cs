@@ -4,10 +4,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Virgil.Core;
 using Virgil.Services.Abstractions;
 
 namespace Virgil.Services;
@@ -65,7 +65,7 @@ public sealed class CleanupService : ICleanupService
         _advancedPlanFactory = advancedPlanFactory ?? BuildAdvancedCategories;
         _systemTempPlanFactory = systemTempPlanFactory ?? BuildSystemTempCleanupPlan;
         _isWindows = isWindows ?? OperatingSystem.IsWindows;
-        _isAdministrator = isAdministrator ?? IsRunningAsAdministrator;
+        _isAdministrator = isAdministrator ?? ProcessElevation.IsProcessElevated;
         _commandRunner = commandRunner ?? RunCommandAsync;
         _isProcessRunning = isProcessRunning ?? IsProcessRunning;
     }
@@ -126,9 +126,8 @@ public sealed class CleanupService : ICleanupService
 
         if (_isWindows() && !_isAdministrator())
         {
-            const string adminMessage = "Nettoyage disque avancé indisponible : droits administrateur requis";
-            const string adminDetails = "Action avancée, peut prendre du temps — mais sans admin, c’est niet (sécurité + accès système).";
-            return ActionExecutionResult.NotAvailable("Nettoyage disque avancé", $"{adminMessage}. {adminDetails}");
+            const string adminMessage = "Cette action nécessite les droits administrateur. Relance Virgil en admin.";
+            return ActionExecutionResult.NotAvailable("Nettoyage disque avancé", adminMessage);
         }
 
         var categories = _advancedPlanFactory();
@@ -1203,20 +1202,6 @@ public sealed class CleanupService : ICleanupService
         }
     }
 
-    private static bool IsRunningAsAdministrator()
-    {
-        try
-        {
-            using var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     private async Task<CleanupStats> RunDismComponentCleanupAsync(CancellationToken ct)
     {
         if (!_isWindows())
@@ -1255,7 +1240,9 @@ public sealed class CleanupService : ICleanupService
                         CreateNoWindow = true,
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
-                        RedirectStandardError = true
+                        RedirectStandardError = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
                     }
                 };
 

@@ -1,5 +1,5 @@
 using System;
-using System.Security.Principal;
+using Virgil.Core;
 
 namespace Virgil.Services.Network;
 
@@ -12,15 +12,6 @@ public sealed class WindowsPrivilegeChecker : IPrivilegeChecker
 {
     public bool IsAdministrator()
     {
-        try
-        {
-            using var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
-        catch
-        {
-            return false;
-        }
+        return ProcessElevation.IsProcessElevated();
     }
 }

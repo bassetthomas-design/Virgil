@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Security.Principal;
 using System.ServiceProcess;
 using System.Text.Json;
 using Microsoft.Win32;
+using Virgil.Core;
 
 namespace Virgil.Services.Startup;
 
@@ -421,7 +421,7 @@ internal sealed class StartupApplier
             return plan.Select(p => p with { Applied = false, ApplyNote = "Analyse uniquement (pas d'application automatique)" }).ToList();
         }
 
-        var elevated = IsAdministrator();
+        var elevated = ProcessElevation.IsProcessElevated();
         var results = new List<ClassifiedStartupEntry>();
 
         foreach (var item in plan)
@@ -443,20 +443,6 @@ internal sealed class StartupApplier
         }
 
         return results;
-    }
-
-    private static bool IsAdministrator()
-    {
-        try
-        {
-            using var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private static bool TryDisable(StartupEntry entry, out string note)
