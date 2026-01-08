@@ -17,6 +17,7 @@ public sealed class ExpressionEngine
     private double _winkProgress;
     private bool _isWinking;
     private bool _winkLeft;
+    private double _gazeDriftPhase;
 
     public ExpressionEngine(Random? random = null)
     {
@@ -32,6 +33,7 @@ public sealed class ExpressionEngine
 
         var mood = ResolveMood(stress, isWorking);
 
+        UpdateGazeDrift(deltaSeconds, isWorking);
         UpdateGaze(deltaSeconds, stress, isWorking, mood);
         UpdateAsymmetry(deltaSeconds, isWorking);
         UpdateWink(deltaSeconds);
@@ -64,9 +66,12 @@ public sealed class ExpressionEngine
             }
         }
 
+        var gazeX = Math.Clamp(_gazeTarget.X + GetDriftX(), -0.65, 0.65);
+        var gazeY = Math.Clamp(_gazeTarget.Y + GetDriftY(), -0.6, 0.6);
+
         var target = new ExpressionState(
-            _gazeTarget.X,
-            _gazeTarget.Y,
+            gazeX,
+            gazeY,
             leftOpen,
             rightOpen,
             squint,
@@ -137,9 +142,30 @@ public sealed class ExpressionEngine
         }
 
         var direction = _random.NextDouble() < 0.5 ? -1 : 1;
-        _asymmetry = direction * RandomRange(0.1, 0.16);
+        _asymmetry = direction * RandomRange(0.06, 0.1);
         _timeToNextAsymmetry = RandomRange(2.5, 5.5);
     }
+
+    private void UpdateGazeDrift(double deltaSeconds, bool isWorking)
+    {
+        if (!isWorking)
+        {
+            _gazeDriftPhase = 0;
+            return;
+        }
+
+        _gazeDriftPhase += deltaSeconds * 0.6;
+        if (!TelemetrySanitizer.IsValid(_gazeDriftPhase))
+        {
+            _gazeDriftPhase = 0;
+        }
+    }
+
+    private double GetDriftX()
+        => Math.Sin(_gazeDriftPhase) * 0.06;
+
+    private double GetDriftY()
+        => Math.Cos(_gazeDriftPhase * 0.8) * 0.04;
 
     private void UpdateWink(double deltaSeconds)
     {

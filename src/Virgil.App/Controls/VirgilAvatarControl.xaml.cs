@@ -24,6 +24,7 @@ public partial class VirgilAvatarControl : UserControl
     private double _blinkProgress;
     private bool _isBlinking;
     private ExpressionState _expressionState = ExpressionState.Neutral;
+    private double _animationTime;
 
     public VirgilAvatarControl()
     {
@@ -93,6 +94,18 @@ public partial class VirgilAvatarControl : UserControl
         set => SetValue(IsWorkingProperty, value);
     }
 
+    public static readonly DependencyProperty IsTelemetryStaleProperty = DependencyProperty.Register(
+        nameof(IsTelemetryStale),
+        typeof(bool),
+        typeof(VirgilAvatarControl),
+        new PropertyMetadata(false, OnIsTelemetryStaleChanged));
+
+    public bool IsTelemetryStale
+    {
+        get => (bool)GetValue(IsTelemetryStaleProperty);
+        set => SetValue(IsTelemetryStaleProperty, value);
+    }
+
     private static void OnStressChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is VirgilAvatarControl control)
@@ -134,6 +147,15 @@ public partial class VirgilAvatarControl : UserControl
         }
     }
 
+    private static void OnIsTelemetryStaleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is VirgilAvatarControl control)
+        {
+            control.UpdateGlowIntensity();
+            control.UpdateVisuals(force: true);
+        }
+    }
+
     private void StartOrStopTimer()
     {
         if (IsAnimated && IsLoaded)
@@ -149,6 +171,7 @@ public partial class VirgilAvatarControl : UserControl
     private void OnAnimationTick(object? sender, EventArgs e)
     {
         const double smoothing = 0.12;
+        _animationTime += _animationTimer.Interval.TotalSeconds;
         if (!TelemetrySanitizer.IsValid(_targetStress))
         {
             _targetStress = _smoothedStress;
@@ -214,9 +237,12 @@ public partial class VirgilAvatarControl : UserControl
         };
 
         var sanitizedStress = TelemetrySanitizer.Clamp01(_smoothedStress, 0d);
-        var intensity = Math.Clamp(0.6 + (sanitizedStress * 0.6) + glowBoost, 0.3, 1.2);
-        RingGlow.Opacity = intensity;
-        FaceGlow.Opacity = 0.6 + (sanitizedStress * 0.4);
+        var staleDimmer = GetStaleDimmer();
+        var intensity = Math.Clamp(0.6 + (sanitizedStress * 0.6) + glowBoost, 0.3, 1.2) * staleDimmer;
+        intensity = TelemetrySanitizer.OrFallback(intensity, 0.6);
+        RingGlow.Opacity = Math.Clamp(intensity, 0.25, 1.2);
+        var faceIntensity = (0.6 + (sanitizedStress * 0.4)) * staleDimmer;
+        FaceGlow.Opacity = Math.Clamp(TelemetrySanitizer.OrFallback(faceIntensity, 0.6), 0.35, 1.2);
     }
 
     private void UpdateVisuals(bool force = false)
@@ -236,6 +262,11 @@ public partial class VirgilAvatarControl : UserControl
             FaceGlow.Color = Color.FromArgb(140, accent.R, accent.G, accent.B);
         }
 
+        var sanitizedStress = TelemetrySanitizer.Clamp01(_smoothedStress, 0d);
+        var staleDimmer = GetStaleDimmer();
+        UpdateRingPulse(sanitizedStress);
+        UpdateEyeGlow(accent, sanitizedStress, staleDimmer);
+
         var blinkScale = _isBlinking
             ? 1 - 0.85 * Math.Sin(Math.Min(_blinkProgress, 1) * Math.PI)
             : 1.0;
@@ -247,7 +278,6 @@ public partial class VirgilAvatarControl : UserControl
         blinkScale = TelemetrySanitizer.OrFallback(blinkScale, 1d);
         var leftOpenness = Math.Max(0.18, leftBaseOpen * squintFactor * blinkScale);
         var rightOpenness = Math.Max(0.18, rightBaseOpen * squintFactor * blinkScale);
-        var sanitizedStress = TelemetrySanitizer.Clamp01(_smoothedStress, 0d);
         var eyeScaleX = 1 + (sanitizedStress * 0.05) + (_expressionState.Squint * 0.08);
         eyeScaleX = TelemetrySanitizer.OrFallback(eyeScaleX, 1d);
 
@@ -290,6 +320,74 @@ public partial class VirgilAvatarControl : UserControl
     }
 
     private static Color Interpolate(Color a, Color b, double t)
+    {
+        t = TelemetrySanitizer.Clamp01(t, 0d);
+        byte Lerp(byte from, byte to) => (byte)(from + (to - from) * t);
+        return Color.FromRgb(Lerp(a.R, b.R), Lerp(a.G, b.G), Lerp(a.B, b.B));
+    }
+
+    private void UpdateRingPulse(double stress)
+    {
+        var pulseStrength = 0d;
+        var speed = 0d;
+        if (stress > 0.5)
+        {
+            var stressScale = (stress - 0.5) / 0.5;
+            pulseStrength = 0.008 + (stressScale * 0.012);
+            speed = 1.4;
+            if (stress >= 0.75)
+            {
+                var redBoost = (stress - 0.75) / 0.25;
+                pulseStrength += redBoost * 0.012;
+                speed = 2.1;
+            }
+        }
+
+        var pulse = 1d;
+        if (pulseStrength > 0)
+        {
+            pulse = 1d + (pulseStrength * Math.Sin(_animationTime * speed));
+        }
+
+        pulse = TelemetrySanitizer.OrFallback(pulse, 1d);
+        RingPulseScale.ScaleX = pulse;
+        RingPulseScale.ScaleY = pulse;
+    }
+
+    private void UpdateEyeGlow(Color accent, double stress, double staleDimmer)
+    {
+        var eyeBrush = (RadialGradientBrush)FindResource("EyeFillBrush");
+        var highlightBrush = (SolidColorBrush)FindResource("EyeHighlightBrush");
+
+        var intensity = Math.Clamp(0.72 + (stress * 0.28), 0.7, 1d) * staleDimmer;
+        intensity = TelemetrySanitizer.OrFallback(intensity, 0.82);
+        LeftEyeContainer.Opacity = intensity;
+        RightEyeContainer.Opacity = intensity;
+
+        var coreBlend = Math.Clamp(0.62 + (stress * 0.2), 0.55, 0.9);
+        var midBlend = Math.Clamp(0.42 + (stress * 0.16), 0.3, 0.8);
+        var outerBlend = 0.25;
+
+        var core = Blend(accent, Colors.White, coreBlend);
+        var mid = Blend(accent, Colors.White, midBlend);
+        var outer = Blend(accent, Color.FromRgb(10, 16, 18), outerBlend);
+
+        if (eyeBrush.GradientStops.Count >= 3)
+        {
+            eyeBrush.GradientStops[0].Color = core;
+            eyeBrush.GradientStops[1].Color = mid;
+            eyeBrush.GradientStops[2].Color = outer;
+        }
+
+        var highlight = Blend(accent, Colors.White, 0.75);
+        var alpha = (byte)Math.Clamp(220 * intensity, 140, 255);
+        highlightBrush.Color = Color.FromArgb(alpha, highlight.R, highlight.G, highlight.B);
+    }
+
+    private double GetStaleDimmer()
+        => IsTelemetryStale ? 0.88 : 1d;
+
+    private static Color Blend(Color a, Color b, double t)
     {
         t = TelemetrySanitizer.Clamp01(t, 0d);
         byte Lerp(byte from, byte to) => (byte)(from + (to - from) * t);

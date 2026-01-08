@@ -431,6 +431,18 @@ namespace Virgil.App.ViewModels
         public string DiskTempText => FormatMetric(DiskTemp, DiskTempLastUpdatedUtc, "°C");
         public string DiskTempDisplay => $"Temp: {DiskTempText}";
 
+        private bool _avatarTelemetryIsStale;
+        public bool AvatarTelemetryIsStale
+        {
+            get => _avatarTelemetryIsStale;
+            private set
+            {
+                if (_avatarTelemetryIsStale == value) return;
+                _avatarTelemetryIsStale = value;
+                OnPropertyChanged();
+            }
+        }
+
         private void OnSystemMetricsUpdated(object? sender, SystemMonitorSnapshot snapshot)
             => DispatchMetrics(() => ApplySnapshot(snapshot));
 
@@ -727,6 +739,15 @@ namespace Virgil.App.ViewModels
 
         private static bool IsInvalid(float value)
             => !TelemetrySanitizer.IsValid(value);
+
+        private void UpdateAvatarTelemetryStale()
+            => AvatarTelemetryIsStale = CpuUsageIsStale
+                || GpuUsageIsStale
+                || RamUsageIsStale
+                || DiskUsageIsStale
+                || CpuTempIsStale
+                || GpuTempIsStale
+                || DiskTempIsStale;
 
         private static string FormatMetric(double value, DateTime? lastUpdatedUtc, string unit)
         {
