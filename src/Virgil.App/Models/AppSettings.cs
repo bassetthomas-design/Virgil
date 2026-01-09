@@ -1,8 +1,11 @@
 namespace Virgil.App.Models
 {
+    using System.ComponentModel;
+
     public enum AiProvider
     {
         EmbeddedLlama,
+        [Description("Ollama (optionnel)")]
         LocalOllama,
         OpenAI,
         Disabled
@@ -17,7 +20,7 @@ namespace Virgil.App.Models
         public bool CompanionTalkative { get; set; } = false;
         public bool MonitoringEnabled { get; set; } = true;
         public bool EnableBeatPulse { get; set; } = true;
-        public AiProvider AiProvider { get; set; } = AiProvider.LocalOllama;
+        public AiProvider AiProvider { get; set; } = AiProvider.EmbeddedLlama;
         public string OpenAiModel { get; set; } = "gpt-4o-mini";
         public int OpenAiTimeoutSeconds { get; set; } = 30;
         public string OllamaBaseUrl { get; set; } = "http://localhost:11434";
