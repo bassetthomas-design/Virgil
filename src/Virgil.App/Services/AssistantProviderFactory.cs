@@ -22,10 +22,16 @@ namespace Virgil.App.Services
                 settings.OllamaBaseUrl,
                 settings.OllamaModel,
                 TimeSpan.FromSeconds(settings.OllamaTimeoutSeconds));
+            var embeddedRuntimeManager = new LlamaRuntimeManager(settings.EmbeddedLlamaBaseUrl);
+            var embeddedProvider = new EmbeddedLlamaProvider(
+                embeddedRuntimeManager,
+                settings.EmbeddedLlamaBaseUrl,
+                TimeSpan.FromSeconds(settings.EmbeddedLlamaTimeoutSeconds));
 
             return settings.AiProvider switch
             {
                 AiProvider.Disabled => null,
+                AiProvider.EmbeddedLlama => embeddedProvider,
                 AiProvider.OpenAI => CreateOpenAiProvider(settings, ollamaProvider),
                 _ => ollamaProvider
             };
