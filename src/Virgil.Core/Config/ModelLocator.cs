@@ -10,5 +10,7 @@ public sealed class ModelLocator
 
     public string ModelPath => Path.Combine(ModelDirectory, ExpectedFileName);
 
+    public string ModelHashPath => Path.Combine(ModelDirectory, $"{ExpectedFileName}.sha256");
+
     public bool IsInstalled => File.Exists(ModelPath);
 }

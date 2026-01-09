@@ -6,7 +6,7 @@ namespace Virgil.App.Views
     {
         private void OnOk(object sender, RoutedEventArgs e)
         {
-            // Close the dialog confirming changes. Settings saving is handled elsewhere.
+            _vm.Save();
             DialogResult = true;
             Close();
         }
