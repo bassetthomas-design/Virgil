@@ -5,8 +5,6 @@ namespace Virgil.App.Models
     public enum AiProvider
     {
         EmbeddedLlama,
-        [Description("Ollama (optionnel)")]
-        LocalOllama,
         OpenAI,
         Disabled
     }
@@ -23,9 +21,6 @@ namespace Virgil.App.Models
         public AiProvider AiProvider { get; set; } = AiProvider.EmbeddedLlama;
         public string OpenAiModel { get; set; } = "gpt-4o-mini";
         public int OpenAiTimeoutSeconds { get; set; } = 30;
-        public string OllamaBaseUrl { get; set; } = "http://localhost:11434";
-        public string OllamaModel { get; set; } = "llama3.1:8b";
-        public int OllamaTimeoutSeconds { get; set; } = 20;
         public string EmbeddedLlamaBaseUrl { get; set; } = "http://localhost:8080";
         public int EmbeddedLlamaTimeoutSeconds { get; set; } = 30;
     }
