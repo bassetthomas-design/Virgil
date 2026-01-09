@@ -90,7 +90,7 @@ public sealed class ModelPackDownloader
 
                 var percent = totalBytes.HasValue && totalBytes.Value > 0
                     ? totalRead / (double)totalBytes.Value * 100
-                    : null;
+                    : (double?)null;
                 var speedText = FormatSpeed(totalRead, stopwatch.Elapsed);
                 progress?.Report(new ModelPackDownloadProgress(percent, speedText, "Téléchargement…", isIndeterminate));
             }
