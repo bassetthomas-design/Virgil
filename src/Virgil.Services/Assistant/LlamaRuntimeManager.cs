@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Virgil.Core.Logging;
 
 namespace Virgil.Services.Assistant;
 
@@ -11,11 +12,14 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable
 {
     private static readonly TimeSpan DefaultHealthTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DefaultShutdownTimeout = TimeSpan.FromSeconds(5);
+    private const string RuntimeExecutableName = "llama-server.exe";
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string? _arguments;
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _healthTimeout;
+    private readonly string? _embeddedRuntimeDirectory;
+    private readonly string? _runtimeDirectory;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Process? _process;
     private bool _disposed;
@@ -28,9 +32,20 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable
         HttpClient? httpClient = null)
     {
         _baseUrl = baseUrl;
-        _executablePath = string.IsNullOrWhiteSpace(executablePath)
-            ? Path.Combine(AppContext.BaseDirectory, "assets", "llama", "llama-server.exe")
-            : executablePath;
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            _embeddedRuntimeDirectory = Path.Combine(AppContext.BaseDirectory, "Assets", "AI", "Runtime");
+            _runtimeDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Virgil",
+                "AI",
+                "Runtime");
+            _executablePath = Path.Combine(_runtimeDirectory, RuntimeExecutableName);
+        }
+        else
+        {
+            _executablePath = executablePath;
+        }
         _arguments = arguments;
         _healthTimeout = healthTimeout ?? DefaultHealthTimeout;
 
@@ -58,10 +73,15 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable
                 return;
             }
 
+            PrepareRuntime();
+
             if (!File.Exists(_executablePath))
             {
                 throw new AssistantProviderUnavailableException($"Llama runtime not found at '{_executablePath}'.");
             }
+
+            Log.Info($"Llama runtime path: {_executablePath}");
+            Log.Info($"Llama runtime args: {_arguments ?? string.Empty}");
 
             var workingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory;
             var startInfo = new ProcessStartInfo
@@ -196,6 +216,49 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable
         }
 
         return false;
+    }
+
+    private void PrepareRuntime()
+    {
+        if (_embeddedRuntimeDirectory is null || _runtimeDirectory is null)
+        {
+            return;
+        }
+
+        if (!Directory.Exists(_embeddedRuntimeDirectory))
+        {
+            throw new AssistantProviderUnavailableException(
+                $"Embedded Llama runtime not found at '{_embeddedRuntimeDirectory}'.");
+        }
+
+        Directory.CreateDirectory(_runtimeDirectory);
+
+        foreach (var sourcePath in Directory.EnumerateFiles(_embeddedRuntimeDirectory))
+        {
+            var fileName = Path.GetFileName(sourcePath);
+            var destinationPath = Path.Combine(_runtimeDirectory, fileName);
+            if (!ShouldCopy(sourcePath, destinationPath))
+            {
+                continue;
+            }
+
+            File.Copy(sourcePath, destinationPath, overwrite: true);
+        }
+
+        Log.Info($"Llama runtime directory: {_runtimeDirectory}");
+    }
+
+    private static bool ShouldCopy(string sourcePath, string destinationPath)
+    {
+        if (!File.Exists(destinationPath))
+        {
+            return true;
+        }
+
+        var sourceInfo = new FileInfo(sourcePath);
+        var destinationInfo = new FileInfo(destinationPath);
+        return sourceInfo.Length != destinationInfo.Length
+            || sourceInfo.LastWriteTimeUtc > destinationInfo.LastWriteTimeUtc;
     }
 
     private bool IsProcessRunning()
