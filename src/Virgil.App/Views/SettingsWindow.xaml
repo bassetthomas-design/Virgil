@@ -1,31 +1,64 @@
 <Window x:Class="Virgil.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Réglages" Height="360" Width="420">
+        Title="Réglages" Height="520" Width="520">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    </Window.Resources>
     <DockPanel Margin="12">
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
             <Button Content="Annuler" Width="90" Margin="0,0,8,0" IsCancel="True"/>
             <Button Content="OK" Width="90" IsDefault="True" Click="OnOk"/>
         </StackPanel>
 
-        <StackPanel>
-            <TextBlock Text="Monitoring" FontWeight="Bold" Margin="0,0,0,6"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <TextBlock Text="Intervalle (ms):" Width="140" VerticalAlignment="Center"/>
-                <TextBox Width="120" Text="{Binding Settings.MonitoringIntervalMs}"/>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Monitoring" FontWeight="Bold" Margin="0,0,0,6"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="Intervalle (ms):" Width="140" VerticalAlignment="Center"/>
+                    <TextBox Width="120" Text="{Binding MonitoringIntervalMs}"/>
+                </StackPanel>
+
+                <TextBlock Text="Chat" FontWeight="Bold" Margin="0,8,0,6"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="Durée msg (ms):" Width="140" VerticalAlignment="Center"/>
+                    <TextBox Width="120" Text="{Binding DefaultMessageTtlMs}"/>
+                </StackPanel>
+
+                <TextBlock Text="Avatar" FontWeight="Bold" Margin="0,8,0,6"/>
+                <CheckBox Content="Battement léger (EnableBeatPulse)" IsChecked="{Binding EnableBeatPulse}"/>
+
+                <TextBlock Text="Compagnon" FontWeight="Bold" Margin="0,8,0,6"/>
+                <CheckBox Content="Bavard (CompanionTalkative)" IsChecked="{Binding CompanionTalkative}"/>
+
+                <TextBlock Text="IA" FontWeight="Bold" Margin="0,16,0,6"/>
+                <TextBlock Text="Statut Pack Full:"/>
+                <TextBlock Text="{Binding PackStatusText}" FontWeight="SemiBold" Margin="0,2,0,6"/>
+                <TextBlock Text="IA locale sélectionnée : Pack Full manquant. Installez-le pour activer l’IA offline."
+                           Margin="0,0,0,6"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding ShowPackInstallPrompt, Converter={StaticResource BoolToVisibility}}"/>
+
+                <ProgressBar Height="16"
+                             Minimum="0"
+                             Maximum="100"
+                             Value="{Binding DownloadProgressPercent}"
+                             IsIndeterminate="{Binding IsDownloadIndeterminate}"
+                             Margin="0,4,0,4"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <TextBlock Text="{Binding DownloadStatusText}" Width="260" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding DownloadSpeedText}" HorizontalAlignment="Right"/>
+                </StackPanel>
+
+                <WrapPanel Margin="0,0,0,8">
+                    <Button Content="Installer Pack Full" Command="{Binding InstallPackCommand}" Margin="0,0,8,8"/>
+                    <Button Content="Annuler" Command="{Binding CancelDownloadCommand}" Margin="0,0,8,8"/>
+                    <Button Content="Vérifier" Command="{Binding VerifyPackCommand}" Margin="0,0,8,8"/>
+                    <Button Content="Tester IA" Command="{Binding TestAiCommand}" Margin="0,0,8,8"/>
+                </WrapPanel>
+
+                <TextBlock Text="{Binding AiTestResponseText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
             </StackPanel>
-
-            <TextBlock Text="Chat" FontWeight="Bold" Margin="0,8,0,6"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <TextBlock Text="Durée msg (ms):" Width="140" VerticalAlignment="Center"/>
-                <TextBox Width="120" Text="{Binding Settings.DefaultMessageTtlMs}"/>
-            </StackPanel>
-
-            <TextBlock Text="Avatar" FontWeight="Bold" Margin="0,8,0,6"/>
-            <CheckBox Content="Battement léger (EnableBeatPulse)" IsChecked="{Binding Settings.EnableBeatPulse}"/>
-
-            <TextBlock Text="Compagnon" FontWeight="Bold" Margin="0,8,0,6"/>
-            <CheckBox Content="Bavard (CompanionTalkative)" IsChecked="{Binding Settings.CompanionTalkative}"/>
-        </StackPanel>
+        </ScrollViewer>
     </DockPanel>
 </Window>
