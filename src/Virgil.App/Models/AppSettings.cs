@@ -1,5 +1,7 @@
 namespace Virgil.App.Models
 {
+    using System.ComponentModel;
+
     public enum AiProvider
     {
         EmbeddedLlama,
