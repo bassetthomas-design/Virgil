@@ -1,33 +1,45 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Core.Config;
-using Virgil.Core.Models;
 
 namespace Virgil.Services.ModelPacks;
 
-public sealed class ModelPackDownloader : IDisposable
-{
-    private const int BufferSize = 1024 * 128;
-    private const int MaxRetries = 3;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
-    private readonly HttpClient _httpClient;
+public sealed record ModelPackDownloadProgress(
+    double? Percent,
+    string SpeedText,
+    string StatusText,
+    bool IsIndeterminate);
 
-    public ModelPackDownloader(HttpClient? httpClient = null, TimeSpan? timeout = null)
+public sealed record ModelPackDownloadResult(
+    bool Success,
+    string StatusText,
+    string? ErrorMessage = null);
+
+public sealed record ModelPackVerificationResult(
+    bool IsValid,
+    string StatusText,
+    string? ErrorMessage = null);
+
+public sealed class ModelPackDownloader
+{
+    private readonly ModelLocator _modelLocator;
+    private readonly HttpClient _httpClient;
+    private string? _lastTempPath;
+
+    public ModelPackDownloader(ModelLocator modelLocator, HttpClient? httpClient = null)
     {
+        _modelLocator = modelLocator ?? throw new ArgumentNullException(nameof(modelLocator));
         _httpClient = httpClient ?? new HttpClient();
-        _httpClient.Timeout = timeout ?? TimeSpan.FromMinutes(30);
     }
 
-    public async Task<DownloadResult> DownloadFullPackAsync(
+    public async Task<ModelPackDownloadResult> DownloadAsync(
         ModelPackManifest manifest,
-        IProgress<DownloadProgress> progress,
+        IProgress<ModelPackDownloadProgress>? progress,
         CancellationToken ct)
     {
         if (manifest is null)
@@ -35,199 +47,147 @@ public sealed class ModelPackDownloader : IDisposable
             throw new ArgumentNullException(nameof(manifest));
         }
 
-        var targetDirectory = Path.Combine(AppPaths.ProgramDataRoot, "AI", "Models");
-        Directory.CreateDirectory(targetDirectory);
+        progress?.Report(new ModelPackDownloadProgress(0, "—", "Téléchargement…", false));
 
-        var finalPath = Path.Combine(targetDirectory, manifest.FileName);
-        var tempPath = finalPath + ".part";
-        DownloadResult? lastFailure = null;
+        Directory.CreateDirectory(_modelLocator.ModelDirectory);
+        _lastTempPath = Path.Combine(_modelLocator.ModelDirectory, $"{ModelLocator.ExpectedFileName}.tmp");
 
-        for (var attempt = 1; attempt <= MaxRetries; attempt++)
-        {
-            try
-            {
-                var result = await DownloadOnceAsync(manifest, tempPath, finalPath, progress, ct).ConfigureAwait(false);
-                if (result.Status == DownloadStatus.Failed && attempt < MaxRetries && !ct.IsCancellationRequested)
-                {
-                    lastFailure = result;
-                    await Task.Delay(RetryDelay, ct).ConfigureAwait(false);
-                    continue;
-                }
-
-                return result;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                return DownloadResult.Canceled();
-            }
-            catch (Exception ex)
-            {
-                lastFailure = DownloadResult.Failed($"Téléchargement échoué: {ex.Message}");
-                if (attempt < MaxRetries)
-                {
-                    await Task.Delay(RetryDelay, ct).ConfigureAwait(false);
-                    continue;
-                }
-
-                return lastFailure;
-            }
-        }
-
-        return lastFailure ?? DownloadResult.Failed("Téléchargement échoué.");
-    }
-
-    public void Dispose()
-    {
-        _httpClient.Dispose();
-    }
-
-    private async Task<DownloadResult> DownloadOnceAsync(
-        ModelPackManifest manifest,
-        string tempPath,
-        string finalPath,
-        IProgress<DownloadProgress> progress,
-        CancellationToken ct)
-    {
-        var existingBytes = GetExistingLength(tempPath);
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, manifest.DownloadUri);
-        if (existingBytes > 0)
-        {
-            request.Headers.Range = new RangeHeaderValue(existingBytes, null);
-        }
-
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-
-        if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable && existingBytes > 0)
-        {
-            return await FinalizeDownloadAsync(tempPath, finalPath, manifest, ct).ConfigureAwait(false);
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var reason = string.IsNullOrWhiteSpace(response.ReasonPhrase) ? "" : $" {response.ReasonPhrase}";
-            return DownloadResult.Failed($"Téléchargement échoué: serveur a répondu {(int)response.StatusCode}{reason}");
-        }
-
-        var isPartial = response.StatusCode == HttpStatusCode.PartialContent;
-        if (!isPartial && existingBytes > 0)
-        {
-            existingBytes = 0;
-        }
-
-        var contentLength = response.Content.Headers.ContentLength;
-        long? totalBytes = contentLength;
-        if (isPartial && contentLength.HasValue)
-        {
-            totalBytes = existingBytes + contentLength.Value;
-        }
-
-        var fileMode = existingBytes > 0 ? FileMode.Append : FileMode.Create;
-        await using var fileStream = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.None, BufferSize, useAsync: true);
-        await using var contentStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-
-        var buffer = new byte[BufferSize];
-        var stopwatch = Stopwatch.StartNew();
-        var lastReport = TimeSpan.Zero;
-        var downloaded = existingBytes;
-
-        ReportProgress(progress, downloaded, totalBytes, stopwatch);
-
-        while (true)
-        {
-            var read = await contentStream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false);
-            if (read == 0)
-            {
-                break;
-            }
-
-            await fileStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-            downloaded += read;
-
-            if (stopwatch.Elapsed - lastReport >= TimeSpan.FromMilliseconds(250))
-            {
-                lastReport = stopwatch.Elapsed;
-                ReportProgress(progress, downloaded, totalBytes, stopwatch);
-            }
-        }
-
-        await fileStream.FlushAsync(ct).ConfigureAwait(false);
-        stopwatch.Stop();
-        ReportProgress(progress, downloaded, totalBytes, stopwatch);
-
-        if (totalBytes.HasValue && downloaded < totalBytes.Value)
-        {
-            return DownloadResult.Failed("Téléchargement interrompu avant la fin.");
-        }
-
-        return await FinalizeDownloadAsync(tempPath, finalPath, manifest, ct).ConfigureAwait(false);
-    }
-
-    private static long GetExistingLength(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return 0;
-        }
-
-        var info = new FileInfo(path);
-        return info.Length;
-    }
-
-    private static void ReportProgress(IProgress<DownloadProgress> progress, long downloaded, long? total, Stopwatch stopwatch)
-    {
-        var speed = stopwatch.Elapsed.TotalSeconds > 0 ? downloaded / stopwatch.Elapsed.TotalSeconds : 0;
-        double? percent = null;
-        if (total.HasValue && total.Value > 0)
-        {
-            percent = downloaded * 100d / total.Value;
-        }
-
-        progress.Report(new DownloadProgress(downloaded, total, percent, speed));
-    }
-
-    private static async Task<DownloadResult> FinalizeDownloadAsync(
-        string tempPath,
-        string finalPath,
-        ModelPackManifest manifest,
-        CancellationToken ct)
-    {
-        if (!File.Exists(tempPath))
-        {
-            return DownloadResult.Failed("Fichier temporaire introuvable.");
-        }
-
-        File.Move(tempPath, finalPath, overwrite: true);
-        var hash = await ComputeSha256Async(finalPath, ct).ConfigureAwait(false);
-
-        if (!string.Equals(hash, manifest.Sha256, StringComparison.OrdinalIgnoreCase))
-        {
-            TryDelete(finalPath);
-            return DownloadResult.Failed("Intégrité invalide (SHA256)");
-        }
-
-        return DownloadResult.Succeeded(finalPath);
-    }
-
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, BufferSize, useAsync: true);
-        using var sha = SHA256.Create();
-        var hash = await sha.ComputeHashAsync(stream, ct).ConfigureAwait(false);
-        return Convert.ToHexString(hash);
-    }
-
-    private static void TryDelete(string path)
-    {
         try
         {
-            if (File.Exists(path))
+            using var response = await _httpClient.GetAsync(
+                manifest.DownloadUrl,
+                HttpCompletionOption.ResponseHeadersRead,
+                ct).ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+            var totalBytes = response.Content.Headers.ContentLength;
+            var isIndeterminate = totalBytes is null or <= 0;
+            progress?.Report(new ModelPackDownloadProgress(0, "—", "Téléchargement…", isIndeterminate));
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await using var fileStream = new FileStream(
+                _lastTempPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                8192,
+                useAsync: true);
+
+            var buffer = new byte[8192];
+            long totalRead = 0;
+            var stopwatch = Stopwatch.StartNew();
+
+            while (true)
             {
-                File.Delete(path);
+                var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false);
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                await fileStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                totalRead += read;
+
+                var percent = totalBytes.HasValue && totalBytes.Value > 0
+                    ? totalRead / (double)totalBytes.Value * 100
+                    : (double?)null;
+                var speedText = FormatSpeed(totalRead, stopwatch.Elapsed);
+                progress?.Report(new ModelPackDownloadProgress(percent, speedText, "Téléchargement…", isIndeterminate));
             }
+
+            fileStream.Close();
+
+            if (File.Exists(_modelLocator.ModelPath))
+            {
+                File.Delete(_modelLocator.ModelPath);
+            }
+
+            File.Move(_lastTempPath, _modelLocator.ModelPath);
+            _lastTempPath = null;
+
+            var hash = await ComputeSha256Async(_modelLocator.ModelPath, ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(_modelLocator.ModelHashPath, hash, ct).ConfigureAwait(false);
+
+            progress?.Report(new ModelPackDownloadProgress(100, "—", "Terminé.", false));
+            return new ModelPackDownloadResult(true, "Terminé.");
+        }
+        catch (OperationCanceledException)
+        {
+            return new ModelPackDownloadResult(false, "Téléchargement annulé.", "Téléchargement annulé.");
+        }
+        catch (Exception ex)
+        {
+            return new ModelPackDownloadResult(false, "Échec du téléchargement.", ex.Message);
+        }
+    }
+
+    public async Task<ModelPackVerificationResult> VerifyAsync()
+    {
+        if (!_modelLocator.IsInstalled)
+        {
+            return new ModelPackVerificationResult(false, "Pack Full non installé.");
+        }
+
+        if (!File.Exists(_modelLocator.ModelHashPath))
+        {
+            return new ModelPackVerificationResult(false, "Hash attendu manquant.", "Hash attendu manquant.");
+        }
+
+        var expected = (await File.ReadAllTextAsync(_modelLocator.ModelHashPath).ConfigureAwait(false)).Trim();
+        var actual = await ComputeSha256Async(_modelLocator.ModelPath, CancellationToken.None).ConfigureAwait(false);
+        if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+        {
+            return new ModelPackVerificationResult(true, "Vérification OK.");
+        }
+
+        return new ModelPackVerificationResult(false, "Hash incorrect.", "Pack Full corrompu: hash incorrect.");
+    }
+
+    public void CleanupTemporaryFiles()
+    {
+        if (_lastTempPath is null || !File.Exists(_lastTempPath))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(_lastTempPath);
         }
         catch
         {
         }
+    }
+
+    private static async Task<string> ComputeSha256Async(string filePath, CancellationToken ct)
+    {
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, useAsync: true);
+        using var sha256 = SHA256.Create();
+        var hash = await sha256.ComputeHashAsync(stream, ct).ConfigureAwait(false);
+        return Convert.ToHexString(hash);
+    }
+
+    private static string FormatSpeed(long bytes, TimeSpan elapsed)
+    {
+        if (elapsed.TotalSeconds <= 0.5)
+        {
+            return "—";
+        }
+
+        var bytesPerSecond = bytes / elapsed.TotalSeconds;
+        return $"{FormatBytes(bytesPerSecond)}/s";
+    }
+
+    private static string FormatBytes(double bytes)
+    {
+        string[] suffixes = { "o", "Ko", "Mo", "Go" };
+        var order = 0;
+        while (bytes >= 1024 && order < suffixes.Length - 1)
+        {
+            order++;
+            bytes /= 1024;
+        }
+
+        return $"{bytes:0.0} {suffixes[order]}";
     }
 }

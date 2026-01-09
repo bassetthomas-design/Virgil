@@ -28,6 +28,7 @@ namespace Virgil.App.Views
         private readonly IActionOrchestrator _orchestrator;
         private readonly IConfirmationService _confirmationService;
         private readonly DispatcherTimer _clockTimer;
+        private readonly IAssistantService? _assistantService;
         private Window? _miniHudWindow;
 
         public MainShell()
@@ -61,7 +62,7 @@ namespace Virgil.App.Views
             var chatEngine = new RuleBasedChatEngine();
             var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));
             var assistantProvider = assistantProviderFactory.CreateProvider();
-            var assistantService = assistantProvider is null ? null : new AssistantService(assistantProvider);
+            _assistantService = assistantProvider is null ? null : new AssistantService(assistantProvider);
 
             var mainVm = new MainViewModel(
                 _chatService,
@@ -73,7 +74,7 @@ namespace Virgil.App.Views
                 _confirmationService,
                 chatBridge,
                 chatEngine,
-                assistantService);
+                _assistantService);
 
             reloader.Attach(mainVm);
 
@@ -98,7 +99,7 @@ namespace Virgil.App.Views
         {
             return Dispatcher.InvokeAsync(() =>
             {
-                var dlg = new SettingsWindow(_settingsService)
+                var dlg = new SettingsWindow(_settingsService, _chatService, _assistantService)
                 {
                     Owner = this
                 };
