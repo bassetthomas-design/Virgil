@@ -1,10 +1,6 @@
 using System;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Net.Http;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -14,6 +10,7 @@ using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Core.Config;
 using Virgil.Services.Assistant;
+using Virgil.Services.ModelPacks;
 
 namespace Virgil.App.ViewModels
 {
@@ -25,9 +22,10 @@ namespace Virgil.App.ViewModels
         private readonly ChatService? _chatService;
         private readonly IAssistantService? _assistantService;
         private readonly ModelLocator _modelLocator = new();
-        private readonly HttpClient _httpClient = new();
         private CancellationTokenSource? _downloadCts;
         private bool _isDownloadIndeterminate;
+        private readonly ModelPackDownloader _packDownloader;
+        private readonly ModelPackManifest _packManifest;
 
         public SettingsViewModel(SettingsService svc, ChatService? chatService = null, IAssistantService? assistantService = null)
         {
@@ -46,6 +44,12 @@ namespace Virgil.App.ViewModels
             _warnTemp = s.Mood.WarnTemp;
             _alertTemp = s.Mood.AlertTemp;
             _warnCpu = s.Mood.WarnCpu;
+
+            _packDownloader = new ModelPackDownloader(_modelLocator);
+            _packManifest = new ModelPackManifest(
+                "pack-full-llama31-8b",
+                "llama-3.1-8b-instruct-q4_k_m",
+                FullPackDownloadUrl);
 
             _isPackInstalled = _modelLocator.IsInstalled;
             _downloadStatusText = _isPackInstalled ? "Pack Full installé." : "Pack Full non installé.";
@@ -242,65 +246,24 @@ namespace Virgil.App.ViewModels
             DownloadSpeedText = "—";
             DownloadStatusText = "Téléchargement…";
 
-            var modelDirectory = _modelLocator.ModelDirectory;
-            Directory.CreateDirectory(modelDirectory);
-
-            var tempPath = Path.Combine(modelDirectory, $"{ModelLocator.ExpectedFileName}.tmp");
-
             try
             {
-                using var response = await _httpClient.GetAsync(
-                    FullPackDownloadUrl,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    ct).ConfigureAwait(false);
-
-                response.EnsureSuccessStatusCode();
-
-                var totalBytes = response.Content.Headers.ContentLength;
-                IsDownloadIndeterminate = totalBytes is null or <= 0;
-
-                await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                await using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, useAsync: true);
-
-                var buffer = new byte[8192];
-                long totalRead = 0;
-                var stopwatch = Stopwatch.StartNew();
-
-                while (true)
+                var progress = new Progress<ModelPackDownloadProgress>(update =>
                 {
-                    var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false);
-                    if (read <= 0)
-                    {
-                        break;
-                    }
+                    DownloadStatusText = update.StatusText;
+                    DownloadSpeedText = update.SpeedText;
+                    DownloadProgressPercent = update.Percent ?? 0;
+                    IsDownloadIndeterminate = update.IsIndeterminate;
+                });
 
-                    await fileStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                    totalRead += read;
-
-                    if (totalBytes.HasValue && totalBytes.Value > 0)
-                    {
-                        DownloadProgressPercent = totalRead / (double)totalBytes.Value * 100;
-                    }
-
-                    DownloadSpeedText = FormatSpeed(totalRead, stopwatch.Elapsed);
-                }
-
-                fileStream.Close();
-
-                var destinationPath = _modelLocator.ModelPath;
-                if (File.Exists(destinationPath))
-                {
-                    File.Delete(destinationPath);
-                }
-
-                File.Move(tempPath, destinationPath);
-
-                var hash = await ComputeSha256Async(destinationPath, ct).ConfigureAwait(false);
-                await File.WriteAllTextAsync(_modelLocator.ModelHashPath, hash, ct).ConfigureAwait(false);
+                var result = await _packDownloader.DownloadAsync(_packManifest, progress, ct).ConfigureAwait(false);
 
                 IsPackInstalled = _modelLocator.IsInstalled;
-                DownloadProgressPercent = 100;
-                DownloadStatusText = "Terminé.";
+                DownloadStatusText = result.StatusText;
+                if (!result.Success && !string.Equals(result.StatusText, "Téléchargement annulé.", StringComparison.OrdinalIgnoreCase))
+                {
+                    NotifyChat(result.ErrorMessage ?? "Téléchargement Pack Full échoué.");
+                }
             }
             catch (OperationCanceledException)
             {
@@ -319,16 +282,7 @@ namespace Virgil.App.ViewModels
                 _downloadCts?.Dispose();
                 _downloadCts = null;
 
-                if (File.Exists(tempPath))
-                {
-                    try
-                    {
-                        File.Delete(tempPath);
-                    }
-                    catch
-                    {
-                    }
-                }
+                _packDownloader.CleanupTemporaryFiles();
             }
         }
 
@@ -360,25 +314,12 @@ namespace Virgil.App.ViewModels
             DownloadStatusText = "Vérification…";
             try
             {
-                var hashPath = _modelLocator.ModelHashPath;
-                if (!File.Exists(hashPath))
+                var result = await _packDownloader.VerifyAsync().ConfigureAwait(false);
+                DownloadStatusText = result.StatusText;
+                IsPackInstalled = result.IsValid;
+                if (!result.IsValid && !string.IsNullOrWhiteSpace(result.ErrorMessage))
                 {
-                    DownloadStatusText = "Hash attendu manquant.";
-                    return;
-                }
-
-                var expected = (await File.ReadAllTextAsync(hashPath).ConfigureAwait(false)).Trim();
-                var actual = await ComputeSha256Async(_modelLocator.ModelPath, CancellationToken.None).ConfigureAwait(false);
-                if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
-                {
-                    DownloadStatusText = "Vérification OK.";
-                    IsPackInstalled = true;
-                }
-                else
-                {
-                    DownloadStatusText = "Hash incorrect.";
-                    IsPackInstalled = false;
-                    NotifyChat("Pack Full corrompu: hash incorrect.");
+                    NotifyChat(result.ErrorMessage);
                 }
             }
             catch (Exception ex)
@@ -406,38 +347,6 @@ namespace Virgil.App.ViewModels
             {
                 AiTestResponseText = $"Erreur IA: {ex.Message}";
             }
-        }
-
-        private static async Task<string> ComputeSha256Async(string filePath, CancellationToken ct)
-        {
-            await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, useAsync: true);
-            using var sha256 = SHA256.Create();
-            var hash = await sha256.ComputeHashAsync(stream, ct).ConfigureAwait(false);
-            return Convert.ToHexString(hash);
-        }
-
-        private static string FormatSpeed(long bytes, TimeSpan elapsed)
-        {
-            if (elapsed.TotalSeconds <= 0.5)
-            {
-                return "—";
-            }
-
-            var bytesPerSecond = bytes / elapsed.TotalSeconds;
-            return $"{FormatBytes(bytesPerSecond)}/s";
-        }
-
-        private static string FormatBytes(double bytes)
-        {
-            string[] suffixes = { "o", "Ko", "Mo", "Go" };
-            var order = 0;
-            while (bytes >= 1024 && order < suffixes.Length - 1)
-            {
-                order++;
-                bytes /= 1024;
-            }
-
-            return $"{bytes:0.0} {suffixes[order]}";
         }
 
         private void NotifyChat(string message)
