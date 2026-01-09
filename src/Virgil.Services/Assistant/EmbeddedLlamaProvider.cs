@@ -13,7 +13,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 {
     private const string DefaultBaseUrl = "http://localhost:8080";
     private const int DefaultTimeoutSeconds = 30;
-    private const string UnavailableMessage = "IA embarquée indisponible (runtime non démarré).";
+    private const string UnavailableMessage = "Pack Full manquant.";
 
     private readonly LlamaRuntimeManager _runtimeManager;
     private readonly HttpClient _httpClient;
