@@ -24,8 +24,22 @@ namespace Virgil.App.Models
         public int OpenAiTimeoutSeconds { get; set; } = 30;
         public string EmbeddedLlamaBaseUrl { get; set; } = "http://localhost:8080";
         public int EmbeddedLlamaTimeoutSeconds { get; set; } = 30;
-        public string? PackFullSha256 { get; set; } = ModelPackManifest.Sha256;
-        public long? PackFullSizeBytes { get; set; } = ModelPackManifest.SizeBytes;
+        public bool AiPackFullEnabled { get; set; } = true;
+        public string AiPackFullDownloadUrl { get; set; } = string.Empty;
+        public string AiPackFullSha256 { get; set; } = string.Empty;
+        public long? AiPackFullSizeBytes { get; set; }
+
+        public ModelPackManifest GetActiveFullManifest()
+        {
+            var embedded = ModelPackManifest.FullPack;
+
+            return embedded with
+            {
+                DownloadUrl = string.IsNullOrWhiteSpace(AiPackFullDownloadUrl) ? embedded.DownloadUrl : AiPackFullDownloadUrl,
+                Sha256 = string.IsNullOrWhiteSpace(AiPackFullSha256) ? embedded.Sha256 : AiPackFullSha256,
+                SizeBytes = AiPackFullSizeBytes ?? embedded.SizeBytes
+            };
+        }
     }
 
     public class MoodThreshold
