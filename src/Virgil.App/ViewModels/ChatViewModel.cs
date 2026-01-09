@@ -180,6 +180,10 @@ namespace Virgil.App.ViewModels
                 var result = await _chatEngine.GenerateAsync(message, context).ConfigureAwait(false);
                 await _actionBridge.RouteAsync(result).ConfigureAwait(false);
             }
+            catch (Virgil.Services.Chat.ChatEngineUnavailableException ex)
+            {
+                _chat.PostSystemMessage(ex.Message, MessageType.Warning, ChatKind.Warning);
+            }
             catch (Exception ex)
             {
                 _chat.PostSystemMessage($"Erreur chat: {ex.Message}", MessageType.Error, ChatKind.Error);

@@ -711,7 +711,7 @@ public sealed class PerformanceService : IPerformanceService
         }
     }
 
-    private sealed class WindowsMemoryReader : IMemoryReader
+    public sealed class WindowsMemoryReader : IMemoryReader
     {
         public bool IsSupportedPlatform => OperatingSystem.IsWindows();
 

@@ -9,6 +9,7 @@ public sealed class StartupDiagnostics
     private readonly string _assetsPath;
     private readonly string _logPath;
     private readonly IReadOnlyList<(string Description, string Path)> _requiredAssets;
+    private readonly ModelLocator _modelLocator;
 
     public StartupDiagnostics(string? appDataPath = null)
     {
@@ -17,6 +18,8 @@ public sealed class StartupDiagnostics
         _appDataPath = TrimTrailingSeparators(resolvedAppDataPath);
         _assetsPath = Path.Combine(_appDataPath, "assets");
         _logPath = Log.CurrentLogFile;
+
+        _modelLocator = new ModelLocator();
 
         _requiredAssets = new List<(string Description, string Path)>
         {
@@ -27,7 +30,7 @@ public sealed class StartupDiagnostics
             ("Voix FR - system.json", Path.Combine(_assetsPath, "voice", "fr", "system.json")),
             ("Voix FR - moods.json", Path.Combine(_assetsPath, "voice", "fr", "moods.json")),
             ("Voix FR - actions.json", Path.Combine(_assetsPath, "voice", "fr", "actions.json")),
-            ("Modèle GGUF", Path.Combine(_assetsPath, "models", "virgil-model.gguf")),
+            ("Modèle GGUF", _modelLocator.ModelPath),
             ("Prompt système", Path.Combine(_assetsPath, "prompts", "system_prompt.txt")),
         };
     }
