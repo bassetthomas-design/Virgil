@@ -46,10 +46,7 @@ namespace Virgil.App.ViewModels
             _warnCpu = s.Mood.WarnCpu;
 
             _packDownloader = new ModelPackDownloader(_modelLocator);
-            _packManifest = new ModelPackManifest(
-                "pack-full-llama31-8b",
-                "llama-3.1-8b-instruct-q4_k_m",
-                FullPackDownloadUrl);
+            _packManifest = ModelPackManifest.FullPack;
 
             _isPackInstalled = _modelLocator.IsInstalled;
             _downloadStatusText = _isPackInstalled ? "Pack Full installé." : "Pack Full non installé.";
@@ -230,7 +227,7 @@ namespace Virgil.App.ViewModels
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(FullPackDownloadUrl))
+            if (string.IsNullOrWhiteSpace(_packManifest.DownloadUrl))
             {
                 DownloadStatusText = "URL Pack Full manquante.";
                 NotifyChat("Installation Pack Full impossible: URL manquante.");
