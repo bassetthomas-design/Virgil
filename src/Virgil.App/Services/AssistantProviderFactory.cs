@@ -18,10 +18,6 @@ namespace Virgil.App.Services
         public IAssistantProvider? CreateProvider()
         {
             var settings = _settingsService.Settings;
-            var ollamaProvider = new OllamaAssistantProvider(
-                settings.OllamaBaseUrl,
-                settings.OllamaModel,
-                TimeSpan.FromSeconds(settings.OllamaTimeoutSeconds));
             var embeddedRuntimeManager = new LlamaRuntimeManager(settings.EmbeddedLlamaBaseUrl);
             var embeddedProvider = new EmbeddedLlamaProvider(
                 embeddedRuntimeManager,
@@ -32,8 +28,8 @@ namespace Virgil.App.Services
             {
                 AiProvider.Disabled => null,
                 AiProvider.EmbeddedLlama => embeddedProvider,
-                AiProvider.OpenAI => CreateOpenAiProvider(settings, ollamaProvider),
-                _ => ollamaProvider
+                AiProvider.OpenAI => CreateOpenAiProvider(settings, embeddedProvider),
+                _ => embeddedProvider
             };
         }
 
