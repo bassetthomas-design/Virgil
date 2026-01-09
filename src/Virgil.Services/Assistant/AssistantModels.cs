@@ -15,6 +15,8 @@ public sealed record ProposedAction(
 public sealed record AssistantReply(string Text, IReadOnlyList<ProposedAction> ProposedActions)
 {
     public static AssistantReply Empty { get; } = new(string.Empty, Array.Empty<ProposedAction>());
+
+    public AssistantReply Value => this;
 }
 
 public sealed record AssistantTelemetrySummary(
