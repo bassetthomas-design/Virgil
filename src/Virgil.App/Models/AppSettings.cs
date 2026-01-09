@@ -1,6 +1,7 @@
 namespace Virgil.App.Models
 {
     using System.ComponentModel;
+    using Virgil.Core.Config;
 
     public enum AiProvider
     {
@@ -23,6 +24,8 @@ namespace Virgil.App.Models
         public int OpenAiTimeoutSeconds { get; set; } = 30;
         public string EmbeddedLlamaBaseUrl { get; set; } = "http://localhost:8080";
         public int EmbeddedLlamaTimeoutSeconds { get; set; } = 30;
+        public string? PackFullSha256 { get; set; } = ModelPackManifest.Sha256;
+        public long? PackFullSizeBytes { get; set; } = ModelPackManifest.SizeBytes;
     }
 
     public class MoodThreshold
