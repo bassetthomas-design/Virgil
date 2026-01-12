@@ -94,7 +94,9 @@ namespace Virgil.App
                 var result = dlg.ShowDialog();
                 if (result == true && _settingsService.Settings.MonitoringEnabled)
                 {
-                    _monitoringService.SetInterval(_settingsService.Settings.MonitoringIntervalMs);
+                    _monitoringService.SetIntervalRange(
+                        _settingsService.Settings.MonitoringIntervalMinutesMin,
+                        _settingsService.Settings.MonitoringIntervalMinutesMax);
                     _monitoringService.Start();
                 }
                 else

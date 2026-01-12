@@ -40,7 +40,8 @@ namespace Virgil.App.ViewModels
             // Charger une "copie" (en champs) pour permettre Annuler sans effet de bord
             var s = _svc.Settings;
 
-            _monitoringIntervalMs = s.MonitoringIntervalMs;
+            _monitoringIntervalMinutesMin = s.MonitoringIntervalMinutesMin;
+            _monitoringIntervalMinutesMax = s.MonitoringIntervalMinutesMax;
             _defaultMessageTtlMs = s.DefaultMessageTtlMs;
             _companionTalkative = s.CompanionTalkative;
             _enableBeatPulse = s.EnableBeatPulse;
@@ -63,11 +64,18 @@ namespace Virgil.App.ViewModels
             _testAiCommand = new AsyncRelayCommand(_ => TestAiAsync(), _ => !IsDownloading);
         }
 
-        private int _monitoringIntervalMs;
-        public int MonitoringIntervalMs
+        private int _monitoringIntervalMinutesMin;
+        public int MonitoringIntervalMinutesMin
         {
-            get => _monitoringIntervalMs;
-            set { _monitoringIntervalMs = value; OnPropertyChanged(); }
+            get => _monitoringIntervalMinutesMin;
+            set { _monitoringIntervalMinutesMin = value; OnPropertyChanged(); }
+        }
+
+        private int _monitoringIntervalMinutesMax;
+        public int MonitoringIntervalMinutesMax
+        {
+            get => _monitoringIntervalMinutesMax;
+            set { _monitoringIntervalMinutesMax = value; OnPropertyChanged(); }
         }
 
         private int _defaultMessageTtlMs;
@@ -232,7 +240,15 @@ namespace Virgil.App.ViewModels
         {
             var s = _svc.Settings;
 
-            s.MonitoringIntervalMs = _monitoringIntervalMs;
+            var minMinutes = Math.Clamp(_monitoringIntervalMinutesMin, 5, 10);
+            var maxMinutes = Math.Clamp(_monitoringIntervalMinutesMax, 5, 10);
+            if (maxMinutes < minMinutes)
+            {
+                (minMinutes, maxMinutes) = (maxMinutes, minMinutes);
+            }
+
+            s.MonitoringIntervalMinutesMin = minMinutes;
+            s.MonitoringIntervalMinutesMax = maxMinutes;
             s.DefaultMessageTtlMs = _defaultMessageTtlMs;
             s.CompanionTalkative = _companionTalkative;
             s.EnableBeatPulse = _enableBeatPulse;

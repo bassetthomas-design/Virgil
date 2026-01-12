@@ -123,7 +123,9 @@ namespace Virgil.App.ViewModels
 
         public async Task InitializeAsync()
         {
-            _monitoringService.SetInterval(_settingsService.Settings.MonitoringIntervalMs);
+            _monitoringService.SetIntervalRange(
+                _settingsService.Settings.MonitoringIntervalMinutesMin,
+                _settingsService.Settings.MonitoringIntervalMinutesMax);
             if (_settingsService.Settings.MonitoringEnabled)
             {
                 _monitoringService.Start();
@@ -146,7 +148,9 @@ namespace Virgil.App.ViewModels
 
         public async Task ReloadUiFromSettingsAsync(CancellationToken ct)
         {
-            _monitoringService.SetInterval(_settingsService.Settings.MonitoringIntervalMs);
+            _monitoringService.SetIntervalRange(
+                _settingsService.Settings.MonitoringIntervalMinutesMin,
+                _settingsService.Settings.MonitoringIntervalMinutesMax);
             _isMonitoringEnabled = _settingsService.Settings.MonitoringEnabled;
             if (_isMonitoringEnabled)
             {
@@ -251,6 +255,7 @@ namespace Virgil.App.ViewModels
             definitions.AddRange(new[]
             {
                 MapAction("monitor_toggle", "Activer / désactiver la surveillance", false, (_, ct) => ToggleMonitoringAsync(ct)),
+                MapAction("monitor_refresh_now", "Rafraîchir maintenant", false, (_, ct) => RefreshMonitoringAsync(ct)),
                 MapAction("hud_toggle", "Afficher / masquer le HUD", false, (_, ct) => ToggleHudAsync(ct)),
                 MapAction("open_settings", "Ouvrir les paramètres", false, (_, ct) => _uiInteractions.OpenSettingsAsync(ct)),
                 MapAction("show_hud", "Afficher le HUD", false, (_, ct) => EnsureHudVisibleAsync(true, ct)),
@@ -359,6 +364,13 @@ namespace Virgil.App.ViewModels
             _settingsService.Save();
             OnPropertyChanged(nameof(MonitoringToggleLabel));
             return Task.FromResult(ActionResult.Completed(_isMonitoringEnabled ? "Surveillance activée" : "Surveillance désactivée"));
+        }
+
+        private async Task<ActionResult> RefreshMonitoringAsync(CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            await _monitoringService.RefreshNowAsync().ConfigureAwait(false);
+            return ActionResult.Completed("Monitoring rafraîchi");
         }
 
         private async Task<ActionResult> ToggleHudAsync(CancellationToken ct)
