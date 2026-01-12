@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,9 @@ namespace Virgil.App.ViewModels
         private bool _isDownloadIndeterminate;
         private readonly ModelPackDownloader _packDownloader;
         private readonly ModelPackManifest _packManifest;
+        private string _modelStatusText = string.Empty;
+        private string _modelPathText = string.Empty;
+        private string _modelAgeText = string.Empty;
 
         public SettingsViewModel(SettingsService svc, ChatService? chatService = null, IAssistantService? assistantService = null)
         {
@@ -51,6 +55,7 @@ namespace Virgil.App.ViewModels
             _isPackInstalled = _modelLocator.IsInstalled;
             _downloadStatusText = _isPackInstalled ? "Pack Full installé." : "Pack Full non installé.";
             _downloadSpeedText = "—";
+            RefreshModelDetails();
 
             _installPackCommand = new AsyncRelayCommand(_ => InstallPackAsync(), _ => !IsDownloading);
             _cancelDownloadCommand = new RelayCommand(_ => CancelDownload(), _ => IsDownloading);
@@ -122,6 +127,7 @@ namespace Virgil.App.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(PackStatusText));
                 OnPropertyChanged(nameof(ShowPackInstallPrompt));
+                RefreshModelDetails();
             }
         }
 
@@ -173,6 +179,24 @@ namespace Virgil.App.ViewModels
         public string PackStatusText => IsPackInstalled ? "Installé" : "Non installé";
 
         public bool ShowPackInstallPrompt => !_isPackInstalled && _svc.Settings.AiProvider == AiProvider.EmbeddedLlama;
+
+        public string ModelStatusText
+        {
+            get => _modelStatusText;
+            private set { _modelStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string ModelPathText
+        {
+            get => _modelPathText;
+            private set { _modelPathText = value; OnPropertyChanged(); }
+        }
+
+        public string ModelAgeText
+        {
+            get => _modelAgeText;
+            private set { _modelAgeText = value; OnPropertyChanged(); }
+        }
 
         public bool IsDownloadIndeterminate
         {
@@ -357,6 +381,22 @@ namespace Virgil.App.ViewModels
             _cancelDownloadCommand.RaiseCanExecuteChanged();
             _verifyPackCommand.RaiseCanExecuteChanged();
             _testAiCommand.RaiseCanExecuteChanged();
+        }
+
+        private void RefreshModelDetails()
+        {
+            if (_modelLocator.TryResolve(out var path, out _))
+            {
+                ModelStatusText = "Modèle: installé";
+                ModelPathText = path;
+                ModelAgeText = $"Âge des données: {ModelLocator.FormatAge(ModelLocator.GetModelAge(path))}";
+            }
+            else
+            {
+                ModelStatusText = "Modèle manquant";
+                ModelPathText = _modelLocator.GetCandidatePaths().First();
+                ModelAgeText = string.Empty;
+            }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

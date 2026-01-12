@@ -30,7 +30,6 @@ public sealed class StartupDiagnostics
             ("Voix FR - system.json", Path.Combine(_assetsPath, "voice", "fr", "system.json")),
             ("Voix FR - moods.json", Path.Combine(_assetsPath, "voice", "fr", "moods.json")),
             ("Voix FR - actions.json", Path.Combine(_assetsPath, "voice", "fr", "actions.json")),
-            ("Modèle GGUF", _modelLocator.ModelPath),
             ("Prompt système", Path.Combine(_assetsPath, "prompts", "system_prompt.txt")),
         };
     }
@@ -45,6 +44,11 @@ public sealed class StartupDiagnostics
             {
                 missing.Add($"{asset.Description} manquant (attendu : {asset.Path})");
             }
+        }
+
+        if (!_modelLocator.TryResolve(out _, out var modelReason))
+        {
+            missing.Add(modelReason);
         }
 
         if (missing.Count == 0)

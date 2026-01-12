@@ -34,6 +34,9 @@
                 <TextBlock Text="IA" FontWeight="Bold" Margin="0,16,0,6"/>
                 <TextBlock Text="Statut Pack Full:"/>
                 <TextBlock Text="{Binding PackStatusText}" FontWeight="SemiBold" Margin="0,2,0,6"/>
+                <TextBlock Text="{Binding ModelStatusText}" FontWeight="SemiBold" Margin="0,2,0,2"/>
+                <TextBlock Text="{Binding ModelPathText}" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding ModelAgeText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <TextBlock Text="IA locale sélectionnée : Pack Full manquant. Installez-le pour activer l’IA offline."
                            Margin="0,0,0,6"
                            TextWrapping="Wrap"
