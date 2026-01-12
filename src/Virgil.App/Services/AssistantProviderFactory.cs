@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Virgil.App.Models;
 using Virgil.Services.Assistant;
 
@@ -18,7 +19,10 @@ namespace Virgil.App.Services
         public IAssistantProvider? CreateProvider()
         {
             var settings = _settingsService.Settings;
-            var embeddedRuntimeManager = new LlamaRuntimeManager(settings.EmbeddedLlamaBaseUrl);
+            var defaultRuntimePath = LlamaRuntimeManager.DefaultRuntimePath;
+            ILocalLlmRuntime embeddedRuntimeManager = File.Exists(defaultRuntimePath)
+                ? new LlamaRuntimeManager(settings.EmbeddedLlamaBaseUrl, defaultRuntimePath)
+                : new NoRuntimeLocalLlmRuntime(defaultRuntimePath);
             var embeddedProvider = new EmbeddedLlamaProvider(
                 embeddedRuntimeManager,
                 settings.EmbeddedLlamaBaseUrl,

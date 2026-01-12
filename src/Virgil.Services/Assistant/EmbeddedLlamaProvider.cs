@@ -13,9 +13,9 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 {
     private const string DefaultBaseUrl = "http://localhost:8080";
     private const int DefaultTimeoutSeconds = 30;
-    private const string UnavailableMessage = "Pack Full manquant.";
+    private const string UnavailableMessage = "Runtime IA manquant (llama-server.exe).";
 
-    private readonly LlamaRuntimeManager _runtimeManager;
+    private readonly ILocalLlmRuntime _runtimeManager;
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -23,7 +23,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
     };
 
     public EmbeddedLlamaProvider(
-        LlamaRuntimeManager runtimeManager,
+        ILocalLlmRuntime runtimeManager,
         string? baseUrl = null,
         TimeSpan? timeout = null,
         HttpClient? httpClient = null)
@@ -58,6 +58,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
     {
         try
         {
+            if (!_runtimeManager.IsRuntimeAvailable())
+            {
+                return UnavailableReply();
+            }
+
             await _runtimeManager.StartAsync(ct).ConfigureAwait(false);
             var healthy = await _runtimeManager.HealthCheckAsync(ct).ConfigureAwait(false);
             if (!healthy)
