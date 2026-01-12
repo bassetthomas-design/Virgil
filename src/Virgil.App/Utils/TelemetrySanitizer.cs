@@ -21,7 +21,7 @@ public static class TelemetrySanitizer
     {
         if (!IsValid(value))
         {
-            return "—";
+            return "N/A";
         }
 
         var suffix = unit ?? string.Empty;

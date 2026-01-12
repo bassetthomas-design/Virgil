@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +20,7 @@ namespace Virgil.App.Services
         private readonly object _loopGate = new();
         private CancellationTokenSource? _loopCts;
         private Task? _loopTask;
+        private readonly SemaphoreSlim _sampleGate = new(1, 1);
         private DateTime _lastErrorLogUtc = DateTime.MinValue;
         private readonly TimeSpan _errorLogInterval = TimeSpan.FromSeconds(30);
         private readonly TimeSpan _cacheDuration = TimeSpan.FromSeconds(30);
@@ -32,6 +34,8 @@ namespace Virgil.App.Services
         private MetricState _cpuTemp = new();
         private MetricState _gpuTemp = new();
         private MetricState _diskTemp = new();
+        public DateTime? LastTelemetryUpdateUtc { get; private set; }
+        public double? DataAgeSeconds { get; private set; }
 
         public MonitoringService()
         {
@@ -106,17 +110,18 @@ namespace Virgil.App.Services
         /// </summary>
         public Task RescanAsync()
         {
-            return Task.Run(Sample);
+            return Task.Run(() => Sample());
         }
 
         private async Task MonitorLoopAsync(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
             {
-                var started = DateTime.UtcNow;
-                Sample();
-                var elapsed = DateTime.UtcNow - started;
-                var delay = _pollInterval - elapsed;
+                var started = Stopwatch.StartNew();
+                var sampled = Sample();
+                started.Stop();
+                LogTickDuration(started.Elapsed, sampled);
+                var delay = _pollInterval - started.Elapsed;
                 if (delay < TimeSpan.Zero)
                 {
                     delay = TimeSpan.Zero;
@@ -133,15 +138,26 @@ namespace Virgil.App.Services
             }
         }
 
-        private void Sample()
+        private bool Sample()
         {
+            if (!_sampleGate.Wait(0))
+            {
+                return false;
+            }
+
             try
             {
                 SampleCore();
+                return true;
             }
             catch (Exception ex)
             {
                 LogMonitoringException(ex, "Monitoring sample failed.");
+                return false;
+            }
+            finally
+            {
+                _sampleGate.Release();
             }
         }
 
@@ -260,6 +276,8 @@ namespace Virgil.App.Services
                 diskUsageSample,
                 gpuTempSample,
                 diskTempSample);
+            LastTelemetryUpdateUtc = now;
+            DataAgeSeconds = snapshot.DataAge?.TotalSeconds;
 
             Metrics?.Invoke(snapshot.CpuUsage.Value, snapshot.GpuUsage.Value, snapshot.RamUsage.Value, snapshot.CpuTemp.Value);
             Updated?.Invoke(this, new MetricsEventArgs(
@@ -319,6 +337,12 @@ namespace Virgil.App.Services
             }
 
             return new MetricSample(double.NaN, true, null, null);
+        }
+
+        private void LogTickDuration(TimeSpan duration, bool sampled)
+        {
+            var status = sampled ? "sampled" : "skipped";
+            Trace.WriteLine($"Monitoring tick {status} in {duration.TotalMilliseconds:F0} ms.");
         }
 
         private void LogMonitoringException(Exception ex, string message)

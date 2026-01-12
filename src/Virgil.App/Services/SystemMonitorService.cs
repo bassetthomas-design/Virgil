@@ -40,9 +40,12 @@ namespace Virgil.App.Services
     /// </summary>
     public sealed class SystemMonitorService : ISystemMonitorService, IDisposable
     {
-        private System.Threading.Timer? _timer;
         private volatile bool _isRunning;
         private readonly object _gate = new();
+        private readonly SemaphoreSlim _sampleGate = new(1, 1);
+        private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(7);
+        private CancellationTokenSource? _loopCts;
+        private Task? _loopTask;
 
         // Perf counters (Windows). Si indisponibles, restent null et on publie 0.
         private PerformanceCounter? _cpuCounter;
@@ -93,7 +96,10 @@ namespace Virgil.App.Services
                 try { _cpuCounter?.NextValue(); } catch { }
                 try { _ramCounter?.NextValue(); } catch { }
 
-                _timer = new System.Threading.Timer(OnTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+                _loopCts?.Cancel();
+                _loopCts?.Dispose();
+                _loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                _loopTask = Task.Run(() => MonitorLoopAsync(_loopCts.Token), cancellationToken);
             }
 
             return Task.CompletedTask;
@@ -106,16 +112,64 @@ namespace Virgil.App.Services
             lock (_gate)
             {
                 _isRunning = false;
-                _timer?.Dispose();
-                _timer = null;
+                _loopCts?.Cancel();
+                _loopCts?.Dispose();
+                _loopCts = null;
+                _loopTask = null;
             }
 
             return Task.CompletedTask;
         }
 
-        private void OnTick(object? state)
+        private async Task MonitorLoopAsync(CancellationToken token)
         {
-            if (!_isRunning) return;
+            while (!token.IsCancellationRequested)
+            {
+                var started = Stopwatch.StartNew();
+                await SampleAsync(token).ConfigureAwait(false);
+                started.Stop();
+                Trace.WriteLine($"System monitor tick completed in {started.Elapsed.TotalMilliseconds:F0} ms.");
+                var delay = _pollInterval - started.Elapsed;
+                if (delay < TimeSpan.Zero)
+                {
+                    delay = TimeSpan.Zero;
+                }
+
+                try
+                {
+                    await Task.Delay(delay, token).ConfigureAwait(false);
+                }
+                catch (TaskCanceledException)
+                {
+                    return;
+                }
+            }
+        }
+
+        private async Task SampleAsync(CancellationToken token)
+        {
+            if (!_isRunning)
+            {
+                return;
+            }
+
+            if (!await _sampleGate.WaitAsync(0, token).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            try
+            {
+                SampleCore();
+            }
+            finally
+            {
+                _sampleGate.Release();
+            }
+        }
+
+        private void SampleCore()
+        {
 
             float cpu = 0f;
             float ram = 0f;
@@ -245,8 +299,10 @@ namespace Virgil.App.Services
 
         public void Dispose()
         {
-            try { _timer?.Dispose(); } catch { }
-            _timer = null;
+            try { _loopCts?.Cancel(); } catch { }
+            try { _loopCts?.Dispose(); } catch { }
+            _loopCts = null;
+            _loopTask = null;
 
             try { _cpuCounter?.Dispose(); } catch { }
             try { _ramCounter?.Dispose(); } catch { }
