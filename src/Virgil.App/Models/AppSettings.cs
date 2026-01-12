@@ -12,7 +12,7 @@ namespace Virgil.App.Models
 
     public class AppSettings
     {
-        public int MonitoringIntervalMs { get; set; } = 2000;
+        public int MonitoringIntervalMs { get; set; } = 7000;
         public int DefaultMessageTtlMs { get; set; } = 60000;
         public MoodThreshold Mood { get; set; } = new();
         public bool ShowMiniHud { get; set; } = true;

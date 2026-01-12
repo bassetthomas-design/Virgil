@@ -76,8 +76,11 @@ namespace Virgil.App.ViewModels
                 if (_lastUpdateTimeUtc == value) return;
                 _lastUpdateTimeUtc = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(LastTelemetryUpdateUtc));
             }
         }
+
+        public DateTime? LastTelemetryUpdateUtc => LastUpdateTimeUtc;
 
         private TimeSpan? _dataAge;
         public TimeSpan? DataAge
@@ -88,8 +91,11 @@ namespace Virgil.App.ViewModels
                 if (_dataAge == value) return;
                 _dataAge = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(DataAgeSeconds));
             }
         }
+
+        public double? DataAgeSeconds => DataAge?.TotalSeconds;
 
 #if DEBUG
         private bool _useDebugStress;
