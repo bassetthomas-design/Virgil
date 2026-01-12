@@ -55,7 +55,9 @@ namespace Virgil.App.Services
 
             var services = Try(() =>
             {
-                _monitoring.SetInterval(_settings.Settings.MonitoringIntervalMs);
+                _monitoring.SetIntervalRange(
+                    _settings.Settings.MonitoringIntervalMinutesMin,
+                    _settings.Settings.MonitoringIntervalMinutesMax);
                 if (_settings.Settings.MonitoringEnabled)
                 {
                     _monitoring.Start();

@@ -23,10 +23,12 @@ namespace Virgil.App.Services
         private readonly SemaphoreSlim _sampleGate = new(1, 1);
         private DateTime _lastErrorLogUtc = DateTime.MinValue;
         private readonly TimeSpan _errorLogInterval = TimeSpan.FromSeconds(30);
-        private readonly TimeSpan _cacheDuration = TimeSpan.FromSeconds(30);
-        private readonly TimeSpan _minInterval = TimeSpan.FromSeconds(5);
-        private readonly TimeSpan _maxInterval = TimeSpan.FromSeconds(10);
-        private TimeSpan _pollInterval = TimeSpan.FromSeconds(7);
+        private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan DefaultMinInterval = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan DefaultMaxInterval = TimeSpan.FromMinutes(10);
+        private readonly Random _rng = new();
+        private TimeSpan _minInterval = DefaultMinInterval;
+        private TimeSpan _maxInterval = DefaultMaxInterval;
         private MetricState _cpuUsage = new();
         private MetricState _gpuUsage = new();
         private MetricState _ramUsage = new();
@@ -63,19 +65,28 @@ namespace Virgil.App.Services
             }
         }
 
-        public void SetInterval(int ms)
+        public void SetIntervalRange(int minMinutes, int maxMinutes)
         {
-            var requested = TimeSpan.FromMilliseconds(ms);
-            if (requested < _minInterval)
+            var min = TimeSpan.FromMinutes(minMinutes);
+            var max = TimeSpan.FromMinutes(maxMinutes);
+
+            if (min < DefaultMinInterval)
             {
-                requested = _minInterval;
-            }
-            else if (requested > _maxInterval)
-            {
-                requested = _maxInterval;
+                min = DefaultMinInterval;
             }
 
-            _pollInterval = requested;
+            if (max > DefaultMaxInterval)
+            {
+                max = DefaultMaxInterval;
+            }
+
+            if (max < min)
+            {
+                (min, max) = (max, min);
+            }
+
+            _minInterval = min;
+            _maxInterval = max;
         }
 
         public void Start()
@@ -109,8 +120,18 @@ namespace Virgil.App.Services
         /// Effectue immédiatement un nouveau prélèvement des métriques.
         /// </summary>
         public Task RescanAsync()
+            => RefreshNowAsync();
+
+        public Task RefreshNowAsync()
         {
-            return Task.Run(() => Sample());
+            Trace.WriteLine("Monitoring manual refresh requested.");
+            return Task.Run(() =>
+            {
+                var started = Stopwatch.StartNew();
+                var sampled = Sample();
+                started.Stop();
+                LogTickDuration(started.Elapsed, sampled);
+            });
         }
 
         private async Task MonitorLoopAsync(CancellationToken token)
@@ -121,12 +142,14 @@ namespace Virgil.App.Services
                 var sampled = Sample();
                 started.Stop();
                 LogTickDuration(started.Elapsed, sampled);
-                var delay = _pollInterval - started.Elapsed;
+                var nextInterval = GetNextInterval();
+                var delay = nextInterval - started.Elapsed;
                 if (delay < TimeSpan.Zero)
                 {
                     delay = TimeSpan.Zero;
                 }
 
+                LogNextSchedule(nextInterval, delay);
                 try
                 {
                     await Task.Delay(delay, token).ConfigureAwait(false);
@@ -343,8 +366,29 @@ namespace Virgil.App.Services
         {
             var status = sampled ? "sampled" : "skipped";
             Trace.WriteLine($"Monitoring tick {status} in {duration.TotalMilliseconds:F0} ms.");
+            if (LastTelemetryUpdateUtc.HasValue)
+            {
+                Trace.WriteLine($"Monitoring last refresh at {LastTelemetryUpdateUtc:O}.");
+            }
         }
 
+        private void LogNextSchedule(TimeSpan interval, TimeSpan delay)
+        {
+            var nextUtc = DateTime.UtcNow + delay;
+            Trace.WriteLine($"Monitoring next tick scheduled at {nextUtc:O} (interval {interval.TotalMinutes:F1} min).");
+        }
+
+        private TimeSpan GetNextInterval()
+        {
+            if (_maxInterval <= _minInterval)
+            {
+                return _minInterval;
+            }
+
+            var rangeMs = (_maxInterval - _minInterval).TotalMilliseconds;
+            var offsetMs = _rng.NextDouble() * rangeMs;
+            return _minInterval + TimeSpan.FromMilliseconds(offsetMs);
+        }
         private void LogMonitoringException(Exception ex, string message)
         {
             var now = DateTime.UtcNow;

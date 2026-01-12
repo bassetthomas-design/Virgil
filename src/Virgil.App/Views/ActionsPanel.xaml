@@ -93,6 +93,9 @@
             <Button Content="Recharger la configuration" Tag="app_reload_settings" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Rafraîchir maintenant" Tag="monitor_refresh_now" Margin="0,0,0,4"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Re-scanner le système" Tag="monitoring_rescan" Margin="0,0,0,0"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
