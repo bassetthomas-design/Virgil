@@ -8,7 +8,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="260" />
@@ -74,15 +73,5 @@
             </StackPanel>
         </Border>
 
-        <!-- Status bar -->
-        <Border Grid.Row="2" Grid.ColumnSpan="3" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="8" Padding="10,6" Margin="0,10,0,0">
-            <Border.Resources>
-                <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
-            </Border.Resources>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <ProgressBar Width="120" Height="10" IsIndeterminate="True" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" Margin="0,0,10,0" />
-                <TextBlock Text="{Binding StatusDisplay}" VerticalAlignment="Center" />
-            </StackPanel>
-        </Border>
     </Grid>
 </Window>

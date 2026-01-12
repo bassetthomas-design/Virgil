@@ -33,8 +33,6 @@ namespace Virgil.App.ViewModels
         private readonly ActionRegistry _actionRegistry;
 
         private bool _isBusy;
-        private string _statusText = "Virgil est prêt";
-        private string? _busyText;
         private bool _lastActionSuccess;
         private string? _lastActionMessage;
         private ActionResult? _lastActionResult;
@@ -52,34 +50,7 @@ namespace Virgil.App.ViewModels
             get => _isBusy;
             private set
             {
-                if (Set(ref _isBusy, value))
-                {
-                    OnPropertyChanged(nameof(StatusDisplay));
-                }
-            }
-        }
-
-        public string StatusText
-        {
-            get => _statusText;
-            private set
-            {
-                if (Set(ref _statusText, value))
-                {
-                    OnPropertyChanged(nameof(StatusDisplay));
-                }
-            }
-        }
-
-        public string? BusyText
-        {
-            get => _busyText;
-            private set
-            {
-                if (Set(ref _busyText, value))
-                {
-                    OnPropertyChanged(nameof(StatusDisplay));
-                }
+                Set(ref _isBusy, value);
             }
         }
 
@@ -100,10 +71,6 @@ namespace Virgil.App.ViewModels
             get => _lastActionResult;
             private set => Set(ref _lastActionResult, value);
         }
-
-        public string StatusDisplay => IsBusy && !string.IsNullOrWhiteSpace(BusyText)
-            ? BusyText!
-            : StatusText;
 
         public string HudToggleLabel => _isHudVisible ? "Masquer HUD" : "Mini HUD";
 
@@ -175,7 +142,6 @@ namespace Virgil.App.ViewModels
                 await ToggleHudAsync(CancellationToken.None).ConfigureAwait(false);
             }
 
-            StatusText = "Virgil est prêt";
         }
 
         public async Task ReloadUiFromSettingsAsync(CancellationToken ct)
@@ -208,17 +174,17 @@ namespace Virgil.App.ViewModels
             LastActionMessage = null;
             LastActionSuccess = false;
             LastActionResult = null;
-            StatusText = "Virgil est prêt";
         }
 
         public async Task<ActionResult> RunActionAsync(string key, Dictionary<string, string>? args, CancellationToken ct)
         {
             Utils.StartupLog.Write($"UI action requested: {key}");
+            var isServiceAction = ActionCatalog.All.ContainsKey(key);
 
             if (!_actionRegistry.TryGet(key, out var definition) || definition is null)
             {
                 var missing = ActionResult.Failure($"Action inconnue: {key}");
-                StatusText = missing.Message;
+                PostLocalActionResult(missing);
                 LastActionSuccess = false;
                 LastActionMessage = missing.Message;
                 LastActionResult = missing;
@@ -235,7 +201,7 @@ namespace Virgil.App.ViewModels
                 if (!confirmed)
                 {
                     var cancelled = ActionResult.Skipped("Action annulée par l'utilisateur");
-                    StatusText = cancelled.Message;
+                    PostLocalActionResult(cancelled);
                     LastActionSuccess = cancelled.Status != ActionResultStatus.Failed;
                     LastActionMessage = cancelled.Message;
                     LastActionResult = cancelled;
@@ -246,15 +212,15 @@ namespace Virgil.App.ViewModels
             try
             {
                 IsBusy = true;
-                BusyText = $"Exécution : {definition.DisplayName}";
 
                 var result = await definition.ExecuteAsync(args ?? new Dictionary<string, string>(), ct).ConfigureAwait(false);
                 LastActionSuccess = result.Status != ActionResultStatus.Failed;
                 LastActionMessage = result.Message;
                 LastActionResult = result;
-                StatusText = string.IsNullOrWhiteSpace(result.Message)
-                    ? definition.DisplayName
-                    : result.Message;
+                if (!isServiceAction)
+                {
+                    PostLocalActionResult(result);
+                }
                 return result;
             }
             catch (Exception ex)
@@ -263,13 +229,12 @@ namespace Virgil.App.ViewModels
                 LastActionSuccess = false;
                 LastActionMessage = failure.Message;
                 LastActionResult = failure;
-                StatusText = failure.Message;
+                PostLocalActionResult(failure);
                 Utils.StartupLog.Write($"Action {key} a échoué", ex);
                 return failure;
             }
             finally
             {
-                BusyText = null;
                 IsBusy = false;
             }
         }
@@ -482,6 +447,22 @@ namespace Virgil.App.ViewModels
             {
                 _chat.PostSystemMessage(formatted.Details, MessageType.Info, ChatKind.Info);
             }
+        }
+
+        private void PostLocalActionResult(ActionResult result)
+        {
+            var (type, kind) = result.Status switch
+            {
+                ActionResultStatus.Failed => (MessageType.Error, ChatKind.Error),
+                ActionResultStatus.PartialSuccess => (MessageType.Warning, ChatKind.Warning),
+                ActionResultStatus.NotAvailable => (MessageType.Warning, ChatKind.Warning),
+                ActionResultStatus.NotImplemented => (MessageType.Warning, ChatKind.Warning),
+                ActionResultStatus.Skipped => (MessageType.Warning, ChatKind.Warning),
+                _ => (MessageType.Info, ChatKind.Info)
+            };
+
+            var message = string.IsNullOrWhiteSpace(result.Message) ? result.Title : result.Message;
+            _chat.PostSystemMessage(message, type, kind);
         }
     }
 }
