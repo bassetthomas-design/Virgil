@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Virgil.Core.Config;
+using Virgil.Core.Logging;
 
 namespace Virgil.Services.Assistant;
 
@@ -13,7 +16,6 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 {
     private const string DefaultBaseUrl = "http://localhost:8080";
     private const int DefaultTimeoutSeconds = 30;
-    private const string UnavailableMessage = "Runtime IA manquant (llama-server.exe).";
 
     private readonly ILocalLlmRuntime _runtimeManager;
     private readonly HttpClient _httpClient;
@@ -58,16 +60,58 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
     {
         try
         {
+            var modelLocator = new ModelLocator();
+            var modelTriedPaths = new List<string>(modelLocator.GetCandidatePaths());
+            var modelFound = modelLocator.TryResolve(out var modelPath, out _);
+
+            Log.Info($"Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}");
+            if (modelFound)
+            {
+                Log.Info($"Modèle GGUF utilisé: {modelPath}");
+            }
+
+            var runtimePathExpected = Path.Combine(AppContext.BaseDirectory, "AI", "Runtime", "llama-server.exe");
+            var runtimeFallbackPath = _runtimeManager.RuntimePathUsed;
+            var runtimeFound = File.Exists(runtimePathExpected);
+            var runtimePathUsed = runtimePathExpected;
+
+            if (!runtimeFound && !string.Equals(runtimeFallbackPath, runtimePathExpected, StringComparison.OrdinalIgnoreCase))
+            {
+                runtimeFound = File.Exists(runtimeFallbackPath);
+                if (runtimeFound)
+                {
+                    runtimePathUsed = runtimeFallbackPath;
+                }
+            }
+
+            Log.Info($"Runtime IA attendu: {runtimePathExpected}");
+            if (runtimeFound)
+            {
+                Log.Info($"Runtime IA utilisé: {runtimePathUsed}");
+            }
+            else if (!string.Equals(runtimeFallbackPath, runtimePathExpected, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Info($"Runtime IA alternatif: {runtimeFallbackPath}");
+            }
+
+            if (!modelFound || !runtimeFound)
+            {
+                return UnavailableReply(
+                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
+            }
+
             if (!_runtimeManager.IsRuntimeAvailable())
             {
-                return UnavailableReply();
+                return UnavailableReply(
+                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
             }
 
             await _runtimeManager.StartAsync(ct).ConfigureAwait(false);
             var healthy = await _runtimeManager.HealthCheckAsync(ct).ConfigureAwait(false);
             if (!healthy)
             {
-                return UnavailableReply();
+                return UnavailableReply(
+                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
             }
 
             var prompt = BuildPrompt(ctx, userMessage);
@@ -80,7 +124,8 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
             if (!response.IsSuccessStatusCode)
             {
-                return UnavailableReply();
+                return UnavailableReply(
+                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
             }
 
             var rawResponse = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -88,7 +133,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (AssistantProviderUnavailableException)
         {
-            return UnavailableReply();
+            return UnavailableReply("IA indisponible.");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -96,11 +141,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (HttpRequestException)
         {
-            return UnavailableReply();
+            return UnavailableReply("IA indisponible.");
         }
         catch (TaskCanceledException)
         {
-            return UnavailableReply();
+            return UnavailableReply("IA indisponible.");
         }
     }
 
@@ -192,8 +237,36 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         return $"{systemPrompt}\nUtilisateur: {userMessage}\nAssistant:";
     }
 
-    private static AssistantReply UnavailableReply()
-        => new(UnavailableMessage, Array.Empty<ProposedAction>());
+    private static AssistantReply UnavailableReply(string message)
+        => new(message, Array.Empty<ProposedAction>());
+
+    private static string BuildUnavailableMessage(
+        bool modelFound,
+        IReadOnlyCollection<string> modelTriedPaths,
+        bool runtimeFound,
+        string runtimePathExpected)
+    {
+        if (!modelFound && !runtimeFound)
+        {
+            return "IA indisponible: Modèle GGUF manquant + Runtime llama-server.exe manquant."
+                + $"{Environment.NewLine}Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}"
+                + $"{Environment.NewLine}Chemin runtime attendu: {runtimePathExpected}";
+        }
+
+        if (!modelFound)
+        {
+            return "IA indisponible: Modèle GGUF manquant."
+                + $"{Environment.NewLine}Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}";
+        }
+
+        if (!runtimeFound)
+        {
+            return "IA indisponible: Runtime IA manquant (llama-server.exe)."
+                + $"{Environment.NewLine}Chemin runtime attendu: {runtimePathExpected}";
+        }
+
+        return "IA indisponible.";
+    }
 
     private sealed record EmbeddedLlamaRequest(
         [property: JsonPropertyName("prompt")] string Prompt,
