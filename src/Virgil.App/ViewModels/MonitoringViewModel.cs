@@ -67,6 +67,30 @@ namespace Virgil.App.ViewModels
 
         public AvatarTelemetryAdapter AvatarTelemetry { get; } = new();
 
+        private DateTime? _lastUpdateTimeUtc;
+        public DateTime? LastUpdateTimeUtc
+        {
+            get => _lastUpdateTimeUtc;
+            private set
+            {
+                if (_lastUpdateTimeUtc == value) return;
+                _lastUpdateTimeUtc = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private TimeSpan? _dataAge;
+        public TimeSpan? DataAge
+        {
+            get => _dataAge;
+            private set
+            {
+                if (_dataAge == value) return;
+                _dataAge = value;
+                OnPropertyChanged();
+            }
+        }
+
 #if DEBUG
         private bool _useDebugStress;
         public bool UseDebugStress
@@ -465,6 +489,8 @@ namespace Virgil.App.ViewModels
         private void ApplySnapshot(SystemMonitorSnapshot snapshot)
         {
             var now = DateTime.UtcNow;
+            LastUpdateTimeUtc = now;
+            DataAge = TimeSpan.Zero;
             var cpuUsage = snapshot.CpuUsage;
             if (IsInvalid(cpuUsage))
             {
@@ -589,18 +615,20 @@ namespace Virgil.App.ViewModels
 
         private void ApplySnapshot(MetricsEventArgs metrics)
         {
-            var now = DateTime.UtcNow;
+            LastUpdateTimeUtc = metrics.SampledAtUtc;
+            DataAge = metrics.DataAge;
             var cpuUsage = metrics.CpuUsage;
             if (IsInvalid(cpuUsage))
             {
                 CpuUsageIsStale = true;
                 cpuUsage = CpuUsage;
+                CpuUsageLastUpdatedUtc = metrics.CpuUsageLastUpdatedUtc;
             }
             else
             {
                 CpuUsage = cpuUsage;
                 CpuUsageIsStale = metrics.CpuUsageIsStale;
-                CpuUsageLastUpdatedUtc = now;
+                CpuUsageLastUpdatedUtc = metrics.CpuUsageLastUpdatedUtc;
             }
 
             var gpuUsage = metrics.GpuUsage;
@@ -608,12 +636,13 @@ namespace Virgil.App.ViewModels
             {
                 GpuUsageIsStale = true;
                 gpuUsage = GpuUsage;
+                GpuUsageLastUpdatedUtc = metrics.GpuUsageLastUpdatedUtc;
             }
             else
             {
                 GpuUsage = gpuUsage;
                 GpuUsageIsStale = metrics.GpuUsageIsStale;
-                GpuUsageLastUpdatedUtc = now;
+                GpuUsageLastUpdatedUtc = metrics.GpuUsageLastUpdatedUtc;
             }
 
             var ramUsage = metrics.RamUsage;
@@ -621,12 +650,13 @@ namespace Virgil.App.ViewModels
             {
                 RamUsageIsStale = true;
                 ramUsage = RamUsage;
+                RamUsageLastUpdatedUtc = metrics.RamUsageLastUpdatedUtc;
             }
             else
             {
                 RamUsage = ramUsage;
                 RamUsageIsStale = metrics.RamUsageIsStale;
-                RamUsageLastUpdatedUtc = now;
+                RamUsageLastUpdatedUtc = metrics.RamUsageLastUpdatedUtc;
             }
 
             var diskUsage = metrics.DiskUsage;
@@ -634,12 +664,13 @@ namespace Virgil.App.ViewModels
             {
                 DiskUsageIsStale = true;
                 diskUsage = DiskUsage;
+                DiskUsageLastUpdatedUtc = metrics.DiskUsageLastUpdatedUtc;
             }
             else
             {
                 DiskUsage = diskUsage;
                 DiskUsageIsStale = metrics.DiskUsageIsStale;
-                DiskUsageLastUpdatedUtc = now;
+                DiskUsageLastUpdatedUtc = metrics.DiskUsageLastUpdatedUtc;
             }
 
             var cpuTemp = metrics.CpuTemp;
@@ -647,12 +678,13 @@ namespace Virgil.App.ViewModels
             {
                 CpuTempIsStale = true;
                 cpuTemp = CpuTemp;
+                CpuTempLastUpdatedUtc = metrics.CpuTempLastUpdatedUtc;
             }
             else
             {
                 CpuTemp = cpuTemp;
                 CpuTempIsStale = metrics.CpuTempIsStale;
-                CpuTempLastUpdatedUtc = now;
+                CpuTempLastUpdatedUtc = metrics.CpuTempLastUpdatedUtc;
             }
 
             var gpuTemp = metrics.GpuTemp;
@@ -660,12 +692,13 @@ namespace Virgil.App.ViewModels
             {
                 GpuTempIsStale = true;
                 gpuTemp = GpuTemp;
+                GpuTempLastUpdatedUtc = metrics.GpuTempLastUpdatedUtc;
             }
             else
             {
                 GpuTemp = gpuTemp;
                 GpuTempIsStale = metrics.GpuTempIsStale;
-                GpuTempLastUpdatedUtc = now;
+                GpuTempLastUpdatedUtc = metrics.GpuTempLastUpdatedUtc;
             }
 
             var diskTemp = metrics.DiskTemp;
@@ -673,12 +706,13 @@ namespace Virgil.App.ViewModels
             {
                 DiskTempIsStale = true;
                 diskTemp = DiskTemp;
+                DiskTempLastUpdatedUtc = metrics.DiskTempLastUpdatedUtc;
             }
             else
             {
                 DiskTemp = diskTemp;
                 DiskTempIsStale = metrics.DiskTempIsStale;
-                DiskTempLastUpdatedUtc = now;
+                DiskTempLastUpdatedUtc = metrics.DiskTempLastUpdatedUtc;
             }
 
             UpdateKeyMetricStaleness();
