@@ -19,6 +19,22 @@ namespace Virgil.App.Models
         public bool DiskUsageIsStale { get; }
         public bool GpuTempIsStale { get; }
         public bool DiskTempIsStale { get; }
+        public DateTime SampledAtUtc { get; init; }
+        public TimeSpan? DataAge { get; init; }
+        public DateTime? CpuUsageLastUpdatedUtc { get; init; }
+        public TimeSpan? CpuUsageDataAge { get; init; }
+        public DateTime? GpuUsageLastUpdatedUtc { get; init; }
+        public TimeSpan? GpuUsageDataAge { get; init; }
+        public DateTime? RamUsageLastUpdatedUtc { get; init; }
+        public TimeSpan? RamUsageDataAge { get; init; }
+        public DateTime? DiskUsageLastUpdatedUtc { get; init; }
+        public TimeSpan? DiskUsageDataAge { get; init; }
+        public DateTime? CpuTempLastUpdatedUtc { get; init; }
+        public TimeSpan? CpuTempDataAge { get; init; }
+        public DateTime? GpuTempLastUpdatedUtc { get; init; }
+        public TimeSpan? GpuTempDataAge { get; init; }
+        public DateTime? DiskTempLastUpdatedUtc { get; init; }
+        public TimeSpan? DiskTempDataAge { get; init; }
 
         // Legacy aliases kept for backward compatibility (if used somewhere)
         public double Cpu => CpuUsage;
