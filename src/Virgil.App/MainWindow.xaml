@@ -15,7 +15,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="44"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="28"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="360"/>
@@ -70,10 +69,5 @@
             <Button Content="Ouvrir configuration"/>
         </StackPanel>
 
-        <!-- Footer -->
-        <DockPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="12,0">
-            <TextBlock Text="Statut: prêt"/>
-            <TextBlock DockPanel.Dock="Right" Text=""/>
-        </DockPanel>
     </Grid>
 </Window>
