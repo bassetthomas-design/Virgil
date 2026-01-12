@@ -50,7 +50,7 @@ public sealed class ModelPackDownloader
         progress?.Report(new ModelPackDownloadProgress(0, "—", "Téléchargement…", false));
 
         Directory.CreateDirectory(_modelLocator.ModelDirectory);
-        _lastTempPath = Path.Combine(_modelLocator.ModelDirectory, $"{ModelLocator.ExpectedFileName}.tmp");
+        _lastTempPath = Path.Combine(_modelLocator.ModelDirectory, $"{_modelLocator.ExpectedFileName}.tmp");
 
         try
         {
@@ -123,18 +123,19 @@ public sealed class ModelPackDownloader
 
     public async Task<ModelPackVerificationResult> VerifyAsync()
     {
-        if (!_modelLocator.IsInstalled)
+        if (!_modelLocator.TryResolve(out var resolvedPath, out _))
         {
             return new ModelPackVerificationResult(false, "Pack Full non installé.");
         }
 
-        if (!File.Exists(_modelLocator.ModelHashPath))
+        var hashPath = _modelLocator.GetHashPathForModel(resolvedPath);
+        if (!File.Exists(hashPath))
         {
             return new ModelPackVerificationResult(false, "Hash attendu manquant.", "Hash attendu manquant.");
         }
 
-        var expected = (await File.ReadAllTextAsync(_modelLocator.ModelHashPath).ConfigureAwait(false)).Trim();
-        var actual = await ComputeSha256Async(_modelLocator.ModelPath, CancellationToken.None).ConfigureAwait(false);
+        var expected = (await File.ReadAllTextAsync(hashPath).ConfigureAwait(false)).Trim();
+        var actual = await ComputeSha256Async(resolvedPath, CancellationToken.None).ConfigureAwait(false);
         if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
         {
             return new ModelPackVerificationResult(true, "Vérification OK.");

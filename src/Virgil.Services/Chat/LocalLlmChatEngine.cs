@@ -39,9 +39,9 @@ public sealed class LocalLlmChatEngine : IChatEngine
     {
         EnsureMinimumMemory();
 
-        if (!_modelLocator.IsInstalled)
+        if (!_modelLocator.TryResolve(out _, out var reason))
         {
-            throw new ChatEngineUnavailableException("IA offline non installée (Pack Full manquant).");
+            throw new ChatEngineUnavailableException(reason);
         }
 
         if (!File.Exists(_systemPromptPath))
