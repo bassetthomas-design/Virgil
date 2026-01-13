@@ -13,6 +13,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 {
     private static readonly TimeSpan DefaultHealthTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DefaultShutdownTimeout = TimeSpan.FromSeconds(5);
+    private const string LocalHostAddress = "127.0.0.1";
+    private const int DefaultPort = 8080;
     private const string RuntimeExecutableName = "llama-server.exe";
     private readonly string _baseUrl;
     private readonly string _executablePath;
@@ -37,7 +39,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         _executablePath = string.IsNullOrWhiteSpace(executablePath)
             ? DefaultRuntimePath
             : executablePath;
-        _arguments = arguments;
+        _arguments = EnsureSecurityArguments(arguments, baseUrl);
         _healthTimeout = healthTimeout ?? DefaultHealthTimeout;
 
         _httpClient = httpClient ?? new HttpClient
@@ -258,6 +260,52 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         return false;
+    }
+
+    private static string EnsureSecurityArguments(string? arguments, string baseUrl)
+    {
+        var sanitizedArguments = arguments ?? string.Empty;
+        var hasHost = ContainsArgument(sanitizedArguments, "--host");
+        var hasPort = ContainsArgument(sanitizedArguments, "--port");
+        var hasAuthFlag = ContainsArgument(sanitizedArguments, "--no-auth")
+            || ContainsArgument(sanitizedArguments, "--api-key");
+
+        var port = ResolvePort(baseUrl);
+        var builder = new StringBuilder(sanitizedArguments);
+
+        AppendArgumentIfMissing(builder, hasHost, $"--host {LocalHostAddress}");
+        AppendArgumentIfMissing(builder, hasPort, $"--port {port}");
+        AppendArgumentIfMissing(builder, hasAuthFlag, "--api-key none");
+
+        return builder.ToString().Trim();
+    }
+
+    private static int ResolvePort(string baseUrl)
+    {
+        if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            return uri.Port;
+        }
+
+        return DefaultPort;
+    }
+
+    private static bool ContainsArgument(string arguments, string flag)
+        => arguments.Contains(flag, StringComparison.OrdinalIgnoreCase);
+
+    private static void AppendArgumentIfMissing(StringBuilder builder, bool hasArgument, string argument)
+    {
+        if (hasArgument)
+        {
+            return;
+        }
+
+        if (builder.Length > 0 && !char.IsWhiteSpace(builder[^1]))
+        {
+            builder.Append(' ');
+        }
+
+        builder.Append(argument);
     }
 
     private bool IsProcessRunning()
