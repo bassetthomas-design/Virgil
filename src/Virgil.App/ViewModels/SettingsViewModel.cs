@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using Virgil.App.Chat;
+using AppChatService = Virgil.App.Chat.ChatService;
 using Virgil.App.Commands;
 using Virgil.App.Models;
 using Virgil.App.Services;
@@ -23,7 +23,7 @@ namespace Virgil.App.ViewModels
         private const string FullPackDownloadUrl =
             "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf";
         private readonly SettingsService _svc;
-        private readonly ChatService? _chatService;
+        private readonly AppChatService? _chatService;
         private readonly IAssistantService? _assistantService;
         private readonly ISecretStore _secretStore;
         private readonly ModelLocator _modelLocator = new();
@@ -47,7 +47,7 @@ namespace Virgil.App.ViewModels
 
         public SettingsViewModel(
             SettingsService svc,
-            ChatService? chatService = null,
+            AppChatService? chatService = null,
             IAssistantService? assistantService = null,
             ISecretStore? secretStore = null)
         {
