@@ -261,12 +261,6 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             message = $"{message}{Environment.NewLine}Commande runtime: {diagnostics.CommandLine}";
         }
 
-        if (!string.IsNullOrWhiteSpace(diagnostics.Stderr)
-            && diagnostics.Stderr.Contains("untrusted environments", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"{message}{Environment.NewLine}Lancement du serveur refusé: flags de sécurité manquants";
-        }
-
         var lastError = diagnostics.LastErrorMessage;
         if (string.IsNullOrWhiteSpace(lastError))
         {

@@ -394,11 +394,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         {
             if (isError)
             {
-                AppendCapped(_stderrBuffer, data);
+                AppendOutputLine(_stderrBuffer, data);
             }
             else
             {
-                AppendCapped(_stdoutBuffer, data);
+                AppendOutputLine(_stdoutBuffer, data);
             }
 
             stdout = _stdoutBuffer.ToString();
@@ -441,21 +441,14 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             lastErrorMessage: errorMessage);
     }
 
-    private static void AppendCapped(StringBuilder builder, string line)
+    private static void AppendOutputLine(StringBuilder builder, string line)
     {
-        const int maxChars = 8000;
         if (builder.Length > 0)
         {
             builder.AppendLine();
         }
 
         builder.Append(line);
-        if (builder.Length <= maxChars)
-        {
-            return;
-        }
-
-        builder.Remove(0, builder.Length - maxChars);
     }
 
     private static string GetLastLine(string value)

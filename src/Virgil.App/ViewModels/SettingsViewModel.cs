@@ -40,6 +40,9 @@ namespace Virgil.App.ViewModels
         private string _runtimeProcessStatusText = string.Empty;
         private string _runtimePortStatusText = string.Empty;
         private string _runtimeLastErrorText = string.Empty;
+        private string _runtimeExitCodeText = string.Empty;
+        private string _runtimeCommandLineText = string.Empty;
+        private string _runtimeStderrText = string.Empty;
         private string _openAiStatusText = string.Empty;
         private string _openAiKeyStatusText = string.Empty;
         private string _openAiTestResponseText = string.Empty;
@@ -255,6 +258,24 @@ namespace Virgil.App.ViewModels
         {
             get => _runtimeLastErrorText;
             private set { _runtimeLastErrorText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeExitCodeText
+        {
+            get => _runtimeExitCodeText;
+            private set { _runtimeExitCodeText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeCommandLineText
+        {
+            get => _runtimeCommandLineText;
+            private set { _runtimeCommandLineText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeStderrText
+        {
+            get => _runtimeStderrText;
+            private set { _runtimeStderrText = value; OnPropertyChanged(); }
         }
 
         public string OpenAiStatusText
@@ -652,6 +673,19 @@ namespace Virgil.App.ViewModels
                 ? "Dernière erreur runtime: —"
                 : $"Dernière erreur runtime: {lastError}";
 
+            RuntimeExitCodeText = diagnostics.ExitCode.HasValue
+                ? $"ExitCode runtime: {diagnostics.ExitCode}"
+                : "ExitCode runtime: —";
+
+            RuntimeCommandLineText = string.IsNullOrWhiteSpace(diagnostics.CommandLine)
+                ? "Commande runtime: —"
+                : $"Commande runtime: {diagnostics.CommandLine}";
+
+            var stderr = string.IsNullOrWhiteSpace(diagnostics.Stderr)
+                ? "—"
+                : Truncate(diagnostics.Stderr, 2000);
+            RuntimeStderrText = $"STDERR runtime: {stderr}";
+
             OpenAiStatusText = _svc.Settings.HasOpenAiKey
                 ? "Statut OpenAI: clé présente"
                 : "Statut OpenAI: clé absente";
@@ -667,6 +701,16 @@ namespace Virgil.App.ViewModels
 
             var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
             return lines.Length == 0 ? string.Empty : lines[^1];
+        }
+
+        private static string Truncate(string value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
+            {
+                return value;
+            }
+
+            return $"{value.Substring(0, maxLength)}…";
         }
 
         private ModelAvailabilityResult GetModelAvailability()
