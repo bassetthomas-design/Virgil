@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Core.Logging;
@@ -82,9 +83,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             }
 
             Log.Info($"Llama runtime path: {_executablePath}");
+            var commandLine = BuildCommandLine(_executablePath, _arguments ?? string.Empty);
             Log.Info($"Llama runtime args: {_arguments ?? string.Empty}");
+            Log.Info($"Llama runtime command line: {commandLine}");
 
-            InitializeDiagnostics();
+            InitializeDiagnostics(commandLine);
 
             var workingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory;
             var startInfo = new ProcessStartInfo
@@ -265,19 +268,43 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private static string EnsureSecurityArguments(string? arguments, string baseUrl)
     {
         var sanitizedArguments = arguments ?? string.Empty;
-        var hasHost = ContainsArgument(sanitizedArguments, "--host");
-        var hasPort = ContainsArgument(sanitizedArguments, "--port");
-        var hasAuthFlag = ContainsArgument(sanitizedArguments, "--no-auth")
-            || ContainsArgument(sanitizedArguments, "--api-key");
+        sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--host");
+        sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--port");
+        sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--api-key");
+        sanitizedArguments = RemoveFlag(sanitizedArguments, "--no-auth");
 
         var port = ResolvePort(baseUrl);
         var builder = new StringBuilder(sanitizedArguments);
 
-        AppendArgumentIfMissing(builder, hasHost, $"--host {LocalHostAddress}");
-        AppendArgumentIfMissing(builder, hasPort, $"--port {port}");
-        AppendArgumentIfMissing(builder, hasAuthFlag, "--api-key none");
+        AppendArgumentIfMissing(builder, false, $"--host {LocalHostAddress}");
+        AppendArgumentIfMissing(builder, false, $"--port {port}");
+        AppendArgumentIfMissing(builder, false, "--no-auth");
 
         return builder.ToString().Trim();
+    }
+
+    private static string RemoveArgumentWithValue(string arguments, string flag)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return string.Empty;
+        }
+
+        var pattern = $@"(?<!\S){Regex.Escape(flag)}(?:\s+|=)(\""[^\""]*\""|'[^']*'|\S+)";
+        var updated = Regex.Replace(arguments, pattern, string.Empty, RegexOptions.IgnoreCase);
+        return NormalizeWhitespace(updated);
+    }
+
+    private static string RemoveFlag(string arguments, string flag)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return string.Empty;
+        }
+
+        var pattern = $@"(?<!\S){Regex.Escape(flag)}(?!\S)";
+        var updated = Regex.Replace(arguments, pattern, string.Empty, RegexOptions.IgnoreCase);
+        return NormalizeWhitespace(updated);
     }
 
     private static int ResolvePort(string baseUrl)
@@ -289,9 +316,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         return DefaultPort;
     }
-
-    private static bool ContainsArgument(string arguments, string flag)
-        => arguments.Contains(flag, StringComparison.OrdinalIgnoreCase);
 
     private static void AppendArgumentIfMissing(StringBuilder builder, bool hasArgument, string argument)
     {
@@ -308,10 +332,29 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         builder.Append(argument);
     }
 
+    private static string NormalizeWhitespace(string value)
+        => string.Join(' ', value.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+
+    private static string BuildCommandLine(string executablePath, string arguments)
+    {
+        var safeExecutable = QuoteIfNeeded(executablePath);
+        return string.IsNullOrWhiteSpace(arguments) ? safeExecutable : $"{safeExecutable} {arguments}";
+    }
+
+    private static string QuoteIfNeeded(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        return value.Contains(' ', StringComparison.Ordinal) ? $"\"{value}\"" : value;
+    }
+
     private bool IsProcessRunning()
         => _process is not null && !_process.HasExited;
 
-    private void InitializeDiagnostics()
+    private void InitializeDiagnostics(string commandLine)
     {
         lock (_outputLock)
         {
@@ -322,6 +365,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var diagnostics = new LlamaRuntimeDiagnostics(
             _executablePath,
             _arguments ?? string.Empty,
+            commandLine,
             string.Empty,
             string.Empty,
             null,
