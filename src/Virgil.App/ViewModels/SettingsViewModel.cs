@@ -563,7 +563,10 @@ namespace Virgil.App.ViewModels
 
         private void NotifyChat(string message)
         {
-            _chatService?.PostSystemMessage(message, MessageType.Error, ChatKind.Error);
+            _chatService?.PostSystemMessage(
+                message,
+                Virgil.App.Chat.MessageType.Error,
+                Virgil.App.Chat.ChatKind.Error);
         }
 
         private void UpdateCommandStates()
