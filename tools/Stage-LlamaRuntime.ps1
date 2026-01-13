@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutDir,
 
+    [string]$Version,
+
     [string]$ZipUrl = "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
 )
 
@@ -42,10 +44,16 @@ if (-not $resolvedOutDir) {
 }
 
 if ([string]::IsNullOrWhiteSpace($ZipUrl)) {
-    throw "Provide -ZipUrl for the llama.cpp runtime archive."
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        $zipSource = "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
+    }
+    else {
+        $zipSource = "https://github.com/ggerganov/llama.cpp/releases/download/$Version/llama-$Version-bin-win-x64.zip"
+    }
 }
-
-$zipSource = $ZipUrl
+else {
+    $zipSource = $ZipUrl
+}
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("llama-runtime-" + [System.Guid]::NewGuid().ToString("N"))
 $zipPath = Join-Path $tempRoot "llama-runtime.zip"
