@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -22,6 +23,7 @@ namespace Virgil.App.ViewModels
         private readonly SettingsService _svc;
         private readonly ChatService? _chatService;
         private readonly IAssistantService? _assistantService;
+        private readonly OpenAiKeyStore _keyStore;
         private readonly ModelLocator _modelLocator = new();
         private CancellationTokenSource? _downloadCts;
         private bool _isDownloadIndeterminate;
@@ -30,12 +32,21 @@ namespace Virgil.App.ViewModels
         private string _modelStatusText = string.Empty;
         private string _modelPathText = string.Empty;
         private string _modelAgeText = string.Empty;
+        private string _providerStatusText = string.Empty;
+        private string _ggufStatusText = string.Empty;
+        private string _runtimeStatusText = string.Empty;
+        private string _openAiStatusText = string.Empty;
 
-        public SettingsViewModel(SettingsService svc, ChatService? chatService = null, IAssistantService? assistantService = null)
+        public SettingsViewModel(
+            SettingsService svc,
+            ChatService? chatService = null,
+            IAssistantService? assistantService = null,
+            OpenAiKeyStore? keyStore = null)
         {
             _svc = svc;
             _chatService = chatService;
             _assistantService = assistantService;
+            _keyStore = keyStore ?? new OpenAiKeyStore();
 
             // Charger une "copie" (en champs) pour permettre Annuler sans effet de bord
             var s = _svc.Settings;
@@ -57,6 +68,7 @@ namespace Virgil.App.ViewModels
             _downloadStatusText = _isPackInstalled ? "Pack Full installé." : "Pack Full non installé.";
             _downloadSpeedText = "—";
             RefreshModelDetails();
+            RefreshAiStatuses();
 
             _installPackCommand = new AsyncRelayCommand(_ => InstallPackAsync(), _ => !IsDownloading);
             _cancelDownloadCommand = new RelayCommand(_ => CancelDownload(), _ => IsDownloading);
@@ -136,6 +148,7 @@ namespace Virgil.App.ViewModels
                 OnPropertyChanged(nameof(PackStatusText));
                 OnPropertyChanged(nameof(ShowPackInstallPrompt));
                 RefreshModelDetails();
+                RefreshAiStatuses();
             }
         }
 
@@ -186,7 +199,31 @@ namespace Virgil.App.ViewModels
 
         public string PackStatusText => IsPackInstalled ? "Installé" : "Non installé";
 
-        public bool ShowPackInstallPrompt => !_isPackInstalled && _svc.Settings.AiProvider == AiProvider.EmbeddedLlama;
+        public bool ShowPackInstallPrompt => !_isPackInstalled && _svc.EffectiveAiProvider == AiProvider.EmbeddedLlama;
+
+        public string ProviderStatusText
+        {
+            get => _providerStatusText;
+            private set { _providerStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string GgufStatusText
+        {
+            get => _ggufStatusText;
+            private set { _ggufStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeStatusText
+        {
+            get => _runtimeStatusText;
+            private set { _runtimeStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string OpenAiStatusText
+        {
+            get => _openAiStatusText;
+            private set { _openAiStatusText = value; OnPropertyChanged(); }
+        }
 
         public string ModelStatusText
         {
@@ -413,6 +450,29 @@ namespace Virgil.App.ViewModels
                 ModelPathText = _modelLocator.GetCandidatePaths().First();
                 ModelAgeText = string.Empty;
             }
+        }
+
+        private void RefreshAiStatuses()
+        {
+            ProviderStatusText = _svc.EffectiveAiProvider switch
+            {
+                AiProvider.EmbeddedLlama => "Provider actif: EmbeddedLlama",
+                AiProvider.OpenAI => "Provider actif: OpenAI",
+                AiProvider.Disabled => "Provider actif: Désactivé",
+                _ => "Provider actif: Inconnu"
+            };
+
+            GgufStatusText = _modelLocator.IsInstalled
+                ? "Statut GGUF: installé"
+                : "Statut GGUF: manquant";
+
+            RuntimeStatusText = File.Exists(LlamaRuntimeManager.DefaultRuntimePath)
+                ? "Statut runtime: présent"
+                : "Statut runtime: manquant";
+
+            OpenAiStatusText = string.IsNullOrWhiteSpace(_keyStore.Load())
+                ? "Statut OpenAI: clé absente"
+                : "Statut OpenAI: clé présente";
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

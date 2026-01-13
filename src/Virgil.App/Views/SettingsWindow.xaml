@@ -36,6 +36,10 @@
                 <CheckBox Content="Bavard (CompanionTalkative)" IsChecked="{Binding CompanionTalkative}"/>
 
                 <TextBlock Text="IA" FontWeight="Bold" Margin="0,16,0,6"/>
+                <TextBlock Text="{Binding ProviderStatusText}" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding GgufStatusText}" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding RuntimeStatusText}" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding OpenAiStatusText}" Margin="0,0,0,6"/>
                 <TextBlock Text="Statut Pack Full:"/>
                 <TextBlock Text="{Binding PackStatusText}" FontWeight="SemiBold" Margin="0,2,0,6"/>
                 <TextBlock Text="{Binding ModelStatusText}" FontWeight="SemiBold" Margin="0,2,0,2"/>

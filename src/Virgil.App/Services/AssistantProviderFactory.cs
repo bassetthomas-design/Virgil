@@ -28,7 +28,7 @@ namespace Virgil.App.Services
                 settings.EmbeddedLlamaBaseUrl,
                 TimeSpan.FromSeconds(settings.EmbeddedLlamaTimeoutSeconds));
 
-            return settings.AiProvider switch
+            return _settingsService.EffectiveAiProvider switch
             {
                 AiProvider.Disabled => null,
                 AiProvider.EmbeddedLlama => embeddedProvider,

@@ -21,7 +21,7 @@ namespace Virgil.App.Models
         public bool CompanionTalkative { get; set; } = false;
         public bool MonitoringEnabled { get; set; } = true;
         public bool EnableBeatPulse { get; set; } = true;
-        public AiProvider AiProvider { get; set; } = AiProvider.EmbeddedLlama;
+        public AiProvider? AiProvider { get; set; }
         public string OpenAiModel { get; set; } = "gpt-4o-mini";
         public int OpenAiTimeoutSeconds { get; set; } = 30;
         public string EmbeddedLlamaBaseUrl { get; set; } = "http://localhost:8080";
