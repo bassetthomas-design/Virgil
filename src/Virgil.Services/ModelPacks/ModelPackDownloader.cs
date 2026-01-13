@@ -22,6 +22,7 @@ public sealed record ModelPackDownloadResult(
 
 public sealed record ModelPackVerificationResult(
     bool IsValid,
+    bool IsVerified,
     string StatusText,
     string? ErrorMessage = null);
 
@@ -45,6 +46,11 @@ public sealed class ModelPackDownloader
         if (manifest is null)
         {
             throw new ArgumentNullException(nameof(manifest));
+        }
+
+        if (string.IsNullOrWhiteSpace(manifest.Sha256))
+        {
+            return new ModelPackDownloadResult(false, "Hash attendu manquant.", "Hash attendu manquant.");
         }
 
         progress?.Report(new ModelPackDownloadProgress(0, "—", "Téléchargement…", false));
@@ -121,27 +127,31 @@ public sealed class ModelPackDownloader
         }
     }
 
-    public async Task<ModelPackVerificationResult> VerifyAsync()
+    public async Task<ModelPackVerificationResult> VerifyAsync(ModelPackManifest manifest)
     {
+        if (manifest is null)
+        {
+            throw new ArgumentNullException(nameof(manifest));
+        }
+
         if (!_modelLocator.TryResolve(out var resolvedPath, out _))
         {
-            return new ModelPackVerificationResult(false, "Pack Full non installé.");
+            return new ModelPackVerificationResult(false, false, "Pack Full non installé.");
         }
 
-        var hashPath = _modelLocator.GetHashPathForModel(resolvedPath);
-        if (!File.Exists(hashPath))
+        var expectedHash = GetExpectedHash(manifest, resolvedPath);
+        if (string.IsNullOrWhiteSpace(expectedHash))
         {
-            return new ModelPackVerificationResult(false, "Hash attendu manquant.", "Hash attendu manquant.");
+            return new ModelPackVerificationResult(true, false, "Modèle installé (hash non vérifié).");
         }
 
-        var expected = (await File.ReadAllTextAsync(hashPath).ConfigureAwait(false)).Trim();
         var actual = await ComputeSha256Async(resolvedPath, CancellationToken.None).ConfigureAwait(false);
-        if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(expectedHash, actual, StringComparison.OrdinalIgnoreCase))
         {
-            return new ModelPackVerificationResult(true, "Vérification OK.");
+            return new ModelPackVerificationResult(true, true, "Vérification OK.");
         }
 
-        return new ModelPackVerificationResult(false, "Hash incorrect.", "Pack Full corrompu: hash incorrect.");
+        return new ModelPackVerificationResult(false, true, "Hash incorrect.", "Pack Full corrompu: hash incorrect.");
     }
 
     public void CleanupTemporaryFiles()
@@ -166,6 +176,23 @@ public sealed class ModelPackDownloader
         using var sha256 = SHA256.Create();
         var hash = await sha256.ComputeHashAsync(stream, ct).ConfigureAwait(false);
         return Convert.ToHexString(hash);
+    }
+
+    private string? GetExpectedHash(ModelPackManifest manifest, string resolvedPath)
+    {
+        if (!string.IsNullOrWhiteSpace(manifest.Sha256))
+        {
+            return manifest.Sha256.Trim();
+        }
+
+        var hashPath = _modelLocator.GetHashPathForModel(resolvedPath);
+        if (!File.Exists(hashPath))
+        {
+            return null;
+        }
+
+        var expected = File.ReadAllText(hashPath).Trim();
+        return string.IsNullOrWhiteSpace(expected) ? null : expected;
     }
 
     private static string FormatSpeed(long bytes, TimeSpan elapsed)

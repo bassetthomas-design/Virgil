@@ -482,7 +482,7 @@ namespace Virgil.App.ViewModels
             DownloadStatusText = "Vérification…";
             try
             {
-                var result = await _packDownloader.VerifyAsync().ConfigureAwait(false);
+                var result = await _packDownloader.VerifyAsync(_packManifest).ConfigureAwait(false);
                 DownloadStatusText = result.StatusText;
                 IsPackInstalled = result.IsValid;
                 if (!result.IsValid && !string.IsNullOrWhiteSpace(result.ErrorMessage))
@@ -578,7 +578,9 @@ namespace Virgil.App.ViewModels
         {
             if (_modelLocator.TryResolve(out var path, out _))
             {
-                ModelStatusText = "Modèle: installé";
+                ModelStatusText = IsModelUnverified(path)
+                    ? "Modèle installé (hash non vérifié)"
+                    : "Modèle: installé";
                 ModelPathText = path;
                 ModelAgeText = $"Âge des données: {ModelLocator.FormatAge(ModelLocator.GetModelAge(path))}";
             }
@@ -612,6 +614,17 @@ namespace Virgil.App.ViewModels
                 ? "Statut OpenAI: clé présente"
                 : "Statut OpenAI: clé absente";
             OpenAiKeyStatusText = _svc.Settings.HasOpenAiKey ? "Clé enregistrée ✅" : "Aucune clé ❌";
+        }
+
+        private bool IsModelUnverified(string path)
+        {
+            if (!string.IsNullOrWhiteSpace(_packManifest.Sha256))
+            {
+                return false;
+            }
+
+            var hashPath = _modelLocator.GetHashPathForModel(path);
+            return !File.Exists(hashPath);
         }
 
         public sealed record AiProviderOption(AiProvider Value, string Label);
