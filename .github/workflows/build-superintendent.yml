@@ -22,7 +22,7 @@ jobs:
 
       - name: Stage llama.cpp runtime
         shell: pwsh
-        run: ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -Version "${{ vars.LLAMA_CPP_VERSION }}" -ZipUrl "${{ vars.LLAMA_CPP_WIN_X64_ZIP_URL }}"
+        run: pwsh -File ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -Version "${{ vars.LLAMA_CPP_VERSION }}" -ZipUrl "${{ vars.LLAMA_CPP_WIN_X64_ZIP_URL }}"
 
       - name: Publish Virgil.App
         run: dotnet publish src/Virgil.App/Virgil.App.csproj -c Release -o out/Virgil.App

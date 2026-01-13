@@ -26,7 +26,7 @@ jobs:
 
       - name: Stage llama.cpp runtime
         shell: pwsh
-        run: ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -ZipUrl "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
+        run: pwsh -File ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -ZipUrl "https://github.com/ggml-org/llama.cpp/releases/download/b7717/llama-b7717-bin-win-cpu-x64.zip"
 
       - name: Publish (self-contained off)
         run: dotnet publish --configuration Release --no-restore --output out
