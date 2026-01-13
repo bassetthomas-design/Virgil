@@ -43,7 +43,9 @@ namespace Virgil.App.Services
             var openAiProvider = new OpenAiAssistantProvider(
                 apiKey,
                 settings.OpenAiModel,
-                TimeSpan.FromSeconds(settings.OpenAiTimeoutSeconds));
+                TimeSpan.FromSeconds(settings.OpenAiTimeoutSeconds),
+                isProviderEnabled: _settingsService.EffectiveAiProvider == AiProvider.OpenAI
+                    && !string.IsNullOrWhiteSpace(apiKey));
 
             return new FallbackAssistantProvider(
                 openAiProvider,

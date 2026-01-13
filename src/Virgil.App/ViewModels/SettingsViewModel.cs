@@ -500,7 +500,15 @@ namespace Virgil.App.ViewModels
 
         private async Task TestAiAsync()
         {
-            if (_assistantService is null)
+            var assistantService = _assistantService;
+            if (assistantService is null)
+            {
+                var factory = new AssistantProviderFactory(_svc, _secretStore);
+                var provider = factory.CreateProvider();
+                assistantService = provider is null ? null : new AssistantService(provider);
+            }
+
+            if (assistantService is null)
             {
                 AiTestResponseText = "IA indisponible.";
                 return;
@@ -509,7 +517,7 @@ namespace Virgil.App.ViewModels
             try
             {
                 AiTestResponseText = "Test en cours…";
-                var reply = await _assistantService.AskAsync("Dis juste: OK", AssistantContext.Empty).ConfigureAwait(false);
+                var reply = await assistantService.AskAsync("Dis juste: OK", AssistantContext.Empty).ConfigureAwait(false);
                 AiTestResponseText = string.IsNullOrWhiteSpace(reply.Text) ? "Réponse vide." : reply.Text;
             }
             catch (Exception ex)
@@ -523,9 +531,9 @@ namespace Virgil.App.ViewModels
             var apiKey = string.IsNullOrWhiteSpace(_openAiApiKeyInput)
                 ? _secretStore.LoadOpenAiApiKey()
                 : _openAiApiKeyInput.Trim();
-            if (string.IsNullOrWhiteSpace(apiKey))
+            if (_svc.EffectiveAiProvider != AiProvider.OpenAI || string.IsNullOrWhiteSpace(apiKey))
             {
-                OpenAiTestResponseText = "Ajoutez une clé OpenAI dans Réglages > IA.";
+                OpenAiTestResponseText = "OpenAI non configuré.";
                 return;
             }
 
