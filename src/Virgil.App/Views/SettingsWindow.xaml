@@ -1,9 +1,11 @@
 <Window x:Class="Virgil.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Réglages" Height="520" Width="520">
+        xmlns:converters="clr-namespace:Virgil.App.Converters"
+        Title="Réglages" Height="640" Width="520">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility"/>
     </Window.Resources>
     <DockPanel Margin="12">
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
@@ -36,10 +38,47 @@
                 <CheckBox Content="Bavard (CompanionTalkative)" IsChecked="{Binding CompanionTalkative}"/>
 
                 <TextBlock Text="IA" FontWeight="Bold" Margin="0,16,0,6"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <TextBlock Text="Provider:" Width="140" VerticalAlignment="Center"/>
+                    <ComboBox Width="200"
+                              ItemsSource="{Binding AiProviderOptions}"
+                              DisplayMemberPath="Label"
+                              SelectedValuePath="Value"
+                              SelectedValue="{Binding SelectedAiProvider}"/>
+                </StackPanel>
                 <TextBlock Text="{Binding ProviderStatusText}" FontWeight="SemiBold" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding GgufStatusText}" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeStatusText}" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding OpenAiStatusText}" Margin="0,0,0,6"/>
+
+                <TextBlock Text="OpenAI" FontWeight="Bold" Margin="0,10,0,6"/>
+                <TextBlock Text="Clé OpenAI:" Margin="0,0,0,4"/>
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <PasswordBox x:Name="OpenAiKeyBox"
+                                 Grid.Column="0"
+                                 PasswordChanged="OnOpenAiKeyPasswordChanged"
+                                 Visibility="{Binding IsOpenAiKeyVisible, Converter={StaticResource InverseBoolToVisibility}}"/>
+                    <TextBox x:Name="OpenAiKeyTextBox"
+                             Grid.Column="0"
+                             Text="{Binding OpenAiApiKeyInput, UpdateSourceTrigger=PropertyChanged}"
+                             Visibility="{Binding IsOpenAiKeyVisible, Converter={StaticResource BoolToVisibility}}"/>
+                    <ToggleButton Grid.Column="1"
+                                  Content="{Binding OpenAiKeyToggleText}"
+                                  IsChecked="{Binding IsOpenAiKeyVisible}"
+                                  Margin="8,0,0,0"
+                                  Checked="OnOpenAiKeyVisibilityChanged"
+                                  Unchecked="OnOpenAiKeyVisibilityChanged"/>
+                </Grid>
+                <TextBlock Text="{Binding OpenAiKeyStatusText}" Margin="0,0,0,6"/>
+                <WrapPanel Margin="0,0,0,8">
+                    <Button Content="Enregistrer" Command="{Binding SaveAiSettingsCommand}" Margin="0,0,8,8"/>
+                    <Button Content="Tester OpenAI" Command="{Binding TestOpenAiCommand}" Margin="0,0,8,8"/>
+                </WrapPanel>
+                <TextBlock Text="{Binding OpenAiTestResponseText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <TextBlock Text="Statut Pack Full:"/>
                 <TextBlock Text="{Binding PackStatusText}" FontWeight="SemiBold" Margin="0,2,0,6"/>
                 <TextBlock Text="{Binding ModelStatusText}" FontWeight="SemiBold" Margin="0,2,0,2"/>

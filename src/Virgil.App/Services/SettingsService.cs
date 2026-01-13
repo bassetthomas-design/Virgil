@@ -11,16 +11,16 @@ namespace Virgil.App.Services
     public class SettingsService
     {
         private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "settings.json");
-        private readonly OpenAiKeyStore _keyStore;
+        private readonly ISecretStore _secretStore;
         private readonly ModelLocator _modelLocator;
         private AiProvider _effectiveAiProvider = AiProvider.EmbeddedLlama;
 
         public AppSettings Settings { get; private set; } = new AppSettings();
         public AiProvider EffectiveAiProvider => _effectiveAiProvider;
 
-        public SettingsService(OpenAiKeyStore? keyStore = null, ModelLocator? modelLocator = null)
+        public SettingsService(ISecretStore? secretStore = null, ModelLocator? modelLocator = null)
         {
-            _keyStore = keyStore ?? new OpenAiKeyStore();
+            _secretStore = secretStore ?? new OpenAiKeyStore();
             _modelLocator = modelLocator ?? new ModelLocator();
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
             Load();
@@ -34,6 +34,7 @@ namespace Virgil.App.Services
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             });
             File.WriteAllText(SettingsPath, json);
+            _effectiveAiProvider = ResolveAiProvider(Settings.AiProvider);
         }
 
         /// <summary>
@@ -56,6 +57,7 @@ namespace Virgil.App.Services
                 Settings = new AppSettings();
             }
 
+            Settings.HasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
             _effectiveAiProvider = ResolveAiProvider(Settings.AiProvider);
         }
 
@@ -73,7 +75,7 @@ namespace Virgil.App.Services
                 return AiProvider.EmbeddedLlama;
             }
 
-            var hasOpenAiKey = !string.IsNullOrWhiteSpace(_keyStore.Load());
+            var hasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
             if (hasOpenAiKey)
             {
                 return AiProvider.OpenAI;

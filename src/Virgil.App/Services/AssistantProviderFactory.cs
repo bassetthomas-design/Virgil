@@ -8,12 +8,12 @@ namespace Virgil.App.Services
     public sealed class AssistantProviderFactory
     {
         private readonly SettingsService _settingsService;
-        private readonly OpenAiKeyStore _keyStore;
+        private readonly ISecretStore _secretStore;
 
-        public AssistantProviderFactory(SettingsService settingsService, OpenAiKeyStore keyStore)
+        public AssistantProviderFactory(SettingsService settingsService, ISecretStore secretStore)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-            _keyStore = keyStore ?? throw new ArgumentNullException(nameof(keyStore));
+            _secretStore = secretStore ?? throw new ArgumentNullException(nameof(secretStore));
         }
 
         public IAssistantProvider? CreateProvider()
@@ -39,7 +39,7 @@ namespace Virgil.App.Services
 
         private IAssistantProvider CreateOpenAiProvider(AppSettings settings, IAssistantProvider fallback)
         {
-            var apiKey = _keyStore.Load();
+            var apiKey = _secretStore.LoadOpenAiApiKey();
             var openAiProvider = new OpenAiAssistantProvider(
                 apiKey,
                 settings.OpenAiModel,
