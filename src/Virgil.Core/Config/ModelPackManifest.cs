@@ -9,8 +9,8 @@ public sealed record ModelPackManifest(
 {
     public static ModelPackManifest FullPack { get; } = new(
         "pack-full-llama31-8b",
-        "llama-3.1-8b-instruct-q4_k_m",
-        "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/llama-3.1-8b-instruct-q4_k_m.gguf",
+        "Meta-Llama-3.1-8B-Instruct-Q5_K_M",
+        "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf",
         string.Empty,
         null);
 }
