@@ -660,7 +660,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     apiKey,
                     _securityFlagsDetected,
                     "Impossible de créer le fichier temporaire pour --api-key-file.",
-                    canStart: false);
+                    CanStart: false);
             }
 
             return new RuntimeSecurityConfiguration(
@@ -710,7 +710,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             null,
             _securityFlagsDetected,
             "Impossible d’activer un mode sécurisé: flags non trouvés",
-            canStart: true);
+            CanStart: true);
     }
 
     private async Task<HelpOutputResult> GetHelpOutputAsync(CancellationToken ct)
