@@ -1,10 +1,12 @@
+$defaultZipUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b7717/llama-b7717-bin-win-cpu-x64.zip"
+
 param(
     [Parameter(Mandatory = $true)]
     [string]$OutDir,
 
     [string]$Version,
 
-    [string]$ZipUrl = "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
+    [string]$ZipUrl = $defaultZipUrl
 )
 
 Set-StrictMode -Version Latest
@@ -43,9 +45,14 @@ if (-not $resolvedOutDir) {
     $resolvedOutDir = (New-Item -Path $OutDir -ItemType Directory -Force).FullName
 }
 
-if ([string]::IsNullOrWhiteSpace($ZipUrl)) {
+$envZipUrl = $env:LLAMA_RUNTIME_ZIP_URL
+
+if (-not [string]::IsNullOrWhiteSpace($envZipUrl)) {
+    $zipSource = $envZipUrl
+}
+elseif ([string]::IsNullOrWhiteSpace($ZipUrl)) {
     if ([string]::IsNullOrWhiteSpace($Version)) {
-        $zipSource = "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
+        $zipSource = $defaultZipUrl
     }
     else {
         $zipSource = "https://github.com/ggerganov/llama.cpp/releases/download/$Version/llama-$Version-bin-win-x64.zip"
