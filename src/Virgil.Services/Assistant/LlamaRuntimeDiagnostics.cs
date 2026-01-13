@@ -5,6 +5,7 @@ namespace Virgil.Services.Assistant;
 public sealed record LlamaRuntimeDiagnostics(
     string ExecutablePath,
     string Arguments,
+    string CommandLine,
     string Stdout,
     string Stderr,
     int? ExitCode,
@@ -13,6 +14,7 @@ public sealed record LlamaRuntimeDiagnostics(
     string? LastErrorMessage)
 {
     public static LlamaRuntimeDiagnostics Empty { get; } = new(
+        string.Empty,
         string.Empty,
         string.Empty,
         string.Empty,
