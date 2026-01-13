@@ -4,28 +4,11 @@ param(
 
     [string]$Version,
 
-    [string]$ZipUrl
+    [string]$ZipUrl = "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-
-function Get-LlamaZipUrl {
-    param(
-        [string]$Version,
-        [string]$ZipUrl
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($ZipUrl)) {
-        return $ZipUrl
-    }
-
-    if ([string]::IsNullOrWhiteSpace($Version)) {
-        throw "Provide -Version (ex: b####) or -ZipUrl for the llama.cpp runtime archive."
-    }
-
-    return "https://github.com/ggerganov/llama.cpp/releases/download/$Version/llama-$Version-bin-win-x64.zip"
-}
 
 function Test-PeAmd64 {
     param(
@@ -60,7 +43,17 @@ if (-not $resolvedOutDir) {
     $resolvedOutDir = (New-Item -Path $OutDir -ItemType Directory -Force).FullName
 }
 
-$zipSource = Get-LlamaZipUrl -Version $Version -ZipUrl $ZipUrl
+if ([string]::IsNullOrWhiteSpace($ZipUrl)) {
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        $zipSource = "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
+    }
+    else {
+        $zipSource = "https://github.com/ggerganov/llama.cpp/releases/download/$Version/llama-$Version-bin-win-x64.zip"
+    }
+}
+else {
+    $zipSource = $ZipUrl
+}
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("llama-runtime-" + [System.Guid]::NewGuid().ToString("N"))
 $zipPath = Join-Path $tempRoot "llama-runtime.zip"
@@ -103,7 +96,7 @@ try {
 
     Write-Host "Runtime staged at: $destinationExe"
     Write-Host ("Runtime size: {0} bytes" -f $fileInfo.Length)
-    Write-Host "Runtime 64-bit validation: OK"
+    Write-Host "PE x64 OK"
 }
 finally {
     if (Test-Path -Path $tempRoot) {

@@ -26,7 +26,7 @@ jobs:
 
       - name: Stage llama.cpp runtime
         shell: pwsh
-        run: ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -Version "${{ vars.LLAMA_CPP_VERSION }}" -ZipUrl "${{ vars.LLAMA_CPP_WIN_X64_ZIP_URL }}"
+        run: ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -ZipUrl "https://github.com/ggerganov/llama.cpp/releases/download/llama.cpp%2Fv21.09.11/llama.cpp_windows_x64.zip"
 
       - name: Publish (self-contained off)
         run: dotnet publish --configuration Release --no-restore --output out
@@ -42,5 +42,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: virgil-build
+          name: Virgil App
           path: out/**
