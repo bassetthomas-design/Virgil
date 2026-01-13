@@ -259,15 +259,30 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
     private static string AppendRuntimeDiagnostics(string message)
     {
         var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+        if (!string.IsNullOrWhiteSpace(diagnostics.WarningMessage))
+        {
+            message = $"{message}{Environment.NewLine}Warning runtime: {diagnostics.WarningMessage}";
+        }
+
         if (!string.IsNullOrWhiteSpace(diagnostics.CommandLine))
         {
             message = $"{message}{Environment.NewLine}Commande runtime: {diagnostics.CommandLine}";
         }
 
+        if (diagnostics.ExitCode.HasValue)
+        {
+            message = $"{message}{Environment.NewLine}ExitCode runtime: {diagnostics.ExitCode}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(diagnostics.Stderr))
+        {
+            message = $"{message}{Environment.NewLine}STDERR runtime: {Truncate(diagnostics.Stderr, 2000)}";
+        }
+
         var lastError = diagnostics.LastErrorMessage;
         if (string.IsNullOrWhiteSpace(lastError))
         {
-            lastError = GetLastLine(diagnostics.Stderr);
+            lastError = GetLastNonWarningLine(diagnostics.Stderr);
         }
 
         if (string.IsNullOrWhiteSpace(lastError))
@@ -275,10 +290,10 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             return message;
         }
 
-        return $"{message}{Environment.NewLine}Dernière erreur runtime: {lastError}";
+        return $"{message}{Environment.NewLine}Erreur runtime bloquante: {lastError}";
     }
 
-    private static string GetLastLine(string value)
+    private static string GetLastNonWarningLine(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -286,7 +301,29 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
 
         var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-        return lines.Length == 0 ? string.Empty : lines[^1];
+        for (var index = lines.Length - 1; index >= 0; index--)
+        {
+            if (!IsRuntimeWarningLine(lines[index]))
+            {
+                return lines[index];
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static bool IsRuntimeWarningLine(string line)
+        => line.Contains("untrusted environments", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("not recommended", StringComparison.OrdinalIgnoreCase);
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return $"{value.Substring(0, maxLength)}…";
     }
 
     private sealed record EmbeddedLlamaRequest(

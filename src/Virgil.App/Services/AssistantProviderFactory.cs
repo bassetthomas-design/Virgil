@@ -21,7 +21,10 @@ namespace Virgil.App.Services
             var settings = _settingsService.Settings;
             var defaultRuntimePath = LlamaRuntimeManager.DefaultRuntimePath;
             ILocalLlmRuntime embeddedRuntimeManager = File.Exists(defaultRuntimePath)
-                ? new LlamaRuntimeManager(settings.EmbeddedLlamaBaseUrl, defaultRuntimePath)
+                ? new LlamaRuntimeManager(
+                    settings.EmbeddedLlamaBaseUrl,
+                    defaultRuntimePath,
+                    apiKey: settings.EmbeddedLlamaApiKey)
                 : new NoRuntimeLocalLlmRuntime(defaultRuntimePath);
             var embeddedProvider = new EmbeddedLlamaProvider(
                 embeddedRuntimeManager,
