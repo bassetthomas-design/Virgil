@@ -50,6 +50,28 @@
                                         IsSignalWeak="{Binding IsKeyMetricStale}"
                                         UseNewAvatar="True" />
                 <views:MetricsBar Width="220" DataContext="{Binding Monitoring}" Margin="0,8,0,0" />
+                <TextBlock Text="{Binding TelemetryCooldownDisplay}"
+                           DataContext="{Binding Monitoring}"
+                           FontSize="12"
+                           Margin="0,8,0,0"
+                           HorizontalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding TelemetryCooldownState}" Value="Fresh">
+                                    <Setter Property="Foreground" Value="{DynamicResource App.SuccessBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding TelemetryCooldownState}" Value="Warning">
+                                    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding TelemetryCooldownState}" Value="Stale">
+                                    <Setter Property="Foreground" Value="{DynamicResource CriticalBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
                 <StackPanel x:Name="AvatarDebugPanel"
                             Visibility="Collapsed"
                             Margin="0,14,0,0"

@@ -37,6 +37,7 @@ namespace Virgil.App.Services
         private MetricState _gpuTemp = new();
         private MetricState _diskTemp = new();
         public DateTime? LastTelemetryUpdateUtc { get; private set; }
+        public DateTime? NextTelemetryUpdateUtc { get; private set; }
         public double? DataAgeSeconds { get; private set; }
 
         public MonitoringService()
@@ -375,6 +376,7 @@ namespace Virgil.App.Services
         private void LogNextSchedule(TimeSpan interval, TimeSpan delay)
         {
             var nextUtc = DateTime.UtcNow + delay;
+            NextTelemetryUpdateUtc = nextUtc;
             Trace.WriteLine($"Monitoring next tick scheduled at {nextUtc:O} (interval {interval.TotalMinutes:F1} min).");
         }
 

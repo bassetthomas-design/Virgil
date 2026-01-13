@@ -30,6 +30,8 @@ namespace Virgil.App.Services
         /// <summary>Dernière valeur connue (jamais null, mais peut être à 0 si indisponible).</summary>
         SystemMonitorSnapshot Latest { get; }
 
+        DateTime? NextTelemetryUpdateUtc { get; }
+
         Task StartAsync(CancellationToken cancellationToken);
         Task StopAsync(CancellationToken cancellationToken);
     }
@@ -55,6 +57,8 @@ namespace Virgil.App.Services
         public event EventHandler<SystemMonitorSnapshot>? SnapshotUpdated;
 
         public SystemMonitorSnapshot Latest { get; } = new SystemMonitorSnapshot();
+
+        public DateTime? NextTelemetryUpdateUtc { get; private set; }
 
         public SystemMonitorService()
         {
@@ -134,6 +138,8 @@ namespace Virgil.App.Services
                 {
                     delay = TimeSpan.Zero;
                 }
+
+                NextTelemetryUpdateUtc = DateTime.UtcNow + delay;
 
                 try
                 {
