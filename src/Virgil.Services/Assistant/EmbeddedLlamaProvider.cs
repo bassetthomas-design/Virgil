@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -103,6 +104,8 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             var payload = new EmbeddedLlamaRequest(
                 prompt,
                 false);
+
+            ConfigureAuthHeaders();
 
             using var response = await _httpClient.PostAsJsonAsync("/completion", payload, _jsonOptions, ct)
                 .ConfigureAwait(false);
@@ -291,4 +294,18 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         [property: JsonPropertyName("stream")] bool Stream);
 
     private sealed record EmbeddedLlamaResponse(string? Text, IReadOnlyList<ProposedAction>? ProposedActions);
+
+    private void ConfigureAuthHeaders()
+    {
+        _httpClient.DefaultRequestHeaders.Authorization = null;
+        _httpClient.DefaultRequestHeaders.Remove("X-API-Key");
+
+        if (string.IsNullOrWhiteSpace(_runtimeManager.ApiKey))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _runtimeManager.ApiKey);
+        _httpClient.DefaultRequestHeaders.Add("X-API-Key", _runtimeManager.ApiKey);
+    }
 }

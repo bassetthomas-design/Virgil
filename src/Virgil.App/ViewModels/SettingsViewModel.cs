@@ -43,6 +43,8 @@ namespace Virgil.App.ViewModels
         private string _runtimeExitCodeText = string.Empty;
         private string _runtimeCommandLineText = string.Empty;
         private string _runtimeStderrText = string.Empty;
+        private string _runtimeSecurityFlagsText = string.Empty;
+        private string _runtimeSecurityStrategyText = string.Empty;
         private string _openAiStatusText = string.Empty;
         private string _openAiKeyStatusText = string.Empty;
         private string _openAiTestResponseText = string.Empty;
@@ -276,6 +278,18 @@ namespace Virgil.App.ViewModels
         {
             get => _runtimeStderrText;
             private set { _runtimeStderrText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeSecurityFlagsText
+        {
+            get => _runtimeSecurityFlagsText;
+            private set { _runtimeSecurityFlagsText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeSecurityStrategyText
+        {
+            get => _runtimeSecurityStrategyText;
+            private set { _runtimeSecurityStrategyText = value; OnPropertyChanged(); }
         }
 
         public string OpenAiStatusText
@@ -685,6 +699,14 @@ namespace Virgil.App.ViewModels
                 ? "—"
                 : Truncate(diagnostics.Stderr, 2000);
             RuntimeStderrText = $"STDERR runtime: {stderr}";
+
+            RuntimeSecurityFlagsText = string.IsNullOrWhiteSpace(diagnostics.SecurityFlagsDetected)
+                ? "Flags détectés: —"
+                : $"Flags détectés: {diagnostics.SecurityFlagsDetected}";
+
+            RuntimeSecurityStrategyText = string.IsNullOrWhiteSpace(diagnostics.SecurityStrategy)
+                ? "Stratégie sécurité: —"
+                : $"Stratégie sécurité: {diagnostics.SecurityStrategy}";
 
             OpenAiStatusText = _svc.Settings.HasOpenAiKey
                 ? "Statut OpenAI: clé présente"
