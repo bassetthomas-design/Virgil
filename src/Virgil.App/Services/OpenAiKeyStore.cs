@@ -5,18 +5,18 @@ using System.Text;
 
 namespace Virgil.App.Services
 {
-    public sealed class OpenAiKeyStore
+    public sealed class OpenAiKeyStore : ISecretStore
     {
         private static readonly string KeyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Virgil",
             "openai.key");
 
-        public void Save(string apiKey)
+        public void SaveOpenAiApiKey(string key)
         {
-            if (string.IsNullOrWhiteSpace(apiKey))
+            if (string.IsNullOrWhiteSpace(key))
             {
-                throw new ArgumentException("API key must be provided.", nameof(apiKey));
+                throw new ArgumentException("API key must be provided.", nameof(key));
             }
 
             if (!OperatingSystem.IsWindows())
@@ -25,12 +25,12 @@ namespace Virgil.App.Services
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(KeyPath)!);
-            var bytes = Encoding.UTF8.GetBytes(apiKey.Trim());
+            var bytes = Encoding.UTF8.GetBytes(key.Trim());
             var protectedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
             File.WriteAllBytes(KeyPath, protectedBytes);
         }
 
-        public string? Load()
+        public string? LoadOpenAiApiKey()
         {
             if (!OperatingSystem.IsWindows())
             {
@@ -55,7 +55,7 @@ namespace Virgil.App.Services
             }
         }
 
-        public void Clear()
+        public void ClearOpenAiApiKey()
         {
             if (!OperatingSystem.IsWindows())
             {

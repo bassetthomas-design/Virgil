@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -23,7 +24,7 @@ namespace Virgil.App.ViewModels
         private readonly SettingsService _svc;
         private readonly ChatService? _chatService;
         private readonly IAssistantService? _assistantService;
-        private readonly OpenAiKeyStore _keyStore;
+        private readonly ISecretStore _secretStore;
         private readonly ModelLocator _modelLocator = new();
         private CancellationTokenSource? _downloadCts;
         private bool _isDownloadIndeterminate;
@@ -36,17 +37,23 @@ namespace Virgil.App.ViewModels
         private string _ggufStatusText = string.Empty;
         private string _runtimeStatusText = string.Empty;
         private string _openAiStatusText = string.Empty;
+        private string _openAiKeyStatusText = string.Empty;
+        private string _openAiTestResponseText = string.Empty;
+        private string _openAiApiKeyInput = string.Empty;
+        private bool _isOpenAiKeyVisible;
+        private AiProvider _selectedAiProvider;
+        private readonly IReadOnlyList<AiProviderOption> _aiProviderOptions;
 
         public SettingsViewModel(
             SettingsService svc,
             ChatService? chatService = null,
             IAssistantService? assistantService = null,
-            OpenAiKeyStore? keyStore = null)
+            ISecretStore? secretStore = null)
         {
             _svc = svc;
             _chatService = chatService;
             _assistantService = assistantService;
-            _keyStore = keyStore ?? new OpenAiKeyStore();
+            _secretStore = secretStore ?? new OpenAiKeyStore();
 
             // Charger une "copie" (en champs) pour permettre Annuler sans effet de bord
             var s = _svc.Settings;
@@ -56,6 +63,13 @@ namespace Virgil.App.ViewModels
             _defaultMessageTtlMs = s.DefaultMessageTtlMs;
             _companionTalkative = s.CompanionTalkative;
             _enableBeatPulse = s.EnableBeatPulse;
+            _selectedAiProvider = s.AiProvider ?? _svc.EffectiveAiProvider;
+            _aiProviderOptions = new[]
+            {
+                new AiProviderOption(AiProvider.EmbeddedLlama, "EmbeddedLlama"),
+                new AiProviderOption(AiProvider.OpenAI, "OpenAI"),
+                new AiProviderOption(AiProvider.Disabled, "Désactivé")
+            };
 
             _warnTemp = s.Mood.WarnTemp;
             _alertTemp = s.Mood.AlertTemp;
@@ -74,6 +88,8 @@ namespace Virgil.App.ViewModels
             _cancelDownloadCommand = new RelayCommand(_ => CancelDownload(), _ => IsDownloading);
             _verifyPackCommand = new AsyncRelayCommand(_ => VerifyPackAsync(), _ => !IsDownloading);
             _testAiCommand = new AsyncRelayCommand(_ => TestAiAsync(), _ => !IsDownloading);
+            _saveAiSettingsCommand = new RelayCommand(_ => SaveAiSettings());
+            _testOpenAiCommand = new AsyncRelayCommand(_ => TestOpenAiAsync(), _ => !IsDownloading);
         }
 
         private int _monitoringIntervalMinutesMin;
@@ -225,6 +241,50 @@ namespace Virgil.App.ViewModels
             private set { _openAiStatusText = value; OnPropertyChanged(); }
         }
 
+        public string OpenAiKeyStatusText
+        {
+            get => _openAiKeyStatusText;
+            private set { _openAiKeyStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string OpenAiTestResponseText
+        {
+            get => _openAiTestResponseText;
+            private set { _openAiTestResponseText = value; OnPropertyChanged(); }
+        }
+
+        public string OpenAiApiKeyInput
+        {
+            get => _openAiApiKeyInput;
+            set { _openAiApiKeyInput = value; OnPropertyChanged(); }
+        }
+
+        public bool IsOpenAiKeyVisible
+        {
+            get => _isOpenAiKeyVisible;
+            set
+            {
+                if (_isOpenAiKeyVisible == value)
+                {
+                    return;
+                }
+
+                _isOpenAiKeyVisible = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(OpenAiKeyToggleText));
+            }
+        }
+
+        public string OpenAiKeyToggleText => IsOpenAiKeyVisible ? "Masquer" : "Afficher";
+
+        public AiProvider SelectedAiProvider
+        {
+            get => _selectedAiProvider;
+            set { _selectedAiProvider = value; OnPropertyChanged(); }
+        }
+
+        public IReadOnlyList<AiProviderOption> AiProviderOptions => _aiProviderOptions;
+
         public string ModelStatusText
         {
             get => _modelStatusText;
@@ -270,10 +330,24 @@ namespace Virgil.App.ViewModels
         private readonly AsyncRelayCommand _testAiCommand;
         public ICommand TestAiCommand => _testAiCommand;
 
+        private readonly RelayCommand _saveAiSettingsCommand;
+        public ICommand SaveAiSettingsCommand => _saveAiSettingsCommand;
+
+        private readonly AsyncRelayCommand _testOpenAiCommand;
+        public ICommand TestOpenAiCommand => _testOpenAiCommand;
+
         /// <summary>
         /// Applique les valeurs au SettingsService et persiste.
         /// </summary>
         public void Save()
+        {
+            ApplyGeneralSettings();
+            ApplyAiSettings();
+            _svc.Save();
+            RefreshAiStatuses();
+        }
+
+        private void ApplyGeneralSettings()
         {
             var s = _svc.Settings;
 
@@ -293,8 +367,28 @@ namespace Virgil.App.ViewModels
             s.Mood.WarnTemp = _warnTemp;
             s.Mood.AlertTemp = _alertTemp;
             s.Mood.WarnCpu = _warnCpu;
+        }
 
+        private void SaveAiSettings()
+        {
+            ApplyAiSettings();
             _svc.Save();
+            RefreshAiStatuses();
+        }
+
+        private void ApplyAiSettings()
+        {
+            var s = _svc.Settings;
+            s.AiProvider = _selectedAiProvider;
+
+            var keyInput = _openAiApiKeyInput?.Trim();
+            if (!string.IsNullOrWhiteSpace(keyInput))
+            {
+                _secretStore.SaveOpenAiApiKey(keyInput);
+                OpenAiApiKeyInput = string.Empty;
+            }
+
+            s.HasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
         }
 
         private async Task InstallPackAsync()
@@ -423,6 +517,49 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        private async Task TestOpenAiAsync()
+        {
+            var apiKey = string.IsNullOrWhiteSpace(_openAiApiKeyInput)
+                ? _secretStore.LoadOpenAiApiKey()
+                : _openAiApiKeyInput.Trim();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                OpenAiTestResponseText = "Ajoutez une clé OpenAI dans Réglages > IA.";
+                return;
+            }
+
+            try
+            {
+                OpenAiTestResponseText = "Test OpenAI en cours…";
+                using var client = new System.Net.Http.HttpClient
+                {
+                    BaseAddress = new Uri("https://api.openai.com/v1/"),
+                    Timeout = TimeSpan.FromSeconds(_svc.Settings.OpenAiTimeoutSeconds)
+                };
+                using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, "models");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    OpenAiTestResponseText = "Clé OpenAI invalide ou expirée.";
+                    return;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    OpenAiTestResponseText = $"Erreur OpenAI: {response.StatusCode}.";
+                    return;
+                }
+
+                OpenAiTestResponseText = "OpenAI OK.";
+            }
+            catch (Exception ex)
+            {
+                OpenAiTestResponseText = $"Erreur OpenAI: {ex.Message}";
+            }
+        }
+
         private void NotifyChat(string message)
         {
             _chatService?.PostSystemMessage(message, MessageType.Error, ChatKind.Error);
@@ -434,6 +571,7 @@ namespace Virgil.App.ViewModels
             _cancelDownloadCommand.RaiseCanExecuteChanged();
             _verifyPackCommand.RaiseCanExecuteChanged();
             _testAiCommand.RaiseCanExecuteChanged();
+            _testOpenAiCommand.RaiseCanExecuteChanged();
         }
 
         private void RefreshModelDetails()
@@ -470,10 +608,13 @@ namespace Virgil.App.ViewModels
                 ? "Statut runtime: présent"
                 : "Statut runtime: manquant";
 
-            OpenAiStatusText = string.IsNullOrWhiteSpace(_keyStore.Load())
-                ? "Statut OpenAI: clé absente"
-                : "Statut OpenAI: clé présente";
+            OpenAiStatusText = _svc.Settings.HasOpenAiKey
+                ? "Statut OpenAI: clé présente"
+                : "Statut OpenAI: clé absente";
+            OpenAiKeyStatusText = _svc.Settings.HasOpenAiKey ? "Clé enregistrée ✅" : "Aucune clé ❌";
         }
+
+        public sealed record AiProviderOption(AiProvider Value, string Label);
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? n = null)

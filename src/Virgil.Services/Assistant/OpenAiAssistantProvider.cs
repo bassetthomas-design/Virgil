@@ -60,7 +60,7 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
     {
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
-            return BuildSettingsReply("Clé OpenAI manquante.");
+            return BuildSettingsReply("Ajoutez une clé OpenAI dans Réglages > IA.");
         }
 
         var prompt = AssistantPromptBuilder.BuildSystemPrompt(ctx);
