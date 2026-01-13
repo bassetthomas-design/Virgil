@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -22,6 +24,8 @@ namespace Virgil.App.ViewModels
     {
         private const string FullPackDownloadUrl =
             "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf";
+        private const int RuntimeHelpMaxLength = 6000;
+        private const string RuntimeHelpLogFileName = "runtime-help.log";
         private readonly SettingsService _svc;
         private readonly AppChatService? _chatService;
         private readonly IAssistantService? _assistantService;
@@ -45,11 +49,13 @@ namespace Virgil.App.ViewModels
         private string _runtimeStderrText = string.Empty;
         private string _runtimeSecurityFlagsText = string.Empty;
         private string _runtimeSecurityStrategyText = string.Empty;
+        private string _runtimeHelpText = "Cliquez sur \"Aide runtime\" pour afficher l'aide.";
         private string _openAiStatusText = string.Empty;
         private string _openAiKeyStatusText = string.Empty;
         private string _openAiTestResponseText = string.Empty;
         private string _openAiApiKeyInput = string.Empty;
         private bool _isOpenAiKeyVisible;
+        private bool _isRuntimeHelpLoading;
         private AiProvider _selectedAiProvider;
         private readonly IReadOnlyList<AiProviderOption> _aiProviderOptions;
 
@@ -99,6 +105,7 @@ namespace Virgil.App.ViewModels
             _testAiCommand = new AsyncRelayCommand(_ => TestAiAsync(), _ => !IsDownloading);
             _saveAiSettingsCommand = new RelayCommand(_ => SaveAiSettings());
             _testOpenAiCommand = new AsyncRelayCommand(_ => TestOpenAiAsync(), _ => !IsDownloading);
+            _runtimeHelpCommand = new AsyncRelayCommand(_ => ShowRuntimeHelpAsync(), _ => !IsRuntimeHelpLoading);
         }
 
         private int _monitoringIntervalMinutesMin;
@@ -292,6 +299,28 @@ namespace Virgil.App.ViewModels
             private set { _runtimeSecurityStrategyText = value; OnPropertyChanged(); }
         }
 
+        public string RuntimeHelpText
+        {
+            get => _runtimeHelpText;
+            private set { _runtimeHelpText = value; OnPropertyChanged(); }
+        }
+
+        public bool IsRuntimeHelpLoading
+        {
+            get => _isRuntimeHelpLoading;
+            private set
+            {
+                if (_isRuntimeHelpLoading == value)
+                {
+                    return;
+                }
+
+                _isRuntimeHelpLoading = value;
+                OnPropertyChanged();
+                UpdateCommandStates();
+            }
+        }
+
         public string OpenAiStatusText
         {
             get => _openAiStatusText;
@@ -392,6 +421,9 @@ namespace Virgil.App.ViewModels
 
         private readonly AsyncRelayCommand _testOpenAiCommand;
         public ICommand TestOpenAiCommand => _testOpenAiCommand;
+
+        private readonly AsyncRelayCommand _runtimeHelpCommand;
+        public ICommand RuntimeHelpCommand => _runtimeHelpCommand;
 
         /// <summary>
         /// Applique les valeurs au SettingsService et persiste.
@@ -640,6 +672,7 @@ namespace Virgil.App.ViewModels
             _verifyPackCommand.RaiseCanExecuteChanged();
             _testAiCommand.RaiseCanExecuteChanged();
             _testOpenAiCommand.RaiseCanExecuteChanged();
+            _runtimeHelpCommand.RaiseCanExecuteChanged();
         }
 
         private void RefreshModelDetails()
@@ -735,9 +768,112 @@ namespace Virgil.App.ViewModels
             return $"{value.Substring(0, maxLength)}…";
         }
 
+        private async Task ShowRuntimeHelpAsync()
+        {
+            if (IsRuntimeHelpLoading)
+            {
+                return;
+            }
+
+            var runtimePath = LlamaRuntimeManager.DefaultRuntimePath;
+            if (!File.Exists(runtimePath))
+            {
+                RuntimeHelpText = $"Runtime introuvable: {runtimePath}";
+                return;
+            }
+
+            IsRuntimeHelpLoading = true;
+            RuntimeHelpText = "Récupération de l'aide runtime…";
+
+            try
+            {
+                var result = await ReadRuntimeHelpAsync(runtimePath).ConfigureAwait(false);
+                RuntimeHelpText = Truncate(result.Output, RuntimeHelpMaxLength);
+                LogRuntimeHelp(runtimePath, result);
+            }
+            catch (Exception ex)
+            {
+                RuntimeHelpText = $"Erreur aide runtime: {ex.Message}";
+                LogRuntimeHelp(runtimePath, new RuntimeHelpResult(string.Empty, ex.ToString(), null));
+            }
+            finally
+            {
+                IsRuntimeHelpLoading = false;
+            }
+        }
+
+        private static async Task<RuntimeHelpResult> ReadRuntimeHelpAsync(string runtimePath)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = runtimePath,
+                Arguments = "--help",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+
+            await process.WaitForExitAsync().ConfigureAwait(false);
+
+            var stdout = await stdoutTask.ConfigureAwait(false);
+            var stderr = await stderrTask.ConfigureAwait(false);
+
+            var combined = string.Join(
+                Environment.NewLine,
+                new[] { stdout, stderr }.Where(text => !string.IsNullOrWhiteSpace(text)));
+
+            if (string.IsNullOrWhiteSpace(combined))
+            {
+                combined = "Aucune sortie retournée.";
+            }
+
+            return new RuntimeHelpResult(stdout, stderr, process.ExitCode, combined);
+        }
+
+        private static void LogRuntimeHelp(string runtimePath, RuntimeHelpResult result)
+        {
+            try
+            {
+                var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "logs");
+                Directory.CreateDirectory(logDir);
+                var logPath = Path.Combine(logDir, RuntimeHelpLogFileName);
+                var builder = new StringBuilder();
+
+                builder.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Runtime help");
+                builder.AppendLine($"Path: {runtimePath}");
+                builder.AppendLine($"ExitCode: {(result.ExitCode.HasValue ? result.ExitCode.ToString() : "—")}");
+                builder.AppendLine("STDOUT:");
+                builder.AppendLine(string.IsNullOrWhiteSpace(result.Stdout) ? "—" : result.Stdout);
+                builder.AppendLine("STDERR:");
+                builder.AppendLine(string.IsNullOrWhiteSpace(result.Stderr) ? "—" : result.Stderr);
+                builder.AppendLine(new string('-', 80));
+
+                File.AppendAllText(logPath, builder.ToString());
+            }
+            catch
+            {
+                // Ignore logging errors.
+            }
+        }
+
         private ModelAvailabilityResult GetModelAvailability()
         {
             return ModelAvailability.Check(_modelLocator, _packManifest);
+        }
+
+        private sealed record RuntimeHelpResult(string Stdout, string Stderr, int? ExitCode, string Output)
+        {
+            public RuntimeHelpResult(string stdout, string stderr, int? exitCode)
+                : this(stdout, stderr, exitCode, string.Empty)
+            {
+            }
         }
 
         public sealed record AiProviderOption(AiProvider Value, string Label);
