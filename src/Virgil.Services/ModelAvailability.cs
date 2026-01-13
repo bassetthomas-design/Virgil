@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using Virgil.Core.Logging;
 using Virgil.Core.Config;
 using Virgil.Services.Assistant;
 
@@ -34,6 +35,11 @@ public static class ModelAvailability
         var runtimePresent = File.Exists(runtimeExpectedPath);
 
         var hashProvided = !string.IsNullOrWhiteSpace(resolvedManifest.Sha256);
+        if (modelPresent && !hashProvided)
+        {
+            Log.Warn(
+                $"Hash attendu manquant (caller: {nameof(ModelAvailability)}.{nameof(Check)} | modelPath: {modelPath} | expectedHashPresent: false | fileExists: true)");
+        }
         bool? hashVerified = null;
 
         if (modelPresent && hashProvided)

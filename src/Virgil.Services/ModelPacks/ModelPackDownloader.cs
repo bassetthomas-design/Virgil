@@ -145,6 +145,8 @@ public sealed class ModelPackDownloader
         var expectedHash = GetExpectedHash(manifest, resolvedPath);
         if (string.IsNullOrWhiteSpace(expectedHash))
         {
+            Log.Warn(
+                $"Hash attendu manquant (caller: {nameof(ModelPackDownloader)}.{nameof(VerifyAsync)} | modelPath: {resolvedPath} | expectedHashPresent: false | fileExists: true)");
             return new ModelPackVerificationResult(true, false, "Modèle installé (hash non vérifié).");
         }
 
