@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Core.Config;
+using Virgil.Core.Logging;
 
 namespace Virgil.Services.ModelPacks;
 
@@ -50,6 +51,8 @@ public sealed class ModelPackDownloader
 
         if (string.IsNullOrWhiteSpace(manifest.Sha256))
         {
+            Log.Warn(
+                $"Hash attendu manquant (caller: {nameof(ModelPackDownloader)}.{nameof(DownloadAsync)} | modelPath: {_modelLocator.ModelPath} | expectedHashPresent: false | fileExists: {File.Exists(_modelLocator.ModelPath)})");
             return new ModelPackDownloadResult(false, "Hash attendu manquant.", "Hash attendu manquant.");
         }
 

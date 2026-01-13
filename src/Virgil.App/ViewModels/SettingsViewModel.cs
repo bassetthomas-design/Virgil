@@ -7,11 +7,12 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using Virgil.App.Chat;
+using AppChatService = Virgil.App.Chat.ChatService;
 using Virgil.App.Commands;
 using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Core.Config;
+using Virgil.Services;
 using Virgil.Services.Assistant;
 using Virgil.Services.ModelPacks;
 
@@ -22,7 +23,7 @@ namespace Virgil.App.ViewModels
         private const string FullPackDownloadUrl =
             "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf";
         private readonly SettingsService _svc;
-        private readonly ChatService? _chatService;
+        private readonly AppChatService? _chatService;
         private readonly IAssistantService? _assistantService;
         private readonly ISecretStore _secretStore;
         private readonly ModelLocator _modelLocator = new();
@@ -46,7 +47,7 @@ namespace Virgil.App.ViewModels
 
         public SettingsViewModel(
             SettingsService svc,
-            ChatService? chatService = null,
+            AppChatService? chatService = null,
             IAssistantService? assistantService = null,
             ISecretStore? secretStore = null)
         {
@@ -76,7 +77,7 @@ namespace Virgil.App.ViewModels
             _warnCpu = s.Mood.WarnCpu;
 
             _packDownloader = new ModelPackDownloader(_modelLocator);
-            _packManifest = ModelPackManifest.FullPack;
+            _packManifest = _svc.Settings.GetActiveFullManifest();
 
             _isPackInstalled = _modelLocator.IsInstalled;
             _downloadStatusText = _isPackInstalled ? "Pack Full installé." : "Pack Full non installé.";
@@ -562,7 +563,10 @@ namespace Virgil.App.ViewModels
 
         private void NotifyChat(string message)
         {
-            _chatService?.PostSystemMessage(message, MessageType.Error, ChatKind.Error);
+            _chatService?.PostSystemMessage(
+                message,
+                Virgil.App.Chat.MessageType.Error,
+                Virgil.App.Chat.ChatKind.Error);
         }
 
         private void UpdateCommandStates()
@@ -576,24 +580,17 @@ namespace Virgil.App.ViewModels
 
         private void RefreshModelDetails()
         {
-            if (_modelLocator.TryResolve(out var path, out _))
-            {
-                ModelStatusText = IsModelUnverified(path)
-                    ? "Modèle installé (hash non vérifié)"
-                    : "Modèle: installé";
-                ModelPathText = path;
-                ModelAgeText = $"Âge des données: {ModelLocator.FormatAge(ModelLocator.GetModelAge(path))}";
-            }
-            else
-            {
-                ModelStatusText = "Modèle manquant";
-                ModelPathText = _modelLocator.GetCandidatePaths().First();
-                ModelAgeText = string.Empty;
-            }
+            var availability = GetModelAvailability();
+            ModelStatusText = availability.UserMessage;
+            ModelPathText = availability.ModelPath;
+            ModelAgeText = availability.IsModelFilePresent
+                ? $"Âge des données: {ModelLocator.FormatAge(ModelLocator.GetModelAge(availability.ModelPath))}"
+                : string.Empty;
         }
 
         private void RefreshAiStatuses()
         {
+            var availability = GetModelAvailability();
             ProviderStatusText = _svc.EffectiveAiProvider switch
             {
                 AiProvider.EmbeddedLlama => "Provider actif: EmbeddedLlama",
@@ -602,11 +599,11 @@ namespace Virgil.App.ViewModels
                 _ => "Provider actif: Inconnu"
             };
 
-            GgufStatusText = _modelLocator.IsInstalled
+            GgufStatusText = availability.IsModelFilePresent
                 ? "Statut GGUF: installé"
                 : "Statut GGUF: manquant";
 
-            RuntimeStatusText = File.Exists(LlamaRuntimeManager.DefaultRuntimePath)
+            RuntimeStatusText = availability.IsRuntimePresent
                 ? "Statut runtime: présent"
                 : "Statut runtime: manquant";
 
@@ -616,15 +613,9 @@ namespace Virgil.App.ViewModels
             OpenAiKeyStatusText = _svc.Settings.HasOpenAiKey ? "Clé enregistrée ✅" : "Aucune clé ❌";
         }
 
-        private bool IsModelUnverified(string path)
+        private ModelAvailabilityResult GetModelAvailability()
         {
-            if (!string.IsNullOrWhiteSpace(_packManifest.Sha256))
-            {
-                return false;
-            }
-
-            var hashPath = _modelLocator.GetHashPathForModel(path);
-            return !File.Exists(hashPath);
+            return ModelAvailability.Check(_modelLocator, _packManifest);
         }
 
         public sealed record AiProviderOption(AiProvider Value, string Label);
