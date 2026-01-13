@@ -2,6 +2,8 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Windows;
+using System.Windows.Threading;
 using Virgil.App.Controls;
 using Virgil.App.Models;
 using Virgil.App.Services;
@@ -24,6 +26,7 @@ namespace Virgil.App.ViewModels
         private readonly SettingsService? _settings = null!;
         private readonly NetworkInsightService? _network = null!;
         private readonly SynchronizationContext? _uiContext;
+        private readonly DispatcherTimer? _cooldownTimer;
 
         public MonitoringViewModel(ISystemMonitorService monitoring)
         {
@@ -32,6 +35,7 @@ namespace Virgil.App.ViewModels
 
             _systemMonitoring.SnapshotUpdated += OnSystemMetricsUpdated;
             AvatarSource = AvatarService.GetAvatarPath(_currentMood);
+            _cooldownTimer = CreateCooldownTimer();
         }
 
         public MonitoringViewModel(
@@ -57,6 +61,7 @@ namespace Virgil.App.ViewModels
             _legacyMonitoring.Updated += OnLegacyMetricsUpdated;
             _legacyMonitoring.Start();
             AvatarSource = AvatarService.GetAvatarPath(_currentMood);
+            _cooldownTimer = CreateCooldownTimer();
         }
 
         // Ctor sans paramètres pour le design-time ou certains usages XAML / legacy.
@@ -77,10 +82,50 @@ namespace Virgil.App.ViewModels
                 _lastUpdateTimeUtc = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(LastTelemetryUpdateUtc));
+                UpdateTelemetrySchedule(_nextTelemetryUpdateUtc);
             }
         }
 
-        public DateTime? LastTelemetryUpdateUtc => LastUpdateTimeUtc;
+        public DateTime LastTelemetryUpdateUtc => LastUpdateTimeUtc ?? DateTime.MinValue;
+
+        private DateTime? _nextTelemetryUpdateUtc;
+        public DateTime NextTelemetryUpdateUtc => _nextTelemetryUpdateUtc ?? DateTime.MinValue;
+
+        private TimeSpan _telemetryCooldownRemaining = TimeSpan.Zero;
+        public TimeSpan TelemetryCooldownRemaining
+        {
+            get => _telemetryCooldownRemaining;
+            private set
+            {
+                if (_telemetryCooldownRemaining == value) return;
+                _telemetryCooldownRemaining = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TelemetryCooldownRemainingText));
+                OnPropertyChanged(nameof(TelemetryCooldownDisplay));
+            }
+        }
+
+        private TimeSpan? _telemetryCooldownDuration;
+
+        private string _telemetryCooldownState = TelemetryCooldownStates.Unknown;
+        public string TelemetryCooldownState
+        {
+            get => _telemetryCooldownState;
+            private set
+            {
+                if (_telemetryCooldownState == value) return;
+                _telemetryCooldownState = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string TelemetryCooldownRemainingText
+            => _nextTelemetryUpdateUtc.HasValue
+                ? FormatCooldown(TelemetryCooldownRemaining)
+                : "--:--";
+
+        public string TelemetryCooldownDisplay
+            => $"🔄 Prochaine mise à jour dans {TelemetryCooldownRemainingText}";
 
         private TimeSpan? _dataAge;
         public TimeSpan? DataAge
@@ -496,6 +541,7 @@ namespace Virgil.App.ViewModels
         {
             var now = DateTime.UtcNow;
             LastUpdateTimeUtc = now;
+            UpdateTelemetrySchedule(_systemMonitoring?.NextTelemetryUpdateUtc);
             DataAge = TimeSpan.Zero;
             var cpuUsage = snapshot.CpuUsage;
             if (IsInvalid(cpuUsage))
@@ -622,6 +668,7 @@ namespace Virgil.App.ViewModels
         private void ApplySnapshot(MetricsEventArgs metrics)
         {
             LastUpdateTimeUtc = metrics.SampledAtUtc;
+            UpdateTelemetrySchedule(_legacyMonitoring?.NextTelemetryUpdateUtc);
             DataAge = metrics.DataAge;
             var cpuUsage = metrics.CpuUsage;
             if (IsInvalid(cpuUsage))
@@ -793,6 +840,115 @@ namespace Virgil.App.ViewModels
         {
             var displayValue = lastUpdatedUtc.HasValue ? value : double.NaN;
             return TelemetrySanitizer.FormatOptional(displayValue, unit);
+        }
+
+        private DispatcherTimer? CreateCooldownTimer()
+        {
+            if (Application.Current?.Dispatcher is null)
+            {
+                return null;
+            }
+
+            var timer = new DispatcherTimer(
+                TimeSpan.FromSeconds(1),
+                DispatcherPriority.Background,
+                (_, _) => OnCooldownTimerTick(),
+                Application.Current.Dispatcher);
+            timer.Start();
+            return timer;
+        }
+
+        private void OnCooldownTimerTick()
+        {
+            RefreshTelemetryScheduleFromService();
+            RecalculateTelemetryCooldown();
+        }
+
+        private void RefreshTelemetryScheduleFromService()
+        {
+            var nextUpdate = _legacyMonitoring?.NextTelemetryUpdateUtc
+                ?? _systemMonitoring?.NextTelemetryUpdateUtc;
+            if (nextUpdate.HasValue && nextUpdate == _nextTelemetryUpdateUtc)
+            {
+                return;
+            }
+
+            if (nextUpdate.HasValue)
+            {
+                UpdateTelemetrySchedule(nextUpdate);
+            }
+        }
+
+        private void UpdateTelemetrySchedule(DateTime? nextUpdateUtc)
+        {
+            if (_nextTelemetryUpdateUtc == nextUpdateUtc)
+            {
+                RecalculateTelemetryCooldown();
+                return;
+            }
+
+            _nextTelemetryUpdateUtc = nextUpdateUtc;
+            OnPropertyChanged(nameof(NextTelemetryUpdateUtc));
+            if (_lastUpdateTimeUtc.HasValue && nextUpdateUtc.HasValue && nextUpdateUtc.Value > _lastUpdateTimeUtc.Value)
+            {
+                _telemetryCooldownDuration = nextUpdateUtc.Value - _lastUpdateTimeUtc.Value;
+            }
+
+            RecalculateTelemetryCooldown();
+        }
+
+        private void RecalculateTelemetryCooldown()
+        {
+            if (_nextTelemetryUpdateUtc.HasValue)
+            {
+                var remaining = _nextTelemetryUpdateUtc.Value - DateTime.UtcNow;
+                TelemetryCooldownRemaining = remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
+            }
+            else
+            {
+                TelemetryCooldownRemaining = TimeSpan.Zero;
+            }
+
+            UpdateTelemetryCooldownState();
+        }
+
+        private void UpdateTelemetryCooldownState()
+        {
+            if (!_lastUpdateTimeUtc.HasValue || !_telemetryCooldownDuration.HasValue || _telemetryCooldownDuration.Value <= TimeSpan.Zero)
+            {
+                TelemetryCooldownState = TelemetryCooldownStates.Unknown;
+                return;
+            }
+
+            var age = DateTime.UtcNow - _lastUpdateTimeUtc.Value;
+            var ratio = age.TotalSeconds / _telemetryCooldownDuration.Value.TotalSeconds;
+            if (ratio <= 0.5)
+            {
+                TelemetryCooldownState = TelemetryCooldownStates.Fresh;
+            }
+            else if (ratio <= 0.85)
+            {
+                TelemetryCooldownState = TelemetryCooldownStates.Warning;
+            }
+            else
+            {
+                TelemetryCooldownState = TelemetryCooldownStates.Stale;
+            }
+        }
+
+        private static string FormatCooldown(TimeSpan remaining)
+        {
+            var totalMinutes = Math.Max(0, (int)remaining.TotalMinutes);
+            var seconds = Math.Max(0, remaining.Seconds);
+            return $"{totalMinutes:00}:{seconds:00}";
+        }
+
+        private static class TelemetryCooldownStates
+        {
+            public const string Unknown = "Unknown";
+            public const string Fresh = "Fresh";
+            public const string Warning = "Warning";
+            public const string Stale = "Stale";
         }
     }
 }
