@@ -1,16 +1,16 @@
-$defaultZipUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b7717/llama-b7717-bin-win-cpu-x64.zip"
-
 param(
     [Parameter(Mandatory = $true)]
     [string]$OutDir,
 
     [string]$Version,
 
-    [string]$ZipUrl = $defaultZipUrl
+    [string]$ZipUrl
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$defaultZipUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b7717/llama-b7717-bin-win-cpu-x64.zip"
 
 function Test-PeAmd64 {
     param(
