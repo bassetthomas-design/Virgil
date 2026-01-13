@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -19,7 +20,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string RuntimeExecutableName = "llama-server.exe";
     private readonly string _baseUrl;
     private readonly string _executablePath;
-    private readonly string? _arguments;
+    private readonly string _baseArguments;
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _healthTimeout;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -27,6 +28,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private Process? _process;
     private StringBuilder _stdoutBuffer = new();
     private StringBuilder _stderrBuffer = new();
+    private string? _tempApiKeyFilePath;
     private bool _disposed;
 
     public LlamaRuntimeManager(
@@ -40,7 +42,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         _executablePath = string.IsNullOrWhiteSpace(executablePath)
             ? DefaultRuntimePath
             : executablePath;
-        _arguments = EnsureSecurityArguments(arguments, baseUrl);
+        _baseArguments = SanitizeRuntimeArguments(arguments);
         _healthTimeout = healthTimeout ?? DefaultHealthTimeout;
 
         _httpClient = httpClient ?? new HttpClient
@@ -83,57 +85,38 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             }
 
             Log.Info($"Llama runtime path: {_executablePath}");
-            var commandLine = BuildCommandLine(_executablePath, _arguments ?? string.Empty);
-            Log.Info($"Llama runtime args: {_arguments ?? string.Empty}");
-            Log.Info($"Llama runtime command line: {commandLine}");
+            var port = ResolvePort(_baseUrl);
+            var attempts = BuildSecurityArgumentAttempts();
+            RuntimeAttemptResult? lastFailure = null;
 
-            InitializeDiagnostics(commandLine);
+            foreach (var attempt in attempts)
+            {
+                ct.ThrowIfCancellationRequested();
 
-            var workingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory;
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = _executablePath,
-                Arguments = _arguments ?? string.Empty,
-                WorkingDirectory = workingDirectory,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
+                var arguments = BuildArguments(_baseArguments, port, attempt.Arguments);
+                var commandLine = BuildCommandLine(_executablePath, arguments);
 
-            _process?.Dispose();
-            try
-            {
-                _process = Process.Start(startInfo);
-            }
-            catch (Exception ex)
-            {
-                UpdateDiagnostics(
-                    processLaunched: false,
-                    portOpen: false,
-                    exitCode: null,
-                    lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}");
-                throw new AssistantProviderUnavailableException($"Impossible de lancer le runtime: {ex.Message}", ex);
+                Log.Info($"Llama runtime args attempt ({attempt.Label}): {arguments}");
+                Log.Info($"Llama runtime command line: {commandLine}");
+
+                var result = await TryStartProcessAsync(arguments, commandLine, ct).ConfigureAwait(false);
+                if (result.Success)
+                {
+                    Log.Info($"Llama runtime security config selected: {attempt.Label}");
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(result.Stderr))
+                {
+                    Log.Warn($"Llama runtime config rejected ({attempt.Label}) stderr: {result.Stderr}");
+                }
+
+                lastFailure = result;
             }
 
-            if (_process is null)
-            {
-                UpdateDiagnostics(
-                    processLaunched: false,
-                    portOpen: false,
-                    exitCode: null,
-                    lastErrorMessage: "Impossible de lancer le runtime.");
-                throw new AssistantProviderUnavailableException("Impossible de lancer le runtime.");
-            }
-
-            _process.EnableRaisingEvents = true;
-            _process.OutputDataReceived += OnOutputDataReceived;
-            _process.ErrorDataReceived += OnErrorDataReceived;
-            _process.Exited += OnProcessExited;
-            _process.BeginOutputReadLine();
-            _process.BeginErrorReadLine();
-
-            UpdateDiagnostics(processLaunched: true, portOpen: null, exitCode: null, lastErrorMessage: null);
+            CleanupTempApiKeyFile();
+            var lastError = lastFailure?.LastErrorMessage ?? "Aucune configuration de sécurité valide trouvée.";
+            throw new AssistantProviderUnavailableException(lastError);
         }
         finally
         {
@@ -252,7 +235,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         try
         {
-            using var response = await _httpClient.GetAsync("/", ct).ConfigureAwait(false);
+            using var response = await _httpClient.GetAsync("/v1/models", ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch (HttpRequestException)
@@ -265,22 +248,15 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         return false;
     }
 
-    private static string EnsureSecurityArguments(string? arguments, string baseUrl)
+    private static string SanitizeRuntimeArguments(string? arguments)
     {
         var sanitizedArguments = arguments ?? string.Empty;
         sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--host");
         sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--port");
         sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--api-key");
         sanitizedArguments = RemoveFlag(sanitizedArguments, "--no-auth");
-
-        var port = ResolvePort(baseUrl);
-        var builder = new StringBuilder(sanitizedArguments);
-
-        AppendArgumentIfMissing(builder, false, $"--host {LocalHostAddress}");
-        AppendArgumentIfMissing(builder, false, $"--port {port}");
-        AppendArgumentIfMissing(builder, false, "--api-key none");
-
-        return builder.ToString().Trim();
+        sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--api-key-file");
+        return sanitizedArguments.Trim();
     }
 
     private static string RemoveArgumentWithValue(string arguments, string flag)
@@ -317,21 +293,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         return DefaultPort;
     }
 
-    private static void AppendArgumentIfMissing(StringBuilder builder, bool hasArgument, string argument)
-    {
-        if (hasArgument)
-        {
-            return;
-        }
-
-        if (builder.Length > 0 && !char.IsWhiteSpace(builder[^1]))
-        {
-            builder.Append(' ');
-        }
-
-        builder.Append(argument);
-    }
-
     private static string NormalizeWhitespace(string value)
         => string.Join(' ', value.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
 
@@ -354,7 +315,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private bool IsProcessRunning()
         => _process is not null && !_process.HasExited;
 
-    private void InitializeDiagnostics(string commandLine)
+    private void InitializeDiagnostics(string arguments, string commandLine)
     {
         lock (_outputLock)
         {
@@ -364,7 +325,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         var diagnostics = new LlamaRuntimeDiagnostics(
             _executablePath,
-            _arguments ?? string.Empty,
+            arguments,
             commandLine,
             string.Empty,
             string.Empty,
@@ -492,7 +453,200 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         _disposed = true;
         await StopAsync().ConfigureAwait(false);
+        CleanupTempApiKeyFile();
         _httpClient.Dispose();
         _gate.Dispose();
     }
+
+    private IEnumerable<RuntimeSecurityAttempt> BuildSecurityArgumentAttempts()
+    {
+        yield return new RuntimeSecurityAttempt("no-auth", "--no-auth");
+        yield return new RuntimeSecurityAttempt("api-key none", "--api-key none");
+        yield return new RuntimeSecurityAttempt("api-key empty", "--api-key \"\"");
+
+        var tempFile = GetOrCreateTempApiKeyFile();
+        if (!string.IsNullOrWhiteSpace(tempFile))
+        {
+            yield return new RuntimeSecurityAttempt("api-key-file empty", $"--api-key-file {QuoteIfNeeded(tempFile)}");
+        }
+        else
+        {
+            Log.Warn("Impossible de créer le fichier temporaire pour --api-key-file.");
+        }
+    }
+
+    private async Task<RuntimeAttemptResult> TryStartProcessAsync(string arguments, string commandLine, CancellationToken ct)
+    {
+        InitializeDiagnostics(arguments, commandLine);
+        _process?.Dispose();
+
+        var workingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory;
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _executablePath,
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        try
+        {
+            _process = Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            UpdateDiagnostics(
+                processLaunched: false,
+                portOpen: false,
+                exitCode: null,
+                lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}");
+            return new RuntimeAttemptResult(false, null, string.Empty, $"Impossible de lancer le runtime: {ex.Message}");
+        }
+
+        if (_process is null)
+        {
+            UpdateDiagnostics(
+                processLaunched: false,
+                portOpen: false,
+                exitCode: null,
+                lastErrorMessage: "Impossible de lancer le runtime.");
+            return new RuntimeAttemptResult(false, null, string.Empty, "Impossible de lancer le runtime.");
+        }
+
+        _process.EnableRaisingEvents = true;
+        _process.OutputDataReceived += OnOutputDataReceived;
+        _process.ErrorDataReceived += OnErrorDataReceived;
+        _process.Exited += OnProcessExited;
+        _process.BeginOutputReadLine();
+        _process.BeginErrorReadLine();
+
+        UpdateDiagnostics(processLaunched: true, portOpen: null, exitCode: null, lastErrorMessage: null);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(1500), ct).ConfigureAwait(false);
+
+        if (_process.HasExited)
+        {
+            var exitCode = _process.ExitCode;
+            var stderr = GetCapturedStderr();
+            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: exitCode, lastErrorMessage: null);
+            await StopProcessAsync(ct).ConfigureAwait(false);
+            var lastError = string.IsNullOrWhiteSpace(stderr)
+                ? $"Runtime terminé avec le code {exitCode}."
+                : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
+            return new RuntimeAttemptResult(false, exitCode, stderr, lastError);
+        }
+
+        var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
+        UpdateDiagnostics(processLaunched: true, portOpen: healthy, exitCode: null, lastErrorMessage: healthy ? null : "Port fermé ou runtime non prêt.");
+        if (!healthy)
+        {
+            var stderr = GetCapturedStderr();
+            await StopProcessAsync(ct).ConfigureAwait(false);
+            return new RuntimeAttemptResult(false, null, stderr, "Port fermé ou runtime non prêt.");
+        }
+
+        return new RuntimeAttemptResult(true, null, string.Empty, null);
+    }
+
+    private async Task StopProcessAsync(CancellationToken ct)
+    {
+        if (_process is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+                await _process.WaitForExitAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception)
+        {
+        }
+        finally
+        {
+            _process.Dispose();
+            _process = null;
+        }
+    }
+
+    private string GetCapturedStderr()
+    {
+        lock (_outputLock)
+        {
+            return _stderrBuffer.ToString();
+        }
+    }
+
+    private static string BuildArguments(string baseArguments, int port, string securityArguments)
+    {
+        var builder = new StringBuilder(baseArguments);
+        AppendArgument(builder, $"--host {LocalHostAddress}");
+        AppendArgument(builder, $"--port {port}");
+        AppendArgument(builder, securityArguments);
+        return builder.ToString().Trim();
+    }
+
+    private static void AppendArgument(StringBuilder builder, string argument)
+    {
+        if (builder.Length > 0 && !char.IsWhiteSpace(builder[^1]))
+        {
+            builder.Append(' ');
+        }
+
+        builder.Append(argument);
+    }
+
+    private string? GetOrCreateTempApiKeyFile()
+    {
+        if (!string.IsNullOrWhiteSpace(_tempApiKeyFilePath))
+        {
+            return _tempApiKeyFilePath;
+        }
+
+        try
+        {
+            var tempFile = Path.Combine(Path.GetTempPath(), $"virgil-llama-api-key-{Guid.NewGuid():N}.txt");
+            File.WriteAllText(tempFile, string.Empty);
+            _tempApiKeyFilePath = tempFile;
+            return tempFile;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void CleanupTempApiKeyFile()
+    {
+        if (string.IsNullOrWhiteSpace(_tempApiKeyFilePath))
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(_tempApiKeyFilePath))
+            {
+                File.Delete(_tempApiKeyFilePath);
+            }
+        }
+        catch (Exception)
+        {
+        }
+        finally
+        {
+            _tempApiKeyFilePath = null;
+        }
+    }
+
+    private sealed record RuntimeSecurityAttempt(string Label, string Arguments);
+
+    private sealed record RuntimeAttemptResult(bool Success, int? ExitCode, string Stderr, string? LastErrorMessage);
 }
