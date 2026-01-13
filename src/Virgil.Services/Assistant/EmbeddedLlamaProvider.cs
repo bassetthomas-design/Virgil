@@ -256,6 +256,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
     private static string AppendRuntimeDiagnostics(string message)
     {
         var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+        if (!string.IsNullOrWhiteSpace(diagnostics.CommandLine))
+        {
+            message = $"{message}{Environment.NewLine}Commande runtime: {diagnostics.CommandLine}";
+        }
+
         if (!string.IsNullOrWhiteSpace(diagnostics.Stderr)
             && diagnostics.Stderr.Contains("untrusted environments", StringComparison.OrdinalIgnoreCase))
         {

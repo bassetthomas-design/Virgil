@@ -278,7 +278,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         AppendArgumentIfMissing(builder, false, $"--host {LocalHostAddress}");
         AppendArgumentIfMissing(builder, false, $"--port {port}");
-        AppendArgumentIfMissing(builder, false, "--no-auth");
+        AppendArgumentIfMissing(builder, false, "--api-key none");
 
         return builder.ToString().Trim();
     }
