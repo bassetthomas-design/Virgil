@@ -19,6 +19,7 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
     private readonly HttpClient _httpClient;
     private readonly string _model;
     private readonly string? _apiKey;
+    private readonly bool _isProviderEnabled;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -28,10 +29,12 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
         string? apiKey,
         string? model = null,
         TimeSpan? timeout = null,
-        HttpClient? httpClient = null)
+        HttpClient? httpClient = null,
+        bool isProviderEnabled = true)
     {
         _apiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         _model = string.IsNullOrWhiteSpace(model) ? DefaultModel : model;
+        _isProviderEnabled = isProviderEnabled;
 
         if (httpClient is not null)
         {
@@ -58,9 +61,9 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
 
     public async Task<AssistantReply> AskAsync(string userMessage, AssistantContext ctx, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_apiKey))
+        if (!_isProviderEnabled || string.IsNullOrWhiteSpace(_apiKey))
         {
-            return BuildSettingsReply("Ajoutez une clé OpenAI dans Réglages > IA.");
+            return BuildSettingsReply("OpenAI non configuré.");
         }
 
         var prompt = AssistantPromptBuilder.BuildSystemPrompt(ctx);

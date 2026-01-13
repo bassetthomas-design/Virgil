@@ -64,9 +64,16 @@ namespace Virgil.App.Services
 
         private AiProvider ResolveAiProvider(AiProvider? configuredProvider)
         {
+            var hasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
             if (configuredProvider is not null)
             {
-                return configuredProvider.Value;
+                return configuredProvider.Value switch
+                {
+                    AiProvider.OpenAI => hasOpenAiKey ? AiProvider.OpenAI : AiProvider.Disabled,
+                    AiProvider.EmbeddedLlama => AiProvider.EmbeddedLlama,
+                    AiProvider.Disabled => AiProvider.Disabled,
+                    _ => AiProvider.Disabled
+                };
             }
 
             var availability = ModelAvailability.Check(_modelLocator, Settings.GetActiveFullManifest());
@@ -75,7 +82,6 @@ namespace Virgil.App.Services
                 return AiProvider.EmbeddedLlama;
             }
 
-            var hasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
             if (hasOpenAiKey)
             {
                 return AiProvider.OpenAI;
