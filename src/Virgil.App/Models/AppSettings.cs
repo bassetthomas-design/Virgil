@@ -27,6 +27,7 @@ namespace Virgil.App.Models
         public int OpenAiTimeoutSeconds { get; set; } = 30;
         public string EmbeddedLlamaBaseUrl { get; set; } = "http://localhost:8080";
         public int EmbeddedLlamaTimeoutSeconds { get; set; } = 30;
+        public string? EmbeddedLlamaApiKey { get; set; }
         public bool AiPackFullEnabled { get; set; } = true;
         public string AiPackFullDownloadUrl { get; set; } = string.Empty;
         public string AiPackFullSha256 { get; set; } = string.Empty;

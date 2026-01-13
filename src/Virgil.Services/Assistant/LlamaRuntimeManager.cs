@@ -15,14 +15,15 @@ namespace Virgil.Services.Assistant;
 public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 {
     private static readonly TimeSpan DefaultHealthTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DefaultReadinessTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DefaultShutdownTimeout = TimeSpan.FromSeconds(5);
     private const string LocalHostAddress = "127.0.0.1";
     private const int DefaultPort = 8080;
     private const string RuntimeExecutableName = "llama-server.exe";
-    private const string DefaultApiKey = "virgil";
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string _baseArguments;
+    private readonly string? _configuredApiKey;
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _healthTimeout;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -34,12 +35,14 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private string? _apiKey;
     private string _securityFlagsDetected = string.Empty;
     private string _securityStrategy = string.Empty;
+    private string _warningMessage = string.Empty;
     private bool _disposed;
 
     public LlamaRuntimeManager(
         string baseUrl,
         string? executablePath = null,
         string? arguments = null,
+        string? apiKey = null,
         TimeSpan? healthTimeout = null,
         HttpClient? httpClient = null)
     {
@@ -48,6 +51,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             ? DefaultRuntimePath
             : executablePath;
         _baseArguments = SanitizeRuntimeArguments(arguments);
+        _configuredApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         _healthTimeout = healthTimeout ?? DefaultHealthTimeout;
 
         _httpClient = httpClient ?? new HttpClient
@@ -103,7 +107,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 processLaunched: null,
                 portOpen: null,
                 exitCode: null,
-                lastErrorMessage: securityConfig.ErrorMessage);
+                lastErrorMessage: securityConfig.CanStart ? string.Empty : securityConfig.ErrorMessage);
 
             if (!securityConfig.CanStart)
             {
@@ -177,7 +181,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             processLaunched: null,
             portOpen: healthy,
             exitCode: null,
-            lastErrorMessage: healthy ? null : "Port fermé ou runtime non prêt.");
+            lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.");
         if (!healthy)
         {
             if (IsProcessRunning())
@@ -191,7 +195,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 processLaunched: null,
                 portOpen: healthy,
                 exitCode: null,
-                lastErrorMessage: healthy ? null : "Port fermé ou runtime non prêt.");
+                lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.");
             return healthy;
         }
 
@@ -224,31 +228,22 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private async Task<bool> ProbeHealthAsync(CancellationToken ct)
     {
-        try
+        foreach (var endpoint in new[] { "/health", "/v1/health", "/v1/models" })
         {
-            using var response = await _httpClient.GetAsync("/health", ct).ConfigureAwait(false);
-            if (response.IsSuccessStatusCode)
+            try
             {
-                return true;
+                using var response = await _httpClient.GetAsync(endpoint, ct).ConfigureAwait(false);
+                if (response.IsSuccessStatusCode)
+                {
+                    return true;
+                }
             }
-        }
-        catch (HttpRequestException)
-        {
-        }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-        {
-        }
-
-        try
-        {
-            using var response = await _httpClient.GetAsync("/v1/models", ct).ConfigureAwait(false);
-            return response.IsSuccessStatusCode;
-        }
-        catch (HttpRequestException)
-        {
-        }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-        {
+            catch (HttpRequestException)
+            {
+            }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            {
+            }
         }
 
         return false;
@@ -331,6 +326,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             _stdoutBuffer = new StringBuilder();
             _stderrBuffer = new StringBuilder();
         }
+        _warningMessage = string.Empty;
 
         var diagnostics = new LlamaRuntimeDiagnostics(
             _executablePath,
@@ -338,6 +334,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             commandLine,
             _securityFlagsDetected,
             _securityStrategy,
+            _warningMessage,
             string.Empty,
             string.Empty,
             null,
@@ -367,6 +364,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             if (isError)
             {
                 AppendOutputLine(_stderrBuffer, data);
+                if (IsRuntimeWarningLine(data))
+                {
+                    _warningMessage = data;
+                }
             }
             else
             {
@@ -379,6 +380,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         LlamaRuntimeDiagnosticsStore.Update(existing => existing with
         {
+            WarningMessage = string.IsNullOrWhiteSpace(_warningMessage)
+                ? existing.WarningMessage
+                : _warningMessage,
             Stdout = stdout,
             Stderr = stderr
         });
@@ -399,7 +403,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         string? errorMessage = null;
-        if (exitCode != 0 || !string.IsNullOrWhiteSpace(stderr))
+        if (exitCode != 0)
         {
             errorMessage = string.IsNullOrWhiteSpace(stderr)
                 ? $"Runtime terminé avec le code {exitCode}."
@@ -447,9 +451,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             SecurityStrategy = string.IsNullOrWhiteSpace(_securityStrategy)
                 ? existing.SecurityStrategy
                 : _securityStrategy,
-            LastErrorMessage = string.IsNullOrWhiteSpace(lastErrorMessage)
+            LastErrorMessage = lastErrorMessage is null
                 ? existing.LastErrorMessage
-                : lastErrorMessage
+                : string.IsNullOrWhiteSpace(lastErrorMessage)
+                    ? null
+                    : lastErrorMessage
         });
     }
 
@@ -540,12 +546,22 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
-        UpdateDiagnostics(processLaunched: true, portOpen: healthy, exitCode: null, lastErrorMessage: healthy ? null : "Port fermé ou runtime non prêt.");
+        UpdateDiagnostics(processLaunched: true, portOpen: healthy, exitCode: null, lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.");
         if (!healthy)
         {
-            var stderr = GetCapturedStderr();
-            await StopProcessAsync(ct).ConfigureAwait(false);
-            return new RuntimeAttemptResult(false, null, stderr, "Port fermé ou runtime non prêt.");
+            var readinessResult = await WaitForReadinessAsync(ct).ConfigureAwait(false);
+            if (!readinessResult.Success)
+            {
+                var stderr = readinessResult.Stderr;
+                var exitCode = readinessResult.ExitCode;
+                UpdateDiagnostics(
+                    processLaunched: false,
+                    portOpen: false,
+                    exitCode: exitCode,
+                    lastErrorMessage: readinessResult.LastErrorMessage);
+                await StopProcessAsync(ct).ConfigureAwait(false);
+                return readinessResult;
+            }
         }
 
         return new RuntimeAttemptResult(true, null, string.Empty, null);
@@ -633,31 +649,25 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var detectedFlags = DetectFlags(helpText);
         _securityFlagsDetected = detectedFlags.Count == 0 ? "—" : string.Join(", ", detectedFlags);
 
-        if (detectedFlags.Contains("--no-auth"))
-        {
-            return new RuntimeSecurityConfiguration("no-auth", "--no-auth", null, _securityFlagsDetected, null);
-        }
-
-        if (detectedFlags.Contains("--api-key"))
+        if (!string.IsNullOrWhiteSpace(_configuredApiKey) && detectedFlags.Contains("--api-key"))
         {
             return new RuntimeSecurityConfiguration(
                 "api-key",
-                $"--api-key {QuoteIfNeeded(DefaultApiKey)}",
-                DefaultApiKey,
+                $"--api-key {QuoteIfNeeded(_configuredApiKey)}",
+                _configuredApiKey,
                 _securityFlagsDetected,
                 null);
         }
 
-        if (detectedFlags.Contains("--api-key-file"))
+        if (!string.IsNullOrWhiteSpace(_configuredApiKey) && detectedFlags.Contains("--api-key-file"))
         {
-            var apiKey = GenerateApiKey();
-            var tempFile = CreateTempApiKeyFile(apiKey);
+            var tempFile = CreateTempApiKeyFile(_configuredApiKey);
             if (string.IsNullOrWhiteSpace(tempFile))
             {
                 return new RuntimeSecurityConfiguration(
                     "api-key-file",
                     string.Empty,
-                    apiKey,
+                    _configuredApiKey,
                     _securityFlagsDetected,
                     "Impossible de créer le fichier temporaire pour --api-key-file.",
                     CanStart: false);
@@ -666,50 +676,54 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             return new RuntimeSecurityConfiguration(
                 "api-key-file",
                 $"--api-key-file {QuoteIfNeeded(tempFile)}",
-                apiKey,
+                _configuredApiKey,
                 _securityFlagsDetected,
                 null);
         }
 
-        if (detectedFlags.Contains("--auth-token"))
+        if (!string.IsNullOrWhiteSpace(_configuredApiKey) && detectedFlags.Contains("--auth-token"))
         {
-            var apiKey = GenerateApiKey();
             return new RuntimeSecurityConfiguration(
                 "auth-token",
-                $"--auth-token {QuoteIfNeeded(apiKey)}",
-                apiKey,
+                $"--auth-token {QuoteIfNeeded(_configuredApiKey)}",
+                _configuredApiKey,
                 _securityFlagsDetected,
                 null);
         }
 
-        if (detectedFlags.Contains("--token"))
+        if (!string.IsNullOrWhiteSpace(_configuredApiKey) && detectedFlags.Contains("--token"))
         {
-            var apiKey = GenerateApiKey();
             return new RuntimeSecurityConfiguration(
                 "token",
-                $"--token {QuoteIfNeeded(apiKey)}",
-                apiKey,
+                $"--token {QuoteIfNeeded(_configuredApiKey)}",
+                _configuredApiKey,
                 _securityFlagsDetected,
                 null);
         }
 
-        if (detectedFlags.Contains("--require-api-key"))
+        if (!string.IsNullOrWhiteSpace(_configuredApiKey) && detectedFlags.Contains("--require-api-key"))
         {
-            var apiKey = GenerateApiKey();
             return new RuntimeSecurityConfiguration(
                 "require-api-key",
                 "--require-api-key",
-                apiKey,
+                _configuredApiKey,
                 _securityFlagsDetected,
                 null);
         }
 
+        if (string.IsNullOrWhiteSpace(_configuredApiKey) && detectedFlags.Contains("--no-auth"))
+        {
+            return new RuntimeSecurityConfiguration("no-auth", "--no-auth", null, _securityFlagsDetected, null);
+        }
+
         return new RuntimeSecurityConfiguration(
-            "fallback host-only",
+            string.IsNullOrWhiteSpace(_configuredApiKey) ? "fallback host-only" : "fallback host-only (clé ignorée)",
             string.Empty,
             null,
             _securityFlagsDetected,
-            "Impossible d’activer un mode sécurisé: flags non trouvés",
+            string.IsNullOrWhiteSpace(_configuredApiKey)
+                ? null
+                : "Clé API configurée mais options d’authentification non supportées.",
             CanStart: true);
     }
 
@@ -829,9 +843,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         return $"{stdout}{Environment.NewLine}{stderr}";
     }
 
-    private string GenerateApiKey()
-        => $"virgil-{Guid.NewGuid():N}";
-
     private string? CreateTempApiKeyFile(string apiKey)
     {
         CleanupTempApiKeyFile();
@@ -861,6 +872,45 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         _httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+    }
+
+    private static bool IsRuntimeWarningLine(string line)
+        => line.Contains("untrusted environments", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("not recommended", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<RuntimeAttemptResult> WaitForReadinessAsync(CancellationToken ct)
+    {
+        var start = DateTimeOffset.UtcNow;
+        var delay = TimeSpan.FromMilliseconds(250);
+        var maxDelay = TimeSpan.FromMilliseconds(500);
+
+        while (DateTimeOffset.UtcNow - start < DefaultReadinessTimeout)
+        {
+            if (_process is not null && _process.HasExited)
+            {
+                var exitCode = _process.ExitCode;
+                var stderr = GetCapturedStderr();
+                var lastError = string.IsNullOrWhiteSpace(stderr)
+                    ? $"Runtime terminé avec le code {exitCode}."
+                    : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
+                return new RuntimeAttemptResult(false, exitCode, stderr, lastError);
+            }
+
+            var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
+            if (healthy)
+            {
+                UpdateDiagnostics(processLaunched: true, portOpen: true, exitCode: null, lastErrorMessage: string.Empty);
+                return new RuntimeAttemptResult(true, null, string.Empty, null);
+            }
+
+            UpdateDiagnostics(processLaunched: true, portOpen: false, exitCode: null, lastErrorMessage: "Runtime non prêt.");
+            await Task.Delay(delay, ct).ConfigureAwait(false);
+            var nextDelayMs = Math.Min(delay.TotalMilliseconds + 50, maxDelay.TotalMilliseconds);
+            delay = TimeSpan.FromMilliseconds(nextDelayMs);
+        }
+
+        var finalStderr = GetCapturedStderr();
+        return new RuntimeAttemptResult(false, null, finalStderr, "Readiness check échoué.");
     }
 
     private sealed record RuntimeSecurityConfiguration(

@@ -43,6 +43,7 @@ namespace Virgil.App.ViewModels
         private string _runtimeStatusText = string.Empty;
         private string _runtimeProcessStatusText = string.Empty;
         private string _runtimePortStatusText = string.Empty;
+        private string _runtimeWarningText = string.Empty;
         private string _runtimeLastErrorText = string.Empty;
         private string _runtimeExitCodeText = string.Empty;
         private string _runtimeCommandLineText = string.Empty;
@@ -261,6 +262,12 @@ namespace Virgil.App.ViewModels
         {
             get => _runtimePortStatusText;
             private set { _runtimePortStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeWarningText
+        {
+            get => _runtimeWarningText;
+            private set { _runtimeWarningText = value; OnPropertyChanged(); }
         }
 
         public string RuntimeLastErrorText
@@ -713,12 +720,14 @@ namespace Virgil.App.ViewModels
                 ? "Port ouvert: OK"
                 : "Port ouvert: KO";
 
-            var lastError = string.IsNullOrWhiteSpace(diagnostics.LastErrorMessage)
-                ? GetLastLine(diagnostics.Stderr)
-                : diagnostics.LastErrorMessage;
+            RuntimeWarningText = string.IsNullOrWhiteSpace(diagnostics.WarningMessage)
+                ? "Warning runtime: —"
+                : $"Warning runtime: {diagnostics.WarningMessage}";
+
+            var lastError = diagnostics.LastErrorMessage;
             RuntimeLastErrorText = string.IsNullOrWhiteSpace(lastError)
-                ? "Dernière erreur runtime: —"
-                : $"Dernière erreur runtime: {lastError}";
+                ? "Erreur runtime bloquante: —"
+                : $"Erreur runtime bloquante: {lastError}";
 
             RuntimeExitCodeText = diagnostics.ExitCode.HasValue
                 ? $"ExitCode runtime: {diagnostics.ExitCode}"
@@ -745,17 +754,6 @@ namespace Virgil.App.ViewModels
                 ? "Statut OpenAI: clé présente"
                 : "Statut OpenAI: clé absente";
             OpenAiKeyStatusText = _svc.Settings.HasOpenAiKey ? "Clé enregistrée ✅" : "Aucune clé ❌";
-        }
-
-        private static string GetLastLine(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return string.Empty;
-            }
-
-            var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            return lines.Length == 0 ? string.Empty : lines[^1];
         }
 
         private static string Truncate(string value, int maxLength)
