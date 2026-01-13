@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Virgil.App.Models;
 using Virgil.Core.Config;
+using Virgil.Services;
 using Virgil.Services.Assistant;
 
 namespace Virgil.App.Services
@@ -68,9 +69,8 @@ namespace Virgil.App.Services
                 return configuredProvider.Value;
             }
 
-            var hasGguf = _modelLocator.IsInstalled;
-            var hasRuntime = File.Exists(LlamaRuntimeManager.DefaultRuntimePath);
-            if (hasGguf && hasRuntime)
+            var availability = ModelAvailability.Check(_modelLocator, Settings.GetActiveFullManifest());
+            if (availability.CanRunOffline)
             {
                 return AiProvider.EmbeddedLlama;
             }
