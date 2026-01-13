@@ -60,7 +60,7 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
     {
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
-            throw new AssistantProviderUnavailableException("OpenAI API key is missing.");
+            return BuildSettingsReply("Clé OpenAI manquante.");
         }
 
         var prompt = AssistantPromptBuilder.BuildSystemPrompt(ctx);
@@ -82,7 +82,7 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
             using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                throw new AssistantProviderUnavailableException("OpenAI unauthorized.");
+                return BuildSettingsReply("Clé OpenAI invalide ou expirée.");
             }
 
             if (!response.IsSuccessStatusCode)
@@ -107,6 +107,11 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
             throw new AssistantProviderUnavailableException("OpenAI request failed.", ex);
         }
     }
+
+    private static AssistantReply BuildSettingsReply(string message)
+        => new(
+            message,
+            new[] { new ProposedAction("open_settings", "Ouvrir les paramètres", RequiresConfirmation: false) });
 
     private static string ExtractAssistantContent(string rawResponse)
     {
