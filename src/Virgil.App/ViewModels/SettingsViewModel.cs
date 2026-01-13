@@ -37,6 +37,9 @@ namespace Virgil.App.ViewModels
         private string _providerStatusText = string.Empty;
         private string _ggufStatusText = string.Empty;
         private string _runtimeStatusText = string.Empty;
+        private string _runtimeProcessStatusText = string.Empty;
+        private string _runtimePortStatusText = string.Empty;
+        private string _runtimeLastErrorText = string.Empty;
         private string _openAiStatusText = string.Empty;
         private string _openAiKeyStatusText = string.Empty;
         private string _openAiTestResponseText = string.Empty;
@@ -234,6 +237,24 @@ namespace Virgil.App.ViewModels
         {
             get => _runtimeStatusText;
             private set { _runtimeStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeProcessStatusText
+        {
+            get => _runtimeProcessStatusText;
+            private set { _runtimeProcessStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimePortStatusText
+        {
+            get => _runtimePortStatusText;
+            private set { _runtimePortStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string RuntimeLastErrorText
+        {
+            get => _runtimeLastErrorText;
+            private set { _runtimeLastErrorText = value; OnPropertyChanged(); }
         }
 
         public string OpenAiStatusText
@@ -599,6 +620,7 @@ namespace Virgil.App.ViewModels
         private void RefreshAiStatuses()
         {
             var availability = GetModelAvailability();
+            var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
             ProviderStatusText = _svc.EffectiveAiProvider switch
             {
                 AiProvider.EmbeddedLlama => "Provider actif: EmbeddedLlama",
@@ -615,10 +637,36 @@ namespace Virgil.App.ViewModels
                 ? "Statut runtime: présent"
                 : "Statut runtime: manquant";
 
+            RuntimeProcessStatusText = diagnostics.ProcessLaunched
+                ? "Process lancé: OK"
+                : "Process lancé: KO";
+
+            RuntimePortStatusText = diagnostics.PortOpen
+                ? "Port ouvert: OK"
+                : "Port ouvert: KO";
+
+            var lastError = string.IsNullOrWhiteSpace(diagnostics.LastErrorMessage)
+                ? GetLastLine(diagnostics.Stderr)
+                : diagnostics.LastErrorMessage;
+            RuntimeLastErrorText = string.IsNullOrWhiteSpace(lastError)
+                ? "Dernière erreur runtime: —"
+                : $"Dernière erreur runtime: {lastError}";
+
             OpenAiStatusText = _svc.Settings.HasOpenAiKey
                 ? "Statut OpenAI: clé présente"
                 : "Statut OpenAI: clé absente";
             OpenAiKeyStatusText = _svc.Settings.HasOpenAiKey ? "Clé enregistrée ✅" : "Aucune clé ❌";
+        }
+
+        private static string GetLastLine(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            return lines.Length == 0 ? string.Empty : lines[^1];
         }
 
         private ModelAvailabilityResult GetModelAvailability()

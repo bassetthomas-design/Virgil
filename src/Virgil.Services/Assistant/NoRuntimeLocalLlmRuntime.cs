@@ -8,11 +8,20 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
     public NoRuntimeLocalLlmRuntime(string runtimePathUsed)
     {
         RuntimePathUsed = runtimePathUsed;
+        Diagnostics = LlamaRuntimeDiagnostics.Empty with
+        {
+            ExecutablePath = runtimePathUsed,
+            ProcessLaunched = false,
+            PortOpen = false
+        };
+        LlamaRuntimeDiagnosticsStore.Set(Diagnostics);
     }
 
     public bool IsRuntimeAvailable() => false;
 
     public string RuntimePathUsed { get; }
+
+    public LlamaRuntimeDiagnostics Diagnostics { get; }
 
     public Task StartAsync(CancellationToken ct = default)
         => Task.CompletedTask;

@@ -49,6 +49,9 @@
                 <TextBlock Text="{Binding ProviderStatusText}" FontWeight="SemiBold" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding GgufStatusText}" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeStatusText}" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding RuntimeProcessStatusText}" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding RuntimePortStatusText}" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding RuntimeLastErrorText}" TextWrapping="Wrap" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding OpenAiStatusText}" Margin="0,0,0,6"/>
 
                 <TextBlock Text="OpenAI" FontWeight="Bold" Margin="0,10,0,6"/>
