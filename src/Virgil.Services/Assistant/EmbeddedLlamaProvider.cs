@@ -118,7 +118,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (AssistantProviderUnavailableException)
         {
-            return UnavailableReply("IA indisponible.");
+            return UnavailableReply(AppendRuntimeDiagnostics("IA indisponible."));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -250,7 +250,35 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
                 + $"{Environment.NewLine}Chemin runtime attendu: {runtimePathExpected}";
         }
 
-        return "IA indisponible.";
+        return AppendRuntimeDiagnostics("IA indisponible.");
+    }
+
+    private static string AppendRuntimeDiagnostics(string message)
+    {
+        var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+        var lastError = diagnostics.LastErrorMessage;
+        if (string.IsNullOrWhiteSpace(lastError))
+        {
+            lastError = GetLastLine(diagnostics.Stderr);
+        }
+
+        if (string.IsNullOrWhiteSpace(lastError))
+        {
+            return message;
+        }
+
+        return $"{message}{Environment.NewLine}Dernière erreur runtime: {lastError}";
+    }
+
+    private static string GetLastLine(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        return lines.Length == 0 ? string.Empty : lines[^1];
     }
 
     private sealed record EmbeddedLlamaRequest(

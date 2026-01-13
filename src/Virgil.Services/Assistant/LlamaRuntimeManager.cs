@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Core.Logging;
@@ -19,7 +20,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _healthTimeout;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly object _outputLock = new();
     private Process? _process;
+    private StringBuilder _stdoutBuffer = new();
+    private StringBuilder _stderrBuffer = new();
     private bool _disposed;
 
     public LlamaRuntimeManager(
@@ -56,6 +60,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     public string RuntimePathUsed => _executablePath;
 
+    public LlamaRuntimeDiagnostics Diagnostics => LlamaRuntimeDiagnosticsStore.Latest;
+
     public async Task StartAsync(CancellationToken ct = default)
     {
         ThrowIfDisposed();
@@ -76,6 +82,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             Log.Info($"Llama runtime path: {_executablePath}");
             Log.Info($"Llama runtime args: {_arguments ?? string.Empty}");
 
+            InitializeDiagnostics();
+
             var workingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory;
             var startInfo = new ProcessStartInfo
             {
@@ -83,15 +91,44 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 Arguments = _arguments ?? string.Empty,
                 WorkingDirectory = workingDirectory,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
 
             _process?.Dispose();
-            _process = Process.Start(startInfo);
+            try
+            {
+                _process = Process.Start(startInfo);
+            }
+            catch (Exception ex)
+            {
+                UpdateDiagnostics(
+                    processLaunched: false,
+                    portOpen: false,
+                    exitCode: null,
+                    lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}");
+                throw new AssistantProviderUnavailableException($"Impossible de lancer le runtime: {ex.Message}", ex);
+            }
+
             if (_process is null)
             {
-                throw new AssistantProviderUnavailableException("Unable to start Llama runtime.");
+                UpdateDiagnostics(
+                    processLaunched: false,
+                    portOpen: false,
+                    exitCode: null,
+                    lastErrorMessage: "Impossible de lancer le runtime.");
+                throw new AssistantProviderUnavailableException("Impossible de lancer le runtime.");
             }
+
+            _process.EnableRaisingEvents = true;
+            _process.OutputDataReceived += OnOutputDataReceived;
+            _process.ErrorDataReceived += OnErrorDataReceived;
+            _process.Exited += OnProcessExited;
+            _process.BeginOutputReadLine();
+            _process.BeginErrorReadLine();
+
+            UpdateDiagnostics(processLaunched: true, portOpen: null, exitCode: null, lastErrorMessage: null);
         }
         finally
         {
@@ -141,7 +178,13 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         await EnsureProcessRunningAsync(ct).ConfigureAwait(false);
 
-        if (!await ProbeHealthAsync(ct).ConfigureAwait(false))
+        var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
+        UpdateDiagnostics(
+            processLaunched: null,
+            portOpen: healthy,
+            exitCode: null,
+            lastErrorMessage: healthy ? null : "Port fermé ou runtime non prêt.");
+        if (!healthy)
         {
             if (IsProcessRunning())
             {
@@ -149,7 +192,13 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             }
 
             await EnsureProcessRunningAsync(ct).ConfigureAwait(false);
-            return await ProbeHealthAsync(ct).ConfigureAwait(false);
+            healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
+            UpdateDiagnostics(
+                processLaunched: null,
+                portOpen: healthy,
+                exitCode: null,
+                lastErrorMessage: healthy ? null : "Port fermé ou runtime non prêt.");
+            return healthy;
         }
 
         return true;
@@ -213,6 +262,133 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private bool IsProcessRunning()
         => _process is not null && !_process.HasExited;
+
+    private void InitializeDiagnostics()
+    {
+        lock (_outputLock)
+        {
+            _stdoutBuffer = new StringBuilder();
+            _stderrBuffer = new StringBuilder();
+        }
+
+        var diagnostics = new LlamaRuntimeDiagnostics(
+            _executablePath,
+            _arguments ?? string.Empty,
+            string.Empty,
+            string.Empty,
+            null,
+            false,
+            false,
+            null);
+        LlamaRuntimeDiagnosticsStore.Set(diagnostics);
+    }
+
+    private void OnOutputDataReceived(object sender, DataReceivedEventArgs e)
+        => AppendOutput(isError: false, e.Data);
+
+    private void OnErrorDataReceived(object sender, DataReceivedEventArgs e)
+        => AppendOutput(isError: true, e.Data);
+
+    private void AppendOutput(bool isError, string? data)
+    {
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            return;
+        }
+
+        string stdout;
+        string stderr;
+        lock (_outputLock)
+        {
+            if (isError)
+            {
+                AppendCapped(_stderrBuffer, data);
+            }
+            else
+            {
+                AppendCapped(_stdoutBuffer, data);
+            }
+
+            stdout = _stdoutBuffer.ToString();
+            stderr = _stderrBuffer.ToString();
+        }
+
+        LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+        {
+            Stdout = stdout,
+            Stderr = stderr
+        });
+    }
+
+    private void OnProcessExited(object? sender, EventArgs e)
+    {
+        if (_process is null)
+        {
+            return;
+        }
+
+        var exitCode = _process.ExitCode;
+        var stderr = string.Empty;
+        lock (_outputLock)
+        {
+            stderr = _stderrBuffer.ToString();
+        }
+
+        string? errorMessage = null;
+        if (exitCode != 0 || !string.IsNullOrWhiteSpace(stderr))
+        {
+            errorMessage = string.IsNullOrWhiteSpace(stderr)
+                ? $"Runtime terminé avec le code {exitCode}."
+                : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
+        }
+
+        UpdateDiagnostics(
+            processLaunched: false,
+            portOpen: false,
+            exitCode: exitCode,
+            lastErrorMessage: errorMessage);
+    }
+
+    private static void AppendCapped(StringBuilder builder, string line)
+    {
+        const int maxChars = 8000;
+        if (builder.Length > 0)
+        {
+            builder.AppendLine();
+        }
+
+        builder.Append(line);
+        if (builder.Length <= maxChars)
+        {
+            return;
+        }
+
+        builder.Remove(0, builder.Length - maxChars);
+    }
+
+    private static string GetLastLine(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        return lines.Length == 0 ? value : lines[^1];
+    }
+
+    private void UpdateDiagnostics(bool? processLaunched, bool? portOpen, int? exitCode, string? lastErrorMessage)
+    {
+        LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+        {
+            ProcessLaunched = processLaunched ?? existing.ProcessLaunched,
+            PortOpen = portOpen ?? existing.PortOpen,
+            ExitCode = exitCode ?? existing.ExitCode,
+            LastErrorMessage = string.IsNullOrWhiteSpace(lastErrorMessage)
+                ? existing.LastErrorMessage
+                : lastErrorMessage
+        });
+    }
 
     private void ThrowIfDisposed()
     {
