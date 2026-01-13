@@ -58,6 +58,17 @@
                 <TextBlock Text="{Binding RuntimeCommandLineText}" TextWrapping="Wrap" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeStderrText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                 <TextBlock Text="{Binding OpenAiStatusText}" Margin="0,0,0,6"/>
+                <WrapPanel Margin="0,0,0,6">
+                    <Button Content="Aide runtime" Command="{Binding RuntimeHelpCommand}" Margin="0,0,8,8"/>
+                </WrapPanel>
+                <Border BorderBrush="#DDDDDD" BorderThickness="1" Padding="6" Margin="0,0,0,8">
+                    <TextBox Text="{Binding RuntimeHelpText}"
+                             IsReadOnly="True"
+                             Height="160"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"/>
+                </Border>
 
                 <TextBlock Text="OpenAI" FontWeight="Bold" Margin="0,10,0,6"/>
                 <TextBlock Text="Clé OpenAI:" Margin="0,0,0,4"/>
