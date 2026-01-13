@@ -18,7 +18,7 @@ namespace Virgil.App.ViewModels
     public class SettingsViewModel : INotifyPropertyChanged
     {
         private const string FullPackDownloadUrl =
-            "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/llama-3.1-8b-instruct-q4_k_m.gguf";
+            "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf";
         private readonly SettingsService _svc;
         private readonly ChatService? _chatService;
         private readonly IAssistantService? _assistantService;
