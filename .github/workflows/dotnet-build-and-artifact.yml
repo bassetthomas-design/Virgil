@@ -24,8 +24,20 @@ jobs:
       - name: Build (Release)
         run: dotnet build --configuration Release --no-restore
 
+      - name: Stage llama.cpp runtime
+        shell: pwsh
+        run: ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -ZipUrl "${{ vars.LLAMA_CPP_WIN_X64_ZIP_URL }}"
+
       - name: Publish (self-contained off)
         run: dotnet publish --configuration Release --no-restore --output out
+
+      - name: Verify runtime in publish output
+        shell: pwsh
+        run: |
+          $runtimePath = "out/AI/Runtime/llama-server.exe"
+          if (-not (Test-Path -Path $runtimePath)) {
+            throw "Missing runtime in publish output: $runtimePath"
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

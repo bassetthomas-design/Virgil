@@ -49,7 +49,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     }
 
     public static string DefaultRuntimePath
-        => Path.Combine(AppContext.BaseDirectory, "Assets", "AI", "Runtime", RuntimeExecutableName);
+        => Path.Combine(AppContext.BaseDirectory, "AI", "Runtime", RuntimeExecutableName);
 
     public bool IsRuntimeAvailable()
         => File.Exists(_executablePath);

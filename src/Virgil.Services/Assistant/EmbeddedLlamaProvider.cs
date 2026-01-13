@@ -71,27 +71,12 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             }
 
             var runtimePathExpected = Path.Combine(AppContext.BaseDirectory, "AI", "Runtime", "llama-server.exe");
-            var runtimeFallbackPath = _runtimeManager.RuntimePathUsed;
             var runtimeFound = File.Exists(runtimePathExpected);
-            var runtimePathUsed = runtimePathExpected;
-
-            if (!runtimeFound && !string.Equals(runtimeFallbackPath, runtimePathExpected, StringComparison.OrdinalIgnoreCase))
-            {
-                runtimeFound = File.Exists(runtimeFallbackPath);
-                if (runtimeFound)
-                {
-                    runtimePathUsed = runtimeFallbackPath;
-                }
-            }
 
             Log.Info($"Runtime IA attendu: {runtimePathExpected}");
             if (runtimeFound)
             {
-                Log.Info($"Runtime IA utilisé: {runtimePathUsed}");
-            }
-            else if (!string.Equals(runtimeFallbackPath, runtimePathExpected, StringComparison.OrdinalIgnoreCase))
-            {
-                Log.Info($"Runtime IA alternatif: {runtimeFallbackPath}");
+                Log.Info($"Runtime IA utilisé: {runtimePathExpected}");
             }
 
             if (!modelFound || !runtimeFound)
