@@ -23,6 +23,8 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
 
     public LlamaRuntimeDiagnostics Diagnostics { get; }
 
+    public string? ApiKey => null;
+
     public Task StartAsync(CancellationToken ct = default)
         => Task.CompletedTask;
 

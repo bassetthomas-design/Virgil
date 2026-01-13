@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -18,6 +19,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string LocalHostAddress = "127.0.0.1";
     private const int DefaultPort = 8080;
     private const string RuntimeExecutableName = "llama-server.exe";
+    private const string DefaultApiKey = "virgil";
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string _baseArguments;
@@ -29,6 +31,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private StringBuilder _stdoutBuffer = new();
     private StringBuilder _stderrBuffer = new();
     private string? _tempApiKeyFilePath;
+    private string? _apiKey;
+    private string _securityFlagsDetected = string.Empty;
+    private string _securityStrategy = string.Empty;
     private bool _disposed;
 
     public LlamaRuntimeManager(
@@ -67,6 +72,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     public LlamaRuntimeDiagnostics Diagnostics => LlamaRuntimeDiagnosticsStore.Latest;
 
+    public string? ApiKey => _apiKey;
+
     public async Task StartAsync(CancellationToken ct = default)
     {
         ThrowIfDisposed();
@@ -86,37 +93,36 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
             Log.Info($"Llama runtime path: {_executablePath}");
             var port = ResolvePort(_baseUrl);
-            var attempts = BuildSecurityArgumentAttempts();
-            RuntimeAttemptResult? lastFailure = null;
+            var securityConfig = await DetectSecurityConfigurationAsync(ct).ConfigureAwait(false);
+            _securityFlagsDetected = securityConfig.FlagsDetected;
+            _securityStrategy = securityConfig.StrategyLabel;
+            _apiKey = securityConfig.ApiKey;
+            ConfigureHttpClientAuthHeaders(_apiKey);
 
-            foreach (var attempt in attempts)
+            UpdateDiagnostics(
+                processLaunched: null,
+                portOpen: null,
+                exitCode: null,
+                lastErrorMessage: securityConfig.ErrorMessage);
+
+            if (!securityConfig.CanStart)
             {
-                ct.ThrowIfCancellationRequested();
-
-                var arguments = BuildArguments(_baseArguments, port, attempt.Arguments);
-                var commandLine = BuildCommandLine(_executablePath, arguments);
-
-                Log.Info($"Llama runtime args attempt ({attempt.Label}): {arguments}");
-                Log.Info($"Llama runtime command line: {commandLine}");
-
-                var result = await TryStartProcessAsync(arguments, commandLine, ct).ConfigureAwait(false);
-                if (result.Success)
-                {
-                    Log.Info($"Llama runtime security config selected: {attempt.Label}");
-                    return;
-                }
-
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
-                {
-                    Log.Warn($"Llama runtime config rejected ({attempt.Label}) stderr: {result.Stderr}");
-                }
-
-                lastFailure = result;
+                throw new AssistantProviderUnavailableException(securityConfig.ErrorMessage ?? "Aucune configuration de sécurité valide trouvée.");
             }
 
-            CleanupTempApiKeyFile();
-            var lastError = lastFailure?.LastErrorMessage ?? "Aucune configuration de sécurité valide trouvée.";
-            throw new AssistantProviderUnavailableException(lastError);
+            var arguments = BuildArguments(_baseArguments, port, securityConfig.Arguments);
+            var commandLine = BuildCommandLine(_executablePath, arguments);
+
+            Log.Info($"Llama runtime security config selected: {securityConfig.StrategyLabel}");
+            Log.Info($"Llama runtime args: {arguments}");
+            Log.Info($"Llama runtime command line: {commandLine}");
+
+            var result = await TryStartProcessAsync(arguments, commandLine, ct).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                CleanupTempApiKeyFile();
+                throw new AssistantProviderUnavailableException(result.LastErrorMessage ?? "Aucune configuration de sécurité valide trouvée.");
+            }
         }
         finally
         {
@@ -256,6 +262,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--api-key");
         sanitizedArguments = RemoveFlag(sanitizedArguments, "--no-auth");
         sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--api-key-file");
+        sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--auth-token");
+        sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--token");
+        sanitizedArguments = RemoveFlag(sanitizedArguments, "--require-api-key");
         return sanitizedArguments.Trim();
     }
 
@@ -327,6 +336,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             _executablePath,
             arguments,
             commandLine,
+            _securityFlagsDetected,
+            _securityStrategy,
             string.Empty,
             string.Empty,
             null,
@@ -430,6 +441,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             ProcessLaunched = processLaunched ?? existing.ProcessLaunched,
             PortOpen = portOpen ?? existing.PortOpen,
             ExitCode = exitCode ?? existing.ExitCode,
+            SecurityFlagsDetected = string.IsNullOrWhiteSpace(_securityFlagsDetected)
+                ? existing.SecurityFlagsDetected
+                : _securityFlagsDetected,
+            SecurityStrategy = string.IsNullOrWhiteSpace(_securityStrategy)
+                ? existing.SecurityStrategy
+                : _securityStrategy,
             LastErrorMessage = string.IsNullOrWhiteSpace(lastErrorMessage)
                 ? existing.LastErrorMessage
                 : lastErrorMessage
@@ -456,23 +473,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         CleanupTempApiKeyFile();
         _httpClient.Dispose();
         _gate.Dispose();
-    }
-
-    private IEnumerable<RuntimeSecurityAttempt> BuildSecurityArgumentAttempts()
-    {
-        yield return new RuntimeSecurityAttempt("no-auth", "--no-auth");
-        yield return new RuntimeSecurityAttempt("api-key none", "--api-key none");
-        yield return new RuntimeSecurityAttempt("api-key empty", "--api-key \"\"");
-
-        var tempFile = GetOrCreateTempApiKeyFile();
-        if (!string.IsNullOrWhiteSpace(tempFile))
-        {
-            yield return new RuntimeSecurityAttempt("api-key-file empty", $"--api-key-file {QuoteIfNeeded(tempFile)}");
-        }
-        else
-        {
-            Log.Warn("Impossible de créer le fichier temporaire pour --api-key-file.");
-        }
     }
 
     private async Task<RuntimeAttemptResult> TryStartProcessAsync(string arguments, string commandLine, CancellationToken ct)
@@ -603,26 +603,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         builder.Append(argument);
     }
 
-    private string? GetOrCreateTempApiKeyFile()
-    {
-        if (!string.IsNullOrWhiteSpace(_tempApiKeyFilePath))
-        {
-            return _tempApiKeyFilePath;
-        }
-
-        try
-        {
-            var tempFile = Path.Combine(Path.GetTempPath(), $"virgil-llama-api-key-{Guid.NewGuid():N}.txt");
-            File.WriteAllText(tempFile, string.Empty);
-            _tempApiKeyFilePath = tempFile;
-            return tempFile;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
     private void CleanupTempApiKeyFile()
     {
         if (string.IsNullOrWhiteSpace(_tempApiKeyFilePath))
@@ -646,7 +626,252 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
     }
 
-    private sealed record RuntimeSecurityAttempt(string Label, string Arguments);
+    private async Task<RuntimeSecurityConfiguration> DetectSecurityConfigurationAsync(CancellationToken ct)
+    {
+        var helpResult = await GetHelpOutputAsync(ct).ConfigureAwait(false);
+        var helpText = helpResult.HelpText;
+        var detectedFlags = DetectFlags(helpText);
+        _securityFlagsDetected = detectedFlags.Count == 0 ? "—" : string.Join(", ", detectedFlags);
+
+        if (detectedFlags.Contains("--no-auth"))
+        {
+            return new RuntimeSecurityConfiguration("no-auth", "--no-auth", null, _securityFlagsDetected, null);
+        }
+
+        if (detectedFlags.Contains("--api-key"))
+        {
+            return new RuntimeSecurityConfiguration(
+                "api-key",
+                $"--api-key {QuoteIfNeeded(DefaultApiKey)}",
+                DefaultApiKey,
+                _securityFlagsDetected,
+                null);
+        }
+
+        if (detectedFlags.Contains("--api-key-file"))
+        {
+            var apiKey = GenerateApiKey();
+            var tempFile = CreateTempApiKeyFile(apiKey);
+            if (string.IsNullOrWhiteSpace(tempFile))
+            {
+                return new RuntimeSecurityConfiguration(
+                    "api-key-file",
+                    string.Empty,
+                    apiKey,
+                    _securityFlagsDetected,
+                    "Impossible de créer le fichier temporaire pour --api-key-file.",
+                    CanStart: false);
+            }
+
+            return new RuntimeSecurityConfiguration(
+                "api-key-file",
+                $"--api-key-file {QuoteIfNeeded(tempFile)}",
+                apiKey,
+                _securityFlagsDetected,
+                null);
+        }
+
+        if (detectedFlags.Contains("--auth-token"))
+        {
+            var apiKey = GenerateApiKey();
+            return new RuntimeSecurityConfiguration(
+                "auth-token",
+                $"--auth-token {QuoteIfNeeded(apiKey)}",
+                apiKey,
+                _securityFlagsDetected,
+                null);
+        }
+
+        if (detectedFlags.Contains("--token"))
+        {
+            var apiKey = GenerateApiKey();
+            return new RuntimeSecurityConfiguration(
+                "token",
+                $"--token {QuoteIfNeeded(apiKey)}",
+                apiKey,
+                _securityFlagsDetected,
+                null);
+        }
+
+        if (detectedFlags.Contains("--require-api-key"))
+        {
+            var apiKey = GenerateApiKey();
+            return new RuntimeSecurityConfiguration(
+                "require-api-key",
+                "--require-api-key",
+                apiKey,
+                _securityFlagsDetected,
+                null);
+        }
+
+        return new RuntimeSecurityConfiguration(
+            "fallback host-only",
+            string.Empty,
+            null,
+            _securityFlagsDetected,
+            "Impossible d’activer un mode sécurisé: flags non trouvés",
+            CanStart: true);
+    }
+
+    private async Task<HelpOutputResult> GetHelpOutputAsync(CancellationToken ct)
+    {
+        var primary = await RunHelpProcessAsync("--help", ct).ConfigureAwait(false);
+        if (primary.ExitCode != 0 && string.IsNullOrWhiteSpace(primary.HelpText))
+        {
+            var fallback = await RunHelpProcessAsync("-h", ct).ConfigureAwait(false);
+            return fallback;
+        }
+
+        return primary;
+    }
+
+    private async Task<HelpOutputResult> RunHelpProcessAsync(string arguments, CancellationToken ct)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = _executablePath,
+                Arguments = arguments,
+                WorkingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return new HelpOutputResult(string.Empty, string.Empty, -1, string.Empty);
+            }
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            var stdout = await stdoutTask.ConfigureAwait(false);
+            var stderr = await stderrTask.ConfigureAwait(false);
+            var helpText = BuildHelpText(stdout, stderr);
+            return new HelpOutputResult(stdout, stderr, process.ExitCode, helpText);
+        }
+        catch (Exception ex)
+        {
+            return new HelpOutputResult(string.Empty, ex.Message, -1, ex.Message);
+        }
+    }
+
+    private static List<string> DetectFlags(string helpText)
+    {
+        var detected = new List<string>();
+        if (ContainsFlag(helpText, "--no-auth"))
+        {
+            detected.Add("--no-auth");
+        }
+
+        if (ContainsFlag(helpText, "--api-key"))
+        {
+            detected.Add("--api-key");
+        }
+
+        if (ContainsFlag(helpText, "--api-key-file"))
+        {
+            detected.Add("--api-key-file");
+        }
+
+        if (ContainsFlag(helpText, "--auth-token"))
+        {
+            detected.Add("--auth-token");
+        }
+
+        if (ContainsFlag(helpText, "--token"))
+        {
+            detected.Add("--token");
+        }
+
+        if (ContainsFlag(helpText, "--require-api-key")
+            || helpText.IndexOf("require-api-key", StringComparison.OrdinalIgnoreCase) >= 0
+            || helpText.IndexOf("require_api_key", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            detected.Add("--require-api-key");
+        }
+
+        return detected;
+    }
+
+    private static bool ContainsFlag(string text, string flag)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var pattern = $@"(?<!\S){Regex.Escape(flag)}(?=\s|,|;|$)";
+        return Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase);
+    }
+
+    private static string BuildHelpText(string stdout, string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stdout) && string.IsNullOrWhiteSpace(stderr))
+        {
+            return string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(stdout))
+        {
+            return stderr;
+        }
+
+        if (string.IsNullOrWhiteSpace(stderr))
+        {
+            return stdout;
+        }
+
+        return $"{stdout}{Environment.NewLine}{stderr}";
+    }
+
+    private string GenerateApiKey()
+        => $"virgil-{Guid.NewGuid():N}";
+
+    private string? CreateTempApiKeyFile(string apiKey)
+    {
+        CleanupTempApiKeyFile();
+
+        try
+        {
+            var tempFile = Path.Combine(Path.GetTempPath(), $"virgil-llama-api-key-{Guid.NewGuid():N}.txt");
+            File.WriteAllText(tempFile, apiKey);
+            _tempApiKeyFilePath = tempFile;
+            return tempFile;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void ConfigureHttpClientAuthHeaders(string? apiKey)
+    {
+        _httpClient.DefaultRequestHeaders.Authorization = null;
+        _httpClient.DefaultRequestHeaders.Remove("X-API-Key");
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        _httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+    }
+
+    private sealed record RuntimeSecurityConfiguration(
+        string StrategyLabel,
+        string Arguments,
+        string? ApiKey,
+        string FlagsDetected,
+        string? ErrorMessage,
+        bool CanStart = true);
+
+    private sealed record HelpOutputResult(string Stdout, string Stderr, int ExitCode, string HelpText = "");
 
     private sealed record RuntimeAttemptResult(bool Success, int? ExitCode, string Stderr, string? LastErrorMessage);
 }

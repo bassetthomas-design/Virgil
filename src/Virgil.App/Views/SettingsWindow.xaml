@@ -51,6 +51,8 @@
                 <TextBlock Text="{Binding RuntimeStatusText}" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeProcessStatusText}" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimePortStatusText}" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding RuntimeSecurityFlagsText}" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding RuntimeSecurityStrategyText}" TextWrapping="Wrap" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeLastErrorText}" TextWrapping="Wrap" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeExitCodeText}" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeCommandLineText}" TextWrapping="Wrap" Margin="0,0,0,2"/>

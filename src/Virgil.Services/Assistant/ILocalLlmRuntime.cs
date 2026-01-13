@@ -8,6 +8,7 @@ public interface ILocalLlmRuntime
     bool IsRuntimeAvailable();
     string RuntimePathUsed { get; }
     LlamaRuntimeDiagnostics Diagnostics { get; }
+    string? ApiKey { get; }
     Task StartAsync(CancellationToken ct = default);
     Task<bool> HealthCheckAsync(CancellationToken ct = default);
 }
