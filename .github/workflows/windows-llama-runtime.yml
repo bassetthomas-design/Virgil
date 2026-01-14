@@ -18,44 +18,15 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Resolve llama.cpp release asset
-        id: llama
+      - name: Fetch llama.cpp runtime
         shell: pwsh
-        run: |
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" -Headers @{ "User-Agent" = "Virgil-CI" }
-          $asset = $release.assets | Where-Object { $_.name -imatch "win.*cpu.*x64.*\.zip" } | Select-Object -First 1
-          if (-not $asset) {
-            throw "Unable to find Windows x64 CPU asset in latest llama.cpp release."
-          }
-          "zip_url=$($asset.browser_download_url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      - name: Download and extract llama.cpp runtime
-        id: llama-runtime
-        shell: pwsh
-        run: |
-          $tempRoot = Join-Path $env:RUNNER_TEMP ("llama-runtime-" + [System.Guid]::NewGuid().ToString("N"))
-          $zipPath = Join-Path $tempRoot "llama-runtime.zip"
-          $extractPath = Join-Path $tempRoot "extract"
-          New-Item -Path $tempRoot -ItemType Directory -Force | Out-Null
-          Invoke-WebRequest -Uri "${{ steps.llama.outputs.zip_url }}" -OutFile $zipPath
-          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-          $runtimeExe = Get-ChildItem -Path $extractPath -Recurse -Filter "llama-server.exe" -File |
-            Sort-Object Length -Descending |
-            Select-Object -First 1
-          if (-not $runtimeExe) {
-            throw "llama-server.exe not found in extracted archive."
-          }
-          $destDir = "src/Virgil.App/AI/Runtime"
-          New-Item -Path $destDir -ItemType Directory -Force | Out-Null
-          $destExe = Join-Path $destDir "llama-server.exe"
-          Copy-Item -Path $runtimeExe.FullName -Destination $destExe -Force
-          "runtime_path=$destExe" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        run: pwsh -File ./scripts/fetch-llama-runtime.ps1
 
       - name: Verify runtime help for OpenAI endpoints
         id: llama-help
         shell: pwsh
         run: |
-          $runtimePath = "${{ steps.llama-runtime.outputs.runtime_path }}"
+          $runtimePath = "src/Virgil.App/AI/Runtime/llama-server.exe"
           if (-not (Test-Path -Path $runtimePath)) {
             "Runtime not found at $runtimePath" | Out-File -FilePath "llama-server-help.txt" -Encoding utf8
             exit 0
