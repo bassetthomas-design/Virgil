@@ -25,6 +25,10 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
 
     public string? ApiKey => null;
 
+    public void SetModelPath(string modelPath)
+    {
+    }
+
     public Task StartAsync(CancellationToken ct = default)
         => Task.CompletedTask;
 

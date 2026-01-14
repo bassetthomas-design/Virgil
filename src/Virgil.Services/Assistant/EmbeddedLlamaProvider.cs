@@ -92,6 +92,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
                     BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
             }
 
+            if (modelFound)
+            {
+                _runtimeManager.SetModelPath(modelPath);
+            }
+
             await _runtimeManager.StartAsync(ct).ConfigureAwait(false);
             var healthy = await _runtimeManager.HealthCheckAsync(ct).ConfigureAwait(false);
             if (!healthy)
@@ -314,7 +319,8 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     private static bool IsRuntimeWarningLine(string line)
         => line.Contains("untrusted environments", StringComparison.OrdinalIgnoreCase)
-            || line.Contains("not recommended", StringComparison.OrdinalIgnoreCase);
+            || line.Contains("not recommended", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("note:", StringComparison.OrdinalIgnoreCase);
 
     private static string Truncate(string value, int maxLength)
     {
