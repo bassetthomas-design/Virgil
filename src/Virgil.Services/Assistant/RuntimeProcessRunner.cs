@@ -22,6 +22,8 @@ public sealed class RuntimeProcessRunner : IRuntimeProcessRunner
             _process = process ?? throw new ArgumentNullException(nameof(process));
         }
 
+        public int Id => _process.Id;
+
         public bool HasExited => _process.HasExited;
 
         public int ExitCode => _process.ExitCode;
