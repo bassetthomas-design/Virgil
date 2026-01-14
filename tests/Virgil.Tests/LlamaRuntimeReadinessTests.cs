@@ -53,6 +53,45 @@ public class LlamaRuntimeReadinessTests
         }
     }
 
+    [Fact]
+    public async Task StartAsync_FailsWhenModelsEndpointReturnsClientError()
+    {
+        var handler = new IncompatibleHandler();
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost:23456"),
+            Timeout = TimeSpan.FromMilliseconds(100)
+        };
+
+        var runtimePath = Path.GetTempFileName();
+        var modelPath = Path.GetTempFileName();
+        try
+        {
+            var runtime = new LlamaRuntimeManager(
+                "http://localhost:23456",
+                runtimePath,
+                apiKey: null,
+                healthTimeout: TimeSpan.FromMilliseconds(50),
+                readinessTimeout: TimeSpan.FromSeconds(1),
+                httpClient: httpClient,
+                processRunner: new FakeProcessRunner(),
+                skipCompatibilityCheck: true,
+                startupDelay: TimeSpan.FromMilliseconds(10));
+
+            runtime.SetModelPath(modelPath);
+
+            var exception = await Assert.ThrowsAsync<AssistantProviderUnavailableException>(() => runtime.StartAsync());
+
+            Assert.Contains("Runtime IA incompatible", exception.Message);
+            Assert.True(handler.ModelsCallCount >= 1);
+        }
+        finally
+        {
+            File.Delete(runtimePath);
+            File.Delete(modelPath);
+        }
+    }
+
     private sealed class SequencedHandler : HttpMessageHandler
     {
         private int _modelsCallCount;
@@ -72,6 +111,25 @@ public class LlamaRuntimeReadinessTests
             {
                 var count = Interlocked.Increment(ref _modelsCallCount);
                 return Task.FromResult(new HttpResponseMessage(count < 2 ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK));
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    private sealed class IncompatibleHandler : HttpMessageHandler
+    {
+        private int _modelsCallCount;
+
+        public int ModelsCallCount => _modelsCallCount;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri?.AbsolutePath ?? string.Empty;
+            if (path.EndsWith("/v1/models", StringComparison.OrdinalIgnoreCase))
+            {
+                Interlocked.Increment(ref _modelsCallCount);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));

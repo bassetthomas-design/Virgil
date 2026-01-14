@@ -47,10 +47,26 @@ public class ProviderPreferenceResolverTests
     }
 
     [Fact]
+    public void Resolve_LocalOnly_IgnoresOpenAiWhenLocalAvailable()
+    {
+        var result = ProviderPreferenceResolver.Resolve(ProviderPreference.LocalOnly, localEnabled: true, openAiEnabled: true);
+
+        Assert.Equal(AiProvider.EmbeddedLlama, result);
+    }
+
+    [Fact]
     public void Resolve_OpenAiOnly_DisablesWhenOpenAiUnavailable()
     {
         var result = ProviderPreferenceResolver.Resolve(ProviderPreference.OpenAIOnly, localEnabled: true, openAiEnabled: false);
 
         Assert.Equal(AiProvider.Disabled, result);
+    }
+
+    [Fact]
+    public void Resolve_OpenAiOnly_IgnoresLocalWhenOpenAiAvailable()
+    {
+        var result = ProviderPreferenceResolver.Resolve(ProviderPreference.OpenAIOnly, localEnabled: true, openAiEnabled: true);
+
+        Assert.Equal(AiProvider.OpenAI, result);
     }
 }
