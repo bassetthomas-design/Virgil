@@ -57,8 +57,8 @@ namespace Virgil.App.ViewModels
         private string _openAiApiKeyInput = string.Empty;
         private bool _isOpenAiKeyVisible;
         private bool _isRuntimeHelpLoading;
-        private AiProvider _selectedAiProvider;
-        private readonly IReadOnlyList<AiProviderOption> _aiProviderOptions;
+        private ProviderPreference _selectedProviderPreference;
+        private readonly IReadOnlyList<ProviderPreferenceOption> _providerPreferenceOptions;
 
         public SettingsViewModel(
             SettingsService svc,
@@ -79,12 +79,13 @@ namespace Virgil.App.ViewModels
             _defaultMessageTtlMs = s.DefaultMessageTtlMs;
             _companionTalkative = s.CompanionTalkative;
             _enableBeatPulse = s.EnableBeatPulse;
-            _selectedAiProvider = s.AiProvider ?? _svc.EffectiveAiProvider;
-            _aiProviderOptions = new[]
+            _selectedProviderPreference = s.ProviderPreference ?? ProviderPreference.LocalFirst;
+            _providerPreferenceOptions = new[]
             {
-                new AiProviderOption(AiProvider.EmbeddedLlama, "EmbeddedLlama"),
-                new AiProviderOption(AiProvider.OpenAI, "OpenAI"),
-                new AiProviderOption(AiProvider.Disabled, "Désactivé")
+                new ProviderPreferenceOption(ProviderPreference.LocalFirst, "LocalFirst (défaut)"),
+                new ProviderPreferenceOption(ProviderPreference.OpenAIFirst, "OpenAIFirst"),
+                new ProviderPreferenceOption(ProviderPreference.LocalOnly, "LocalOnly"),
+                new ProviderPreferenceOption(ProviderPreference.OpenAIOnly, "OpenAIOnly")
             };
 
             _warnTemp = s.Mood.WarnTemp;
@@ -370,13 +371,13 @@ namespace Virgil.App.ViewModels
 
         public string OpenAiKeyToggleText => IsOpenAiKeyVisible ? "Masquer" : "Afficher";
 
-        public AiProvider SelectedAiProvider
+        public ProviderPreference SelectedProviderPreference
         {
-            get => _selectedAiProvider;
-            set { _selectedAiProvider = value; OnPropertyChanged(); }
+            get => _selectedProviderPreference;
+            set { _selectedProviderPreference = value; OnPropertyChanged(); }
         }
 
-        public IReadOnlyList<AiProviderOption> AiProviderOptions => _aiProviderOptions;
+        public IReadOnlyList<ProviderPreferenceOption> ProviderPreferenceOptions => _providerPreferenceOptions;
 
         public string ModelStatusText
         {
@@ -475,7 +476,8 @@ namespace Virgil.App.ViewModels
         private void ApplyAiSettings()
         {
             var s = _svc.Settings;
-            s.AiProvider = _selectedAiProvider;
+            s.ProviderPreference = _selectedProviderPreference;
+            s.AiProvider = null;
 
             var keyInput = _openAiApiKeyInput?.Trim();
             if (!string.IsNullOrWhiteSpace(keyInput))
@@ -874,7 +876,7 @@ namespace Virgil.App.ViewModels
             }
         }
 
-        public sealed record AiProviderOption(AiProvider Value, string Label);
+        public sealed record ProviderPreferenceOption(ProviderPreference Value, string Label);
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? n = null)

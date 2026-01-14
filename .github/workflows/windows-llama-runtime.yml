@@ -1,0 +1,84 @@
+name: Windows Build with Llama Runtime
+
+on:
+  push:
+    branches: [ main, fix/*, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Resolve llama.cpp release asset
+        id: llama
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" -Headers @{ "User-Agent" = "Virgil-CI" }
+          $asset = $release.assets | Where-Object { $_.name -like "*bin-win-cpu-x64.zip" } | Select-Object -First 1
+          if (-not $asset) {
+            throw "Unable to find Windows x64 CPU asset in latest llama.cpp release."
+          }
+          "zip_url=$($asset.browser_download_url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Stage llama.cpp runtime
+        shell: pwsh
+        run: pwsh -File ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -ZipUrl "${{ steps.llama.outputs.zip_url }}"
+
+      - name: Verify runtime help for OpenAI endpoints
+        shell: pwsh
+        run: |
+          $runtimePath = "src/Virgil.App/AI/Runtime/llama-server.exe"
+          if (-not (Test-Path -Path $runtimePath)) {
+            throw "Runtime not found at $runtimePath"
+          }
+          $output = & $runtimePath --help 2>&1 | Out-String
+          if ($output -notmatch "/v1/models") {
+            throw "Missing /v1/models in --help output"
+          }
+          if ($output -notmatch "/v1/chat/completions") {
+            throw "Missing /v1/chat/completions in --help output"
+          }
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish --configuration Release --no-restore --output out
+
+      - name: Copy runtime to Runtime/llama
+        shell: pwsh
+        run: |
+          $source = "out/AI/Runtime/llama-server.exe"
+          if (-not (Test-Path -Path $source)) {
+            throw "Missing runtime in publish output: $source"
+          }
+          $destDir = "out/Runtime/llama"
+          New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+          Copy-Item -Path $source -Destination (Join-Path $destDir "llama-server.exe") -Force
+
+      - name: Create artifact zip
+        shell: pwsh
+        run: |
+          $zipPath = "virgil-app.zip"
+          if (Test-Path -Path $zipPath) {
+            Remove-Item -Path $zipPath -Force
+          }
+          Compress-Archive -Path "out/*" -DestinationPath $zipPath
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Virgil App (Windows)
+          path: virgil-app.zip

@@ -39,12 +39,12 @@
 
                 <TextBlock Text="IA" FontWeight="Bold" Margin="0,16,0,6"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                    <TextBlock Text="Provider:" Width="140" VerticalAlignment="Center"/>
+                    <TextBlock Text="Préférence provider:" Width="140" VerticalAlignment="Center"/>
                     <ComboBox Width="200"
-                              ItemsSource="{Binding AiProviderOptions}"
+                              ItemsSource="{Binding ProviderPreferenceOptions}"
                               DisplayMemberPath="Label"
                               SelectedValuePath="Value"
-                              SelectedValue="{Binding SelectedAiProvider}"/>
+                              SelectedValue="{Binding SelectedProviderPreference}"/>
                 </StackPanel>
                 <TextBlock Text="{Binding ProviderStatusText}" FontWeight="SemiBold" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding GgufStatusText}" Margin="0,0,0,2"/>
