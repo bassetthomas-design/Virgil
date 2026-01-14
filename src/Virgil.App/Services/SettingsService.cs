@@ -19,6 +19,21 @@ namespace Virgil.App.Services
         public AppSettings Settings { get; private set; } = new AppSettings();
         public AiProvider EffectiveAiProvider => _effectiveAiProvider;
 
+        public ProviderPreference EffectiveProviderPreference
+            => Settings.ProviderPreference ?? ProviderPreference.LocalFirst;
+
+        public bool IsLocalEnabled
+        {
+            get
+            {
+                var availability = ModelAvailability.Check(_modelLocator, Settings.GetActiveFullManifest());
+                var runtimePath = LlamaRuntimeManager.DefaultRuntimePath;
+                return availability.CanRunOffline && File.Exists(runtimePath);
+            }
+        }
+
+        public bool IsOpenAiEnabled => !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
+
         public SettingsService(ISecretStore? secretStore = null, ModelLocator? modelLocator = null)
         {
             _secretStore = secretStore ?? new OpenAiKeyStore();
@@ -64,9 +79,9 @@ namespace Virgil.App.Services
 
         private AiProvider ResolveAiProvider(AiProvider? configuredProvider)
         {
-            var hasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
-            if (configuredProvider is not null)
+            if (Settings.ProviderPreference is null && configuredProvider is not null)
             {
+                var hasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
                 return configuredProvider.Value switch
                 {
                     AiProvider.OpenAI => hasOpenAiKey ? AiProvider.OpenAI : AiProvider.Disabled,
@@ -76,18 +91,10 @@ namespace Virgil.App.Services
                 };
             }
 
-            var availability = ModelAvailability.Check(_modelLocator, Settings.GetActiveFullManifest());
-            if (availability.CanRunOffline)
-            {
-                return AiProvider.EmbeddedLlama;
-            }
-
-            if (hasOpenAiKey)
-            {
-                return AiProvider.OpenAI;
-            }
-
-            return AiProvider.Disabled;
+            return ProviderPreferenceResolver.Resolve(
+                EffectiveProviderPreference,
+                IsLocalEnabled,
+                IsOpenAiEnabled);
         }
     }
 }

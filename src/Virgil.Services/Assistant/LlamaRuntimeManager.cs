@@ -18,6 +18,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private static readonly TimeSpan DefaultHealthTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DefaultReadinessTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan DefaultShutdownTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DefaultStartupDelay = TimeSpan.FromMilliseconds(1500);
     private const string LocalHostAddress = "127.0.0.1";
     private const int DefaultPort = 8080;
     private const string RuntimeExecutableName = "llama-server.exe";
@@ -38,9 +39,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _healthTimeout;
     private readonly TimeSpan _readinessTimeout;
+    private readonly TimeSpan _startupDelay;
+    private readonly IRuntimeProcessRunner _processRunner;
+    private readonly bool _skipCompatibilityCheck;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly object _outputLock = new();
-    private Process? _process;
+    private IRuntimeProcess? _process;
     private StringBuilder _stdoutBuffer = new();
     private StringBuilder _stderrBuffer = new();
     private string? _tempApiKeyFilePath;
@@ -58,7 +62,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         string? apiKey = null,
         TimeSpan? healthTimeout = null,
         TimeSpan? readinessTimeout = null,
-        HttpClient? httpClient = null)
+        HttpClient? httpClient = null,
+        IRuntimeProcessRunner? processRunner = null,
+        bool skipCompatibilityCheck = false,
+        TimeSpan? startupDelay = null)
     {
         _baseUrl = baseUrl;
         _executablePath = string.IsNullOrWhiteSpace(executablePath)
@@ -68,6 +75,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         _configuredApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         _healthTimeout = healthTimeout ?? DefaultHealthTimeout;
         _readinessTimeout = readinessTimeout ?? DefaultReadinessTimeout;
+        _startupDelay = startupDelay ?? DefaultStartupDelay;
+        _processRunner = processRunner ?? new RuntimeProcessRunner();
+        _skipCompatibilityCheck = skipCompatibilityCheck;
 
         _httpClient = httpClient ?? new HttpClient
         {
@@ -115,8 +125,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 throw new AssistantProviderUnavailableException($"Llama runtime not found at '{_executablePath}'.");
             }
 
-            await ValidateRuntimeCompatibilityAsync(ct).ConfigureAwait(false);
-            await LogRuntimeVersionAsync(ct).ConfigureAwait(false);
+            if (!_skipCompatibilityCheck)
+            {
+                await ValidateRuntimeCompatibilityAsync(ct).ConfigureAwait(false);
+                await LogRuntimeVersionAsync(ct).ConfigureAwait(false);
+            }
 
             Log.Info($"Llama runtime path: {_executablePath}");
             var port = ResolvePort(_baseUrl);
@@ -605,7 +618,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         try
         {
-            _process = Process.Start(startInfo);
+            _process = _processRunner.Start(startInfo);
         }
         catch (Exception ex)
         {
@@ -636,7 +649,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         UpdateDiagnostics(processLaunched: true, portOpen: null, exitCode: null, lastErrorMessage: null);
 
-        await Task.Delay(TimeSpan.FromMilliseconds(1500), ct).ConfigureAwait(false);
+        await Task.Delay(_startupDelay, ct).ConfigureAwait(false);
 
         if (_process.HasExited)
         {
