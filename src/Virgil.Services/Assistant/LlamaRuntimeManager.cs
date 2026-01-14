@@ -24,6 +24,13 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
     private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", "/v1/models" };
+    private static readonly string[] CompatibilityMarkers =
+    {
+        "/v1/chat/completions",
+        "OpenAI",
+        "chat/completions",
+        "v1/models"
+    };
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string _baseArguments;
@@ -107,6 +114,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             {
                 throw new AssistantProviderUnavailableException($"Llama runtime not found at '{_executablePath}'.");
             }
+
+            await ValidateRuntimeCompatibilityAsync(ct).ConfigureAwait(false);
+            await LogRuntimeVersionAsync(ct).ConfigureAwait(false);
 
             Log.Info($"Llama runtime path: {_executablePath}");
             var port = ResolvePort(_baseUrl);
@@ -833,6 +843,34 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             CanStart: true);
     }
 
+    private async Task ValidateRuntimeCompatibilityAsync(CancellationToken ct)
+    {
+        var helpResult = await GetHelpOutputAsync(ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(helpResult.HelpText))
+        {
+            var message = "Runtime IA incompatible: impossible de lire l’aide du binaire (llama-server.exe).";
+            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: helpResult.ExitCode, lastErrorMessage: message);
+            throw new AssistantProviderUnavailableException(message);
+        }
+
+        if (!ContainsCompatibilityMarker(helpResult.HelpText))
+        {
+            var message = "Runtime IA incompatible: l’aide ne mentionne pas l’API OpenAI (/v1/chat/completions, v1/models, etc.).";
+            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: helpResult.ExitCode, lastErrorMessage: message);
+            throw new AssistantProviderUnavailableException(message);
+        }
+    }
+
+    private async Task LogRuntimeVersionAsync(CancellationToken ct)
+    {
+        var versionResult = await RunHelpProcessAsync("--version", ct).ConfigureAwait(false);
+        var versionText = BuildHelpText(versionResult.Stdout, versionResult.Stderr);
+        if (!string.IsNullOrWhiteSpace(versionText))
+        {
+            Log.Info($"Llama runtime version: {versionText.Trim()}");
+        }
+    }
+
     private async Task<HelpOutputResult> GetHelpOutputAsync(CancellationToken ct)
     {
         var primary = await RunHelpProcessAsync("--help", ct).ConfigureAwait(false);
@@ -947,6 +985,19 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         return $"{stdout}{Environment.NewLine}{stderr}";
+    }
+
+    private static bool ContainsCompatibilityMarker(string helpText)
+    {
+        foreach (var marker in CompatibilityMarkers)
+        {
+            if (helpText.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private string? CreateTempApiKeyFile(string apiKey)
