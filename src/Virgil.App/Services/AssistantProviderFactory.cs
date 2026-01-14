@@ -51,7 +51,7 @@ namespace Virgil.App.Services
                     return CreateOpenAiProvider(settings);
                 }
 
-                Log.Warning("IA indisponible: aucune option locale ou OpenAI active.");
+                Log.Warn("IA indisponible: aucune option locale ou OpenAI active.");
                 return null;
             }
 
@@ -67,7 +67,7 @@ namespace Virgil.App.Services
                     return embeddedProvider;
                 }
 
-                Log.Warning("IA indisponible: aucune option locale ou OpenAI active.");
+                Log.Warn("IA indisponible: aucune option locale ou OpenAI active.");
                 return null;
             }
 
@@ -81,7 +81,7 @@ namespace Virgil.App.Services
 
             if (provider is null)
             {
-                Log.Warning("IA indisponible: aucune option locale ou OpenAI active.");
+                Log.Warn("IA indisponible: aucune option locale ou OpenAI active.");
             }
 
             return provider;
@@ -102,7 +102,7 @@ namespace Virgil.App.Services
             var modelLocator = new ModelLocator();
             if (!modelLocator.TryResolve(out var modelPath, out _))
             {
-                Log.Warning("IA locale indisponible: modèle GGUF non trouvé.");
+                Log.Warn("IA locale indisponible: modèle GGUF non trouvé.");
                 return false;
             }
 
@@ -113,19 +113,19 @@ namespace Virgil.App.Services
                 var healthy = runtimeManager.HealthCheckAsync(CancellationToken.None).GetAwaiter().GetResult();
                 if (!healthy)
                 {
-                    Log.Warning("IA locale indisponible: runtime non prêt.");
+                    Log.Warn("IA locale indisponible: runtime non prêt.");
                 }
 
                 return healthy;
             }
             catch (AssistantProviderUnavailableException ex)
             {
-                Log.Warning($"IA locale indisponible: {ex.Message}");
+                Log.Warn($"IA locale indisponible: {ex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "IA locale indisponible: échec inattendu.");
+                Log.Error($"IA locale indisponible: échec inattendu. {ex}");
                 return false;
             }
         }
