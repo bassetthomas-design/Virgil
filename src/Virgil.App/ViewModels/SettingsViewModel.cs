@@ -55,6 +55,7 @@ namespace Virgil.App.ViewModels
         private string _openAiKeyStatusText = string.Empty;
         private string _openAiTestResponseText = string.Empty;
         private string _openAiApiKeyInput = string.Empty;
+        private bool _openAiEnabled;
         private bool _isOpenAiKeyVisible;
         private bool _isRuntimeHelpLoading;
         private ProviderPreference _selectedProviderPreference;
@@ -91,6 +92,7 @@ namespace Virgil.App.ViewModels
             _warnTemp = s.Mood.WarnTemp;
             _alertTemp = s.Mood.AlertTemp;
             _warnCpu = s.Mood.WarnCpu;
+            _openAiEnabled = s.OpenAiEnabled;
 
             _packDownloader = new ModelPackDownloader(_modelLocator);
             _packManifest = _svc.Settings.GetActiveFullManifest();
@@ -353,6 +355,12 @@ namespace Virgil.App.ViewModels
             set { _openAiApiKeyInput = value; OnPropertyChanged(); }
         }
 
+        public bool OpenAiEnabled
+        {
+            get => _openAiEnabled;
+            set { _openAiEnabled = value; OnPropertyChanged(); }
+        }
+
         public bool IsOpenAiKeyVisible
         {
             get => _isOpenAiKeyVisible;
@@ -478,6 +486,7 @@ namespace Virgil.App.ViewModels
             var s = _svc.Settings;
             s.ProviderPreference = _selectedProviderPreference;
             s.AiProvider = null;
+            s.OpenAiEnabled = _openAiEnabled;
 
             var keyInput = _openAiApiKeyInput?.Trim();
             if (!string.IsNullOrWhiteSpace(keyInput))
@@ -625,6 +634,12 @@ namespace Virgil.App.ViewModels
 
         private async Task TestOpenAiAsync()
         {
+            if (!OpenAiEnabled)
+            {
+                OpenAiTestResponseText = "OpenAI désactivé.";
+                return;
+            }
+
             var apiKey = string.IsNullOrWhiteSpace(_openAiApiKeyInput)
                 ? _secretStore.LoadOpenAiApiKey()
                 : _openAiApiKeyInput.Trim();
@@ -752,9 +767,9 @@ namespace Virgil.App.ViewModels
                 ? "Stratégie sécurité: —"
                 : $"Stratégie sécurité: {diagnostics.SecurityStrategy}";
 
-            OpenAiStatusText = _svc.Settings.HasOpenAiKey
-                ? "Statut OpenAI: clé présente"
-                : "Statut OpenAI: clé absente";
+            OpenAiStatusText = _svc.Settings.OpenAiEnabled
+                ? "Statut OpenAI: activé"
+                : "Statut OpenAI: désactivé";
             OpenAiKeyStatusText = _svc.Settings.HasOpenAiKey ? "Clé enregistrée ✅" : "Aucune clé ❌";
         }
 

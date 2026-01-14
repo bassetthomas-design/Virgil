@@ -31,6 +31,7 @@ namespace Virgil.App.Models
         public bool EnableBeatPulse { get; set; } = true;
         public AiProvider? AiProvider { get; set; }
         public ProviderPreference? ProviderPreference { get; set; }
+        public bool OpenAiEnabled { get; set; } = false;
         public bool HasOpenAiKey { get; set; }
         public string OpenAiModel { get; set; } = "gpt-4o-mini";
         public int OpenAiTimeoutSeconds { get; set; } = 30;

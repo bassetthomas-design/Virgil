@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows;
 using Virgil.App.Chat;
 using Virgil.App.Commands;
 using Virgil.App.Interfaces;
@@ -261,6 +262,7 @@ namespace Virgil.App.ViewModels
                 MapAction("show_hud", "Afficher le HUD", false, (_, ct) => EnsureHudVisibleAsync(true, ct)),
                 MapAction("hide_hud", "Masquer le HUD", false, (_, ct) => EnsureHudVisibleAsync(false, ct)),
                 MapAction("actions_selftest", "Test actions", false, (_, ct) => ValidateRegistryAsync(ct)),
+                MapAction("copy_diagnostic", "Copier diagnostic", false, (args, ct) => CopyDiagnosticAsync(args, ct)),
             });
 
             return new ActionRegistry(definitions);
@@ -438,6 +440,25 @@ namespace Virgil.App.ViewModels
 
             _chat.PostSystemMessage(sb.ToString().TrimEnd(), MessageType.Info, ChatKind.Info);
             return ActionResult.Completed("Diagnostic câblage terminé");
+        }
+
+        private Task<ActionResult> CopyDiagnosticAsync(Dictionary<string, string>? args, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (args is null || !args.TryGetValue("text", out var text) || string.IsNullOrWhiteSpace(text))
+            {
+                return Task.FromResult(ActionResult.Failure("Aucun diagnostic à copier."));
+            }
+
+            try
+            {
+                Clipboard.SetText(text);
+                return Task.FromResult(ActionResult.Completed("Diagnostic copié dans le presse-papiers."));
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(ActionResult.Failure($"Copie du diagnostic impossible: {ex.Message}"));
+            }
         }
 
         private static ActionResult MapResult(ServiceActionExecutionResult result)

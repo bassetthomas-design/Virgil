@@ -92,6 +92,44 @@ public class LlamaRuntimeReadinessTests
         }
     }
 
+    [Fact]
+    public async Task StartAsync_FailsWhenModelsEndpointTimesOut()
+    {
+        var handler = new TimeoutHandler();
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost:34567"),
+            Timeout = TimeSpan.FromMilliseconds(50)
+        };
+
+        var runtimePath = Path.GetTempFileName();
+        var modelPath = Path.GetTempFileName();
+        try
+        {
+            var runtime = new LlamaRuntimeManager(
+                "http://localhost:34567",
+                runtimePath,
+                apiKey: null,
+                healthTimeout: TimeSpan.FromMilliseconds(50),
+                readinessTimeout: TimeSpan.FromMilliseconds(250),
+                httpClient: httpClient,
+                processRunner: new FakeProcessRunner(),
+                skipCompatibilityCheck: true,
+                startupDelay: TimeSpan.FromMilliseconds(10));
+
+            runtime.SetModelPath(modelPath);
+
+            var exception = await Assert.ThrowsAsync<AssistantProviderUnavailableException>(() => runtime.StartAsync());
+
+            Assert.Contains("Readiness check", exception.Message);
+        }
+        finally
+        {
+            File.Delete(runtimePath);
+            File.Delete(modelPath);
+        }
+    }
+
     private sealed class SequencedHandler : HttpMessageHandler
     {
         private int _modelsCallCount;
@@ -133,6 +171,14 @@ public class LlamaRuntimeReadinessTests
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    private sealed class TimeoutHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromException<HttpResponseMessage>(new TaskCanceledException("timeout"));
         }
     }
 
