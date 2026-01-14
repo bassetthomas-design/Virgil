@@ -20,6 +20,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\Virgil.App\Chat\**\*.cs" Link="AppChat\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\src\Virgil.App\Models\AppSettings.cs" Link="AppModels\AppSettings.cs" />
+    <Compile Include="..\..\src\Virgil.App\Services\ProviderPreferenceResolver.cs" Link="AppServices\ProviderPreferenceResolver.cs" />
   </ItemGroup>
 
 </Project>
