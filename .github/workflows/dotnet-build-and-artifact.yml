@@ -18,15 +18,15 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Fetch llama.cpp runtime
+        shell: pwsh
+        run: pwsh -File ./scripts/fetch-llama-runtime.ps1
+
       - name: Restore
         run: dotnet restore
 
       - name: Build (Release)
         run: dotnet build --configuration Release --no-restore
-
-      - name: Stage llama.cpp runtime
-        shell: pwsh
-        run: pwsh -File ./tools/Stage-LlamaRuntime.ps1 -OutDir "src/Virgil.App/AI/Runtime" -ZipUrl "https://github.com/ggml-org/llama.cpp/releases/download/b7717/llama-b7717-bin-win-cpu-x64.zip"
 
       - name: Publish (self-contained off)
         run: dotnet publish --configuration Release --no-restore --output out
