@@ -10,6 +10,14 @@ namespace Virgil.App.Models
         Disabled
     }
 
+    public enum ProviderPreference
+    {
+        LocalFirst,
+        OpenAIFirst,
+        LocalOnly,
+        OpenAIOnly
+    }
+
     public class AppSettings
     {
         public int MonitoringIntervalMs { get; set; } = 7000;
@@ -22,6 +30,7 @@ namespace Virgil.App.Models
         public bool MonitoringEnabled { get; set; } = true;
         public bool EnableBeatPulse { get; set; } = true;
         public AiProvider? AiProvider { get; set; }
+        public ProviderPreference? ProviderPreference { get; set; }
         public bool HasOpenAiKey { get; set; }
         public string OpenAiModel { get; set; } = "gpt-4o-mini";
         public int OpenAiTimeoutSeconds { get; set; } = 30;
