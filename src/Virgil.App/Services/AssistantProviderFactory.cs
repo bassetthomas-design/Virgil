@@ -32,7 +32,10 @@ namespace Virgil.App.Services
             var embeddedProvider = new EmbeddedLlamaProvider(
                 embeddedRuntimeManager,
                 settings.EmbeddedLlamaBaseUrl,
-                TimeSpan.FromSeconds(settings.EmbeddedLlamaTimeoutSeconds));
+                TimeSpan.FromSeconds(settings.EmbeddedLlamaTimeoutSeconds),
+                providerPreference: _settingsService.EffectiveProviderPreference.ToString(),
+                localEnabled: _settingsService.IsLocalEnabled,
+                openAiEnabled: _settingsService.IsOpenAiEnabled);
 
             var preference = _settingsService.EffectiveProviderPreference;
             var localEnabled = _settingsService.IsLocalEnabled;
