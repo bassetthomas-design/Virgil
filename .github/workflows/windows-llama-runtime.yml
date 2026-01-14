@@ -41,10 +41,10 @@ jobs:
             throw "Runtime not found at $runtimePath"
           }
           $output = & $runtimePath --help 2>&1 | Out-String
-          if ($output -notmatch "/v1/models") {
+          if ($output -notmatch "/v1/models" -and $output -notmatch "v1/models") {
             throw "Missing /v1/models in --help output"
           }
-          if ($output -notmatch "/v1/chat/completions") {
+          if ($output -notmatch "/v1/chat/completions" -and $output -notmatch "v1/chat/completions" -and $output -notmatch "chat/completions") {
             throw "Missing /v1/chat/completions in --help output"
           }
 

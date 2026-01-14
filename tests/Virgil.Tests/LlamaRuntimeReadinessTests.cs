@@ -85,6 +85,7 @@ public class LlamaRuntimeReadinessTests
 
     private sealed class FakeProcess : IRuntimeProcess
     {
+#pragma warning disable CS0067
         private bool _hasExited;
         private int _exitCode;
 
@@ -99,6 +100,7 @@ public class LlamaRuntimeReadinessTests
         public event DataReceivedEventHandler? ErrorDataReceived;
 
         public event EventHandler? Exited;
+#pragma warning restore CS0067
 
         public void BeginOutputReadLine()
         {

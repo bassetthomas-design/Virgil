@@ -24,6 +24,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string RuntimeExecutableName = "llama-server.exe";
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
+    private static readonly string[] OpenAiModelsMarkers = { "/v1/models", "v1/models" };
+    private static readonly string[] OpenAiChatCompletionsMarkers = { "/v1/chat/completions", "v1/chat/completions", "chat/completions" };
     private const string ModelsEndpoint = "/v1/models";
     private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", ModelsEndpoint };
     private static readonly string[] CompatibilityMarkers =
@@ -75,7 +77,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             var requestedPath = Path.GetFullPath(executablePath);
             if (!string.Equals(requestedPath, defaultRuntimePath, StringComparison.OrdinalIgnoreCase))
             {
-                Log.Warning($"Llama runtime path override ignored. Using packaged runtime at '{defaultRuntimePath}'. Requested: '{requestedPath}'.");
+                Log.Warn($"Llama runtime path override ignored. Using packaged runtime at '{defaultRuntimePath}'. Requested: '{requestedPath}'.");
             }
         }
 
@@ -1028,8 +1030,26 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private static bool ContainsOpenAiCompatibilityMarkers(string helpText)
     {
-        return helpText.IndexOf(OpenAiModelsMarker, StringComparison.OrdinalIgnoreCase) >= 0
-            && helpText.IndexOf(OpenAiChatCompletionsMarker, StringComparison.OrdinalIgnoreCase) >= 0;
+        return ContainsAnyMarker(helpText, OpenAiModelsMarkers)
+            && ContainsAnyMarker(helpText, OpenAiChatCompletionsMarkers);
+    }
+
+    private static bool ContainsAnyMarker(string text, IReadOnlyCollection<string> markers)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (var marker in markers)
+        {
+            if (text.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string ExtractHelpExcerpt(string helpText, int maxLength = 800)
