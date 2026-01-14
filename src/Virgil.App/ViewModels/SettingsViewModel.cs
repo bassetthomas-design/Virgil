@@ -646,6 +646,20 @@ namespace Virgil.App.ViewModels
                     return;
                 }
 
+                var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+                if (diagnostics.LocalStatus != LocalStatus.Ready)
+                {
+                    AiTestResponseText = "IA locale non prête.";
+                    return;
+                }
+
+                var modelId = diagnostics.LocalModelId;
+                if (string.IsNullOrWhiteSpace(modelId))
+                {
+                    AiTestResponseText = "Modèle IA local introuvable.";
+                    return;
+                }
+
                 using var client = new HttpClient
                 {
                     BaseAddress = new Uri(baseUrl, UriKind.Absolute),
@@ -653,18 +667,11 @@ namespace Virgil.App.ViewModels
                 };
                 ConfigureLocalAuthHeaders(client, _svc.Settings.EmbeddedLlamaApiKey);
 
-                var modelsProbe = await ProbeLocalModelsAsync(client).ConfigureAwait(false);
-                if (!modelsProbe.Success)
-                {
-                    AiTestResponseText = modelsProbe.Message;
-                    return;
-                }
-
                 AiTestResponseText = "IA locale prête. Test chat en cours…";
-                var chatProbe = await ProbeLocalChatAsync(client, modelsProbe.ModelId).ConfigureAwait(false);
+                var chatProbe = await ProbeLocalChatAsync(client, modelId).ConfigureAwait(false);
                 if (!chatProbe.Success)
                 {
-                    AiTestResponseText = chatProbe.Message;
+                    AiTestResponseText = "Erreur génération";
                     return;
                 }
 
@@ -674,7 +681,8 @@ namespace Virgil.App.ViewModels
             }
             catch (Exception ex)
             {
-                AiTestResponseText = $"Erreur IA: {ex.Message}";
+                Log.Warn($"Test IA local: exception {ex.Message}");
+                AiTestResponseText = "Erreur génération";
             }
         }
 
@@ -690,81 +698,6 @@ namespace Virgil.App.ViewModels
 
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
-        }
-
-        private static async Task<LocalModelsProbeResult> ProbeLocalModelsAsync(HttpClient client)
-        {
-            const string endpoint = "/v1/models";
-            Log.Info($"Test IA local: GET {endpoint}");
-
-            try
-            {
-                using var response = await client.GetAsync(endpoint).ConfigureAwait(false);
-                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var excerpt = Truncate(body, 400);
-                Log.Info($"Test IA local: GET {endpoint} -> HTTP {(int)response.StatusCode} {response.StatusCode} | {excerpt}");
-
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    var message = $"Readiness IA locale échoué (HTTP {(int)response.StatusCode}).";
-                    LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                    {
-                        LocalStatus = "NotReady",
-                        LastModelsStatusCode = (int)response.StatusCode,
-                        LastModelsResponseExcerpt = excerpt,
-                        LastModelsErrorMessage = message
-                    });
-                    return new LocalModelsProbeResult(false, string.Empty, message);
-                }
-
-                var modelId = TryExtractModelId(body);
-                if (string.IsNullOrWhiteSpace(modelId))
-                {
-                    var message = "Readiness IA locale OK mais aucun modèle détecté.";
-                    LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                    {
-                        LocalStatus = "NotReady",
-                        LastModelsStatusCode = (int)response.StatusCode,
-                        LastModelsResponseExcerpt = excerpt,
-                        LastModelsErrorMessage = message
-                    });
-                    return new LocalModelsProbeResult(false, string.Empty, message);
-                }
-
-                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                {
-                    LocalStatus = "Ready",
-                    LastModelsStatusCode = (int)response.StatusCode,
-                    LastModelsResponseExcerpt = excerpt,
-                    LastModelsErrorMessage = null,
-                    FailureCategory = null
-                });
-                return new LocalModelsProbeResult(true, modelId, "IA locale prête.");
-            }
-            catch (HttpRequestException ex)
-            {
-                var message = $"Readiness IA locale échoué: {ex.GetBaseException().Message}";
-                Log.Warn($"Test IA local: GET {endpoint} -> exception {message}");
-                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                {
-                    LocalStatus = "NotReady",
-                    LastModelsErrorMessage = message,
-                    FailureCategory = "EndpointUnavailable"
-                });
-                return new LocalModelsProbeResult(false, string.Empty, message);
-            }
-            catch (TaskCanceledException ex)
-            {
-                var message = $"Readiness IA locale timeout: {ex.GetBaseException().Message}";
-                Log.Warn($"Test IA local: GET {endpoint} -> timeout {message}");
-                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                {
-                    LocalStatus = "NotReady",
-                    LastModelsErrorMessage = message,
-                    FailureCategory = "TimeoutLoading"
-                });
-                return new LocalModelsProbeResult(false, string.Empty, message);
-            }
         }
 
         private static async Task<LocalChatProbeResult> ProbeLocalChatAsync(HttpClient client, string modelId)
@@ -802,12 +735,7 @@ namespace Virgil.App.ViewModels
                 {
                     var message = $"Chat endpoint failed (HTTP {(int)response.StatusCode}).";
                     var detail = string.IsNullOrWhiteSpace(excerpt) ? message : $"{message} {excerpt}";
-                    LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                    {
-                        LocalStatus = "Ready",
-                        LastErrorMessage = detail,
-                        FailureCategory = $"ChatEndpointError (HTTP {(int)response.StatusCode}): {excerpt}"
-                    });
+                    Log.Warn($"Test IA local: POST {endpoint} -> {detail}");
                     return new LocalChatProbeResult(false, "Chat endpoint failed.");
                 }
 
@@ -817,66 +745,20 @@ namespace Virgil.App.ViewModels
                     return new LocalChatProbeResult(true, "Réponse vide.");
                 }
 
-                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                {
-                    LocalStatus = "Ready",
-                    LastErrorMessage = null,
-                    FailureCategory = null
-                });
                 return new LocalChatProbeResult(true, content);
             }
             catch (HttpRequestException ex)
             {
                 var message = $"Chat endpoint failed: {ex.GetBaseException().Message}";
                 Log.Warn($"Test IA local: POST {endpoint} -> exception {message}");
-                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                {
-                    LocalStatus = "Ready",
-                    LastErrorMessage = message,
-                    FailureCategory = $"ChatEndpointError: {message}"
-                });
                 return new LocalChatProbeResult(false, "Chat endpoint failed.");
             }
             catch (TaskCanceledException ex)
             {
                 var message = $"Chat endpoint timeout: {ex.GetBaseException().Message}";
                 Log.Warn($"Test IA local: POST {endpoint} -> timeout {message}");
-                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
-                {
-                    LocalStatus = "Ready",
-                    LastErrorMessage = message,
-                    FailureCategory = $"ChatEndpointError: {message}"
-                });
                 return new LocalChatProbeResult(false, "Chat endpoint failed.");
             }
-        }
-
-        private static string TryExtractModelId(string json)
-        {
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return string.Empty;
-            }
-
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("data", out var dataElement)
-                    && dataElement.ValueKind == JsonValueKind.Array
-                    && dataElement.GetArrayLength() > 0)
-                {
-                    var first = dataElement[0];
-                    if (first.TryGetProperty("id", out var idElement))
-                    {
-                        return idElement.GetString() ?? string.Empty;
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-            }
-
-            return string.Empty;
         }
 
         private static string TryExtractChatContent(string json)
@@ -909,8 +791,6 @@ namespace Virgil.App.ViewModels
 
             return string.Empty;
         }
-
-        private sealed record LocalModelsProbeResult(bool Success, string ModelId, string Message);
 
         private sealed record LocalChatProbeResult(bool Success, string Message);
 
