@@ -1283,7 +1283,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var lastStatusCode = (HttpStatusCode?)null;
         string? lastResponseExcerpt = null;
         string? lastEndpoint = null;
-        string? lastModelsErrorMessage = null;
         var lastLog = DateTimeOffset.MinValue;
         var attempt = 0;
         var lastProbeException = string.Empty;
