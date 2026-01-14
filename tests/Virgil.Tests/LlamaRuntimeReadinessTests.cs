@@ -193,6 +193,8 @@ public class LlamaRuntimeReadinessTests
         private bool _hasExited;
         private int _exitCode;
 
+        public int Id => 1234;
+
         public bool HasExited => _hasExited;
 
         public int ExitCode => _exitCode;

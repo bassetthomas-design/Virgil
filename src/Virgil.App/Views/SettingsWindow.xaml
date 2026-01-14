@@ -58,7 +58,9 @@
                 <TextBlock Text="{Binding RuntimeExitCodeText}" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeCommandLineText}" TextWrapping="Wrap" Margin="0,0,0,2"/>
                 <TextBlock Text="{Binding RuntimeStderrText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding OpenAiStatusText}" Margin="0,0,0,6"/>
+                <TextBlock Text="{Binding OpenAiStatusText}"
+                           Margin="0,0,0,6"
+                           Visibility="{Binding OpenAiEnabled, Converter={StaticResource BoolToVisibility}}"/>
                 <WrapPanel Margin="0,0,0,6">
                     <Button Content="Aide runtime" Command="{Binding RuntimeHelpCommand}" Margin="0,0,8,8"/>
                 </WrapPanel>
@@ -68,35 +70,37 @@
                     </ScrollViewer>
                 </Border>
 
-                <TextBlock Text="OpenAI" FontWeight="Bold" Margin="0,10,0,6"/>
-                <CheckBox Content="OpenAI activé" IsChecked="{Binding OpenAiEnabled}" Margin="0,0,0,6"/>
-                <TextBlock Text="Clé OpenAI:" Margin="0,0,0,4"/>
-                <Grid Margin="0,0,0,6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <PasswordBox x:Name="OpenAiKeyBox"
+                <StackPanel Visibility="{Binding OpenAiEnabled, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="OpenAI" FontWeight="Bold" Margin="0,10,0,6"/>
+                    <CheckBox Content="OpenAI activé" IsChecked="{Binding OpenAiEnabled}" Margin="0,0,0,6"/>
+                    <TextBlock Text="Clé OpenAI:" Margin="0,0,0,4"/>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <PasswordBox x:Name="OpenAiKeyBox"
+                                     Grid.Column="0"
+                                     PasswordChanged="OnOpenAiKeyPasswordChanged"
+                                     Visibility="{Binding IsOpenAiKeyVisible, Converter={StaticResource InverseBoolToVisibility}}"/>
+                        <TextBox x:Name="OpenAiKeyTextBox"
                                  Grid.Column="0"
-                                 PasswordChanged="OnOpenAiKeyPasswordChanged"
-                                 Visibility="{Binding IsOpenAiKeyVisible, Converter={StaticResource InverseBoolToVisibility}}"/>
-                    <TextBox x:Name="OpenAiKeyTextBox"
-                             Grid.Column="0"
-                             Text="{Binding OpenAiApiKeyInput, UpdateSourceTrigger=PropertyChanged}"
-                             Visibility="{Binding IsOpenAiKeyVisible, Converter={StaticResource BoolToVisibility}}"/>
-                    <ToggleButton Grid.Column="1"
-                                  Content="{Binding OpenAiKeyToggleText}"
-                                  IsChecked="{Binding IsOpenAiKeyVisible}"
-                                  Margin="8,0,0,0"
-                                  Checked="OnOpenAiKeyVisibilityChanged"
-                                  Unchecked="OnOpenAiKeyVisibilityChanged"/>
-                </Grid>
-                <TextBlock Text="{Binding OpenAiKeyStatusText}" Margin="0,0,0,6"/>
-                <WrapPanel Margin="0,0,0,8">
-                    <Button Content="Enregistrer" Command="{Binding SaveAiSettingsCommand}" Margin="0,0,8,8"/>
-                    <Button Content="Tester OpenAI" Command="{Binding TestOpenAiCommand}" Margin="0,0,8,8"/>
-                </WrapPanel>
-                <TextBlock Text="{Binding OpenAiTestResponseText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                 Text="{Binding OpenAiApiKeyInput, UpdateSourceTrigger=PropertyChanged}"
+                                 Visibility="{Binding IsOpenAiKeyVisible, Converter={StaticResource BoolToVisibility}}"/>
+                        <ToggleButton Grid.Column="1"
+                                      Content="{Binding OpenAiKeyToggleText}"
+                                      IsChecked="{Binding IsOpenAiKeyVisible}"
+                                      Margin="8,0,0,0"
+                                      Checked="OnOpenAiKeyVisibilityChanged"
+                                      Unchecked="OnOpenAiKeyVisibilityChanged"/>
+                    </Grid>
+                    <TextBlock Text="{Binding OpenAiKeyStatusText}" Margin="0,0,0,6"/>
+                    <WrapPanel Margin="0,0,0,8">
+                        <Button Content="Enregistrer" Command="{Binding SaveAiSettingsCommand}" Margin="0,0,8,8"/>
+                        <Button Content="Tester OpenAI" Command="{Binding TestOpenAiCommand}" Margin="0,0,8,8"/>
+                    </WrapPanel>
+                    <TextBlock Text="{Binding OpenAiTestResponseText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                </StackPanel>
                 <TextBlock Text="Statut Pack Full:"/>
                 <TextBlock Text="{Binding PackStatusText}" FontWeight="SemiBold" Margin="0,2,0,6"/>
                 <TextBlock Text="{Binding ModelStatusText}" FontWeight="SemiBold" Margin="0,2,0,2"/>

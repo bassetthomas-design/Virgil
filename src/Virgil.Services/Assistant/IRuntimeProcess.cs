@@ -7,6 +7,7 @@ namespace Virgil.Services.Assistant;
 
 public interface IRuntimeProcess : IDisposable
 {
+    int Id { get; }
     bool HasExited { get; }
     int ExitCode { get; }
     bool EnableRaisingEvents { get; set; }

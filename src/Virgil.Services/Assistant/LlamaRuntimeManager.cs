@@ -130,25 +130,63 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 return;
             }
 
+            var runtimeFullPath = Path.GetFullPath(_executablePath);
+            var runtimeExists = File.Exists(runtimeFullPath);
+            var workingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory;
+            LocalAiFileLog.Write($"RuntimePath: {runtimeFullPath} (exists={runtimeExists})");
+            LocalAiFileLog.Write($"WorkingDirectory: {workingDirectory}");
+            if (Uri.TryCreate(_baseUrl, UriKind.Absolute, out var baseUri))
+            {
+                LocalAiFileLog.Write($"BaseUrl: {_baseUrl} (host={baseUri.Host}, port={baseUri.Port})");
+            }
+            else
+            {
+                LocalAiFileLog.Write($"BaseUrl: {_baseUrl}");
+            }
+
+            var modelPath = _modelPath;
+            var resolvedModelPath = string.IsNullOrWhiteSpace(modelPath) ? null : Path.GetFullPath(modelPath);
+            if (string.IsNullOrWhiteSpace(resolvedModelPath))
+            {
+                LocalAiFileLog.Write("ModelPath: (absent) (exists=false, length=—)");
+            }
+            else
+            {
+                var modelExistsAtStart = File.Exists(resolvedModelPath);
+                var modelLengthAtStart = modelExistsAtStart ? new FileInfo(resolvedModelPath).Length : (long?)null;
+                LocalAiFileLog.Write($"ModelPath: {resolvedModelPath} (exists={modelExistsAtStart}, length={(modelLengthAtStart.HasValue ? modelLengthAtStart.Value.ToString() : "—")})");
+            }
+
             if (!IsRuntimeAvailable())
             {
                 var missingRuntimeMessage = $"Llama runtime not found at '{_executablePath}'.";
                 UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: null, lastErrorMessage: missingRuntimeMessage, failureCategory: "RuntimeMissing");
+                LocalAiFileLog.Write("Arguments: (non construits, runtime manquant)");
+                LocalAiFileLog.Write("Process.Start: skipped (runtime manquant)");
+                LocalAiFileLog.Write("FAILED Cause=RuntimeMissing");
                 throw new AssistantProviderUnavailableException(missingRuntimeMessage);
             }
 
             if (!_skipCompatibilityCheck)
             {
-                await ValidateRuntimeCompatibilityAsync(ct).ConfigureAwait(false);
-                await LogRuntimeVersionAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await ValidateRuntimeCompatibilityAsync(ct).ConfigureAwait(false);
+                    await LogRuntimeVersionAsync(ct).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    LocalAiFileLog.Write($"Process.Start: skipped (compatibility check failed: {ex.Message})");
+                    LocalAiFileLog.Write("FAILED Cause=EndpointUnavailable");
+                    throw;
+                }
             }
 
             Log.Info($"Llama runtime path: {_executablePath}");
             var port = ResolvePort(_baseUrl);
             _apiKey = null;
 
-            var modelPath = _modelPath;
-            if (string.IsNullOrWhiteSpace(modelPath))
+            if (string.IsNullOrWhiteSpace(resolvedModelPath))
             {
                 UpdateDiagnostics(
                     processLaunched: false,
@@ -156,19 +194,44 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     exitCode: null,
                     lastErrorMessage: MissingModelErrorMessage,
                     failureCategory: "ModelMissing");
+                LocalAiFileLog.Write("Arguments: (non construits, modèle manquant)");
+                LocalAiFileLog.Write("Process.Start: skipped (modèle manquant)");
+                LocalAiFileLog.Write("FAILED Cause=ModelMissing");
                 throw new AssistantProviderUnavailableException(MissingModelErrorMessage);
             }
 
-            var arguments = BuildArguments(_baseArguments, port, modelPath);
+            var modelExists = File.Exists(resolvedModelPath);
+            var modelLength = modelExists ? new FileInfo(resolvedModelPath).Length : (long?)null;
+            if (!modelExists)
+            {
+                var missingModelMessage = $"Modèle introuvable: {resolvedModelPath}";
+                UpdateDiagnostics(
+                    processLaunched: false,
+                    portOpen: false,
+                    exitCode: null,
+                    lastErrorMessage: MissingModelErrorMessage,
+                    failureCategory: "ModelMissing");
+                LocalAiFileLog.Write("Arguments: (non construits, modèle manquant)");
+                LocalAiFileLog.Write("Process.Start: skipped (modèle manquant)");
+                LocalAiFileLog.Write("FAILED Cause=ModelMissing");
+                throw new AssistantProviderUnavailableException(missingModelMessage);
+            }
+
+            var arguments = BuildArguments(_baseArguments, port, resolvedModelPath);
             var commandLine = BuildCommandLine(_executablePath, arguments);
 
             Log.Info($"Llama runtime args: {arguments}");
             Log.Info($"Llama runtime command line: {commandLine}");
+            LocalAiFileLog.Write($"Arguments: {SanitizeArgumentsForLog(arguments)}");
 
             var result = await TryStartProcessAsync(arguments, commandLine, ct).ConfigureAwait(false);
             if (!result.Success)
             {
                 CleanupTempApiKeyFile();
+                if (TryDetectPortInUse(result.LastErrorMessage, result.Stderr))
+                {
+                    LocalAiFileLog.Write("FAILED Cause=PortInUse");
+                }
                 throw new AssistantProviderUnavailableException(result.LastErrorMessage ?? "Aucune configuration de sécurité valide trouvée.");
             }
         }
@@ -301,12 +364,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             var responseExcerpt = await ReadResponseExcerptAsync(response, ct).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.OK)
             {
-                return new ModelsProbeResult(true, false, response.StatusCode, null, responseExcerpt);
+                return new ModelsProbeResult(true, false, response.StatusCode, null, responseExcerpt, null);
             }
 
             if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
             {
-                return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt);
+                return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt, null);
             }
 
             if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
@@ -316,18 +379,19 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     true,
                     response.StatusCode,
                     $"Runtime IA incompatible: endpoint {ModelsEndpoint} indisponible (HTTP {(int)response.StatusCode}).",
-                    responseExcerpt);
+                    responseExcerpt,
+                    null);
             }
 
-            return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt);
+            return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt, null);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            return new ModelsProbeResult(false, false, null, null, null);
+            return new ModelsProbeResult(false, false, null, null, null, ex.GetBaseException().Message);
         }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            return new ModelsProbeResult(false, false, null, null, null);
+            return new ModelsProbeResult(false, false, null, null, null, ex.GetBaseException().Message);
         }
     }
 
@@ -489,6 +553,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             return;
         }
 
+        LocalAiFileLog.Write(isError ? $"STDERR: {data}" : $"STDOUT: {data}");
+
         if (isError && IsMissingModelLine(data))
         {
             UpdateDiagnostics(
@@ -620,7 +686,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         if (combined.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("eaddrinuse", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("only one usage", StringComparison.OrdinalIgnoreCase))
+            || combined.Contains("only one usage", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("bind", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("port already", StringComparison.OrdinalIgnoreCase))
         {
             return "PortInUse";
         }
@@ -734,6 +802,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 portOpen: false,
                 exitCode: null,
                 lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}");
+            LocalAiFileLog.Write($"Process.Start: fail ({ex.GetType().Name}: {ex.Message})");
             return new RuntimeAttemptResult(false, null, string.Empty, $"Impossible de lancer le runtime: {ex.Message}", TimedOut: false);
         }
 
@@ -744,8 +813,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 portOpen: false,
                 exitCode: null,
                 lastErrorMessage: "Impossible de lancer le runtime.");
+            LocalAiFileLog.Write("Process.Start: fail (process null)");
             return new RuntimeAttemptResult(false, null, string.Empty, "Impossible de lancer le runtime.", TimedOut: false);
         }
+
+        LocalAiFileLog.Write($"Process.Start: success (pid={_process.Id})");
 
         _process.EnableRaisingEvents = true;
         _process.OutputDataReceived += OnOutputDataReceived;
@@ -774,6 +846,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 : string.IsNullOrWhiteSpace(stderr)
                     ? $"Runtime terminé avec le code {exitCode}."
                     : $"Runtime terminé avec le code {exitCode}: {GetLastNonWarningLine(stderr)}";
+            if (TryDetectPortInUse(lastError, stderr))
+            {
+                LocalAiFileLog.Write("FAILED Cause=PortInUse");
+            }
             return new RuntimeAttemptResult(false, exitCode, stderr, lastError, TimedOut: false);
         }
 
@@ -1195,6 +1271,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         string? lastResponseExcerpt = null;
         string? lastEndpoint = null;
         var lastLog = DateTimeOffset.MinValue;
+        var attempt = 0;
+        var lastProbeException = string.Empty;
+        string? lastModelsErrorMessageText = null;
 
         while (DateTimeOffset.UtcNow - start < _readinessTimeout)
         {
@@ -1211,10 +1290,20 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 return new RuntimeAttemptResult(false, exitCode, stderr, lastError, TimedOut: false);
             }
 
+            attempt++;
             var readinessProbe = await ProbeModelsAsync(ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(readinessProbe.ExceptionMessage))
+            {
+                lastProbeException = readinessProbe.ExceptionMessage;
+            }
+            if (!string.IsNullOrWhiteSpace(readinessProbe.ErrorMessage))
+            {
+                lastModelsErrorMessageText = readinessProbe.ErrorMessage;
+            }
             lastStatusCode = readinessProbe.StatusCode;
             lastResponseExcerpt = readinessProbe.ResponseExcerpt;
             lastEndpoint = ModelsEndpoint;
+            LocalAiFileLog.Write(BuildReadinessLogEntry(attempt, readinessProbe.StatusCode, readinessProbe.ResponseExcerpt, readinessProbe.ExceptionMessage));
             if (readinessProbe.Incompatible)
             {
                 var incompatibleMessage = readinessProbe.ErrorMessage
@@ -1227,6 +1316,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
                     failureCategory: "EndpointUnavailable");
+                LocalAiFileLog.Write("FAILED Cause=EndpointUnavailable");
                 return new RuntimeAttemptResult(false, null, GetCapturedStderr(), incompatibleMessage, TimedOut: false, ShouldStopProcess: true);
             }
 
@@ -1276,6 +1366,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var finalStatus = lastStatusCode.HasValue ? ((int)lastStatusCode.Value).ToString() : "aucun";
         var finalEndpoint = string.IsNullOrWhiteSpace(lastEndpoint) ? "aucun" : lastEndpoint;
         Log.Info($"Readiness runtime expiré après {finalWarmup.TotalSeconds:0.0}s (dernier HTTP {finalStatus} sur {finalEndpoint}).");
+        if (!string.IsNullOrWhiteSpace(lastModelsErrorMessageText))
+        {
+            LocalAiFileLog.Write($"Readiness dernière erreur: {lastModelsErrorMessageText}");
+        }
+        var finalCause = ResolveReadinessFailureCause(lastStatusCode, lastProbeException, finalMissingModelError);
         UpdateDiagnostics(
             processLaunched: true,
             portOpen: false,
@@ -1283,7 +1378,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             lastErrorMessage: finalMissingModelError ?? "Readiness check échoué.",
             lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
             lastModelsResponseExcerpt: lastResponseExcerpt,
-            failureCategory: "TimeoutLoading");
+            failureCategory: finalCause);
+        LocalAiFileLog.Write($"FAILED Cause={finalCause}");
         return new RuntimeAttemptResult(false, null, finalStderr, finalMissingModelError ?? "Readiness check échoué.", TimedOut: true);
     }
 
@@ -1299,5 +1395,94 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private sealed record RuntimeAttemptResult(bool Success, int? ExitCode, string Stderr, string? LastErrorMessage, bool TimedOut, bool ShouldStopProcess = false);
 
-    private sealed record ModelsProbeResult(bool Ready, bool Incompatible, HttpStatusCode? StatusCode, string? ErrorMessage, string? ResponseExcerpt);
+    private sealed record ModelsProbeResult(
+        bool Ready,
+        bool Incompatible,
+        HttpStatusCode? StatusCode,
+        string? ErrorMessage,
+        string? ResponseExcerpt,
+        string? ExceptionMessage);
+
+    private static string SanitizeArgumentsForLog(string arguments)
+    {
+        var sanitized = arguments;
+        sanitized = RedactArgumentValue(sanitized, "--api-key");
+        sanitized = RedactArgumentValue(sanitized, "--api-key-file");
+        sanitized = RedactArgumentValue(sanitized, "--auth-token");
+        sanitized = RedactArgumentValue(sanitized, "--token");
+        sanitized = RedactArgumentValue(sanitized, "--cert");
+        sanitized = RedactArgumentValue(sanitized, "--key");
+        return sanitized;
+    }
+
+    private static string RedactArgumentValue(string arguments, string flag)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return string.Empty;
+        }
+
+        var pattern = $@"(?<!\S){Regex.Escape(flag)}(?:\s+|=)(\""[^\""]*\""|'[^']*'|\S+)";
+        var updated = Regex.Replace(arguments, pattern, $"{flag} <redacted>", RegexOptions.IgnoreCase);
+        return NormalizeWhitespace(updated);
+    }
+
+    private static string BuildReadinessLogEntry(int attempt, HttpStatusCode? statusCode, string? responseExcerpt, string? exceptionMessage)
+    {
+        var status = statusCode.HasValue ? ((int)statusCode.Value).ToString() : "aucun";
+        var firstLine = GetFirstLine(responseExcerpt);
+        if (!string.IsNullOrWhiteSpace(exceptionMessage))
+        {
+            return $"Readiness GET {ModelsEndpoint} attempt={attempt} exception={exceptionMessage}";
+        }
+
+        return string.IsNullOrWhiteSpace(firstLine)
+            ? $"Readiness GET {ModelsEndpoint} attempt={attempt} status={status}"
+            : $"Readiness GET {ModelsEndpoint} attempt={attempt} status={status} response=\"{firstLine}\"";
+    }
+
+    private static string? GetFirstLine(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        return lines.Length == 0 ? value : lines[0];
+    }
+
+    private static bool TryDetectPortInUse(string? message, string stderr)
+    {
+        var combined = $"{message}{Environment.NewLine}{stderr}".Trim();
+        if (string.IsNullOrWhiteSpace(combined))
+        {
+            return false;
+        }
+
+        return combined.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("eaddrinuse", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("bind", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("port already", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveReadinessFailureCause(HttpStatusCode? statusCode, string? exceptionMessage, string? missingModelError)
+    {
+        if (!string.IsNullOrWhiteSpace(missingModelError))
+        {
+            return "ModelMissing";
+        }
+
+        if (!string.IsNullOrWhiteSpace(exceptionMessage))
+        {
+            return "EndpointUnavailable";
+        }
+
+        if (statusCode == HttpStatusCode.NotFound)
+        {
+            return "EndpointUnavailable";
+        }
+
+        return "TimeoutLoading";
+    }
 }
