@@ -18,9 +18,14 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 {
     private const string DefaultBaseUrl = "http://localhost:8080";
     private const int DefaultTimeoutSeconds = 30;
+    private const int MaxDiagnosticCharacters = 3500;
+    private const int DiagnosticTailLines = 30;
 
     private readonly ILocalLlmRuntime _runtimeManager;
     private readonly HttpClient _httpClient;
+    private readonly string _providerPreference;
+    private readonly bool _localEnabled;
+    private readonly bool _openAiEnabled;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -30,9 +35,15 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         ILocalLlmRuntime runtimeManager,
         string? baseUrl = null,
         TimeSpan? timeout = null,
-        HttpClient? httpClient = null)
+        HttpClient? httpClient = null,
+        string? providerPreference = null,
+        bool localEnabled = true,
+        bool openAiEnabled = true)
     {
         _runtimeManager = runtimeManager ?? throw new ArgumentNullException(nameof(runtimeManager));
+        _providerPreference = string.IsNullOrWhiteSpace(providerPreference) ? "—" : providerPreference;
+        _localEnabled = localEnabled;
+        _openAiEnabled = openAiEnabled;
 
         var resolvedBaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl;
         if (httpClient is not null)
@@ -64,11 +75,13 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         var runtimeFound = false;
         var runtimePathExpected = Path.Combine(AppContext.BaseDirectory, "AI", "Runtime", "llama-server.exe");
         IReadOnlyCollection<string> modelTriedPaths = Array.Empty<string>();
+        string? resolvedModelPath = null;
         try
         {
             var modelLocator = new ModelLocator();
             modelTriedPaths = new List<string>(modelLocator.GetCandidatePaths());
             modelFound = modelLocator.TryResolve(out var modelPath, out _);
+            resolvedModelPath = modelFound ? modelPath : null;
 
             Log.Info($"Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}");
             if (modelFound)
@@ -88,6 +101,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             {
                 return BuildUnavailableReply(
                     modelFound,
+                    resolvedModelPath,
                     modelTriedPaths,
                     runtimeFound,
                     runtimePathExpected);
@@ -97,6 +111,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             {
                 return BuildUnavailableReply(
                     modelFound,
+                    resolvedModelPath,
                     modelTriedPaths,
                     runtimeFound,
                     runtimePathExpected);
@@ -113,6 +128,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             {
                 return BuildUnavailableReply(
                     modelFound,
+                    resolvedModelPath,
                     modelTriedPaths,
                     runtimeFound,
                     runtimePathExpected);
@@ -132,6 +148,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             {
                 return BuildUnavailableReply(
                     modelFound,
+                    resolvedModelPath,
                     modelTriedPaths,
                     runtimeFound,
                     runtimePathExpected);
@@ -142,7 +159,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (AssistantProviderUnavailableException)
         {
-            return BuildUnavailableReply(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
+            return BuildUnavailableReply(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -150,11 +167,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (HttpRequestException)
         {
-            return BuildUnavailableReply(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
+            return BuildUnavailableReply(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
         catch (TaskCanceledException)
         {
-            return BuildUnavailableReply(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
+            return BuildUnavailableReply(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
     }
 
@@ -248,23 +265,20 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     private AssistantReply BuildUnavailableReply(
         bool modelFound,
+        string? resolvedModelPath,
         IReadOnlyCollection<string> modelTriedPaths,
         bool runtimeFound,
         string runtimePathExpected)
     {
-        var diagnostics = BuildDiagnosticReport(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
-        var action = new ProposedAction(
-            "copy_diagnostic",
-            "Copier diagnostic",
-            new Dictionary<string, string> { ["text"] = diagnostics },
-            RequiresConfirmation: false);
+        var diagnostics = BuildDiagnosticReport(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
         return new AssistantReply(
-            "IA indisponible. Utilisez « Copier diagnostic » pour obtenir le rapport détaillé.",
-            new[] { action });
+            $"IA indisponible (Local Llama).{Environment.NewLine}{Environment.NewLine}Diagnostic (auto):{Environment.NewLine}{diagnostics}",
+            Array.Empty<ProposedAction>());
     }
 
     private string BuildDiagnosticReport(
         bool modelFound,
+        string? resolvedModelPath,
         IReadOnlyCollection<string> modelTriedPaths,
         bool runtimeFound,
         string runtimePathExpected)
@@ -278,22 +292,32 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             : diagnostics.ExecutablePath;
         var arguments = string.IsNullOrWhiteSpace(diagnostics.Arguments) ? "—" : diagnostics.Arguments;
         var statusLabel = diagnostics.LastModelsStatusCode.HasValue
-            ? diagnostics.LastModelsStatusCode.Value.ToString()
-            : "aucun";
+            ? $"HTTP {diagnostics.LastModelsStatusCode.Value}"
+            : string.Empty;
+        var lastModelsError = string.IsNullOrWhiteSpace(diagnostics.LastModelsErrorMessage)
+            ? string.Empty
+            : diagnostics.LastModelsErrorMessage;
         var modelsExcerpt = string.IsNullOrWhiteSpace(diagnostics.LastModelsResponseExcerpt)
             ? "—"
             : diagnostics.LastModelsResponseExcerpt;
         var failureCategory = ResolveFailureCategory(modelFound, runtimeFound, diagnostics);
 
         var sb = new StringBuilder();
-        sb.AppendLine("Diagnostic IA locale");
+        sb.AppendLine($"ProviderPreference: {_providerPreference}");
+        sb.AppendLine($"LocalEnabled: {_localEnabled}");
+        sb.AppendLine($"OpenAIEnabled: {_openAiEnabled}");
         sb.AppendLine($"Cause: {failureCategory}");
-        sb.AppendLine($"Runtime: {runtimePath}");
-        sb.AppendLine($"Arguments: {arguments}");
-        sb.AppendLine($"Base URL: {baseUrl}");
-        sb.AppendLine($"Ping /v1/models: HTTP {statusLabel}");
-        sb.AppendLine($"Réponse /v1/models: {modelsExcerpt}");
+        sb.AppendLine($"RuntimePath: {FormatPathStatus(runtimePath)}");
+        sb.AppendLine($"ModelPath: {FormatModelStatus(resolvedModelPath)}");
+        sb.AppendLine($"BaseUrl: {FormatBaseUrl(baseUrl)}");
+        sb.AppendLine($"ProcessStart: {FormatProcessStart(diagnostics)}");
+        sb.AppendLine($"Readiness /v1/models: {FormatReadinessStatus(statusLabel, lastModelsError)}");
+        sb.AppendLine($"ExitCode: {(diagnostics.ExitCode.HasValue ? diagnostics.ExitCode.Value.ToString() : "—")}");
+        sb.AppendLine($"Stdout tail ({DiagnosticTailLines} lignes): {GetLastLines(diagnostics.Stdout, DiagnosticTailLines)}");
+        sb.AppendLine($"Stderr tail ({DiagnosticTailLines} lignes): {GetLastLines(diagnostics.Stderr, DiagnosticTailLines)}");
         sb.AppendLine($"Dernière erreur: {diagnostics.LastErrorMessage ?? "—"}");
+        sb.AppendLine($"Arguments: {arguments}");
+        sb.AppendLine($"Réponse /v1/models: {modelsExcerpt}");
 
         if (!modelFound && modelTriedPaths.Count > 0)
         {
@@ -305,12 +329,74 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             sb.AppendLine($"Chemin runtime attendu: {runtimePathExpected}");
         }
 
-        var stdoutTail = GetLastLines(diagnostics.Stdout, 12);
-        var stderrTail = GetLastLines(diagnostics.Stderr, 12);
-        sb.AppendLine($"Logs stdout (12 dernières lignes): {stdoutTail}");
-        sb.AppendLine($"Logs stderr (12 dernières lignes): {stderrTail}");
+        return TrimDiagnostics(sb.ToString().TrimEnd());
+    }
 
-        return sb.ToString().TrimEnd();
+    private static string FormatReadinessStatus(string statusLabel, string errorMessage)
+    {
+        if (!string.IsNullOrWhiteSpace(statusLabel))
+        {
+            return statusLabel;
+        }
+
+        if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return $"Erreur: {errorMessage}";
+        }
+
+        return "aucun";
+    }
+
+    private static string FormatProcessStart(LlamaRuntimeDiagnostics diagnostics)
+    {
+        if (diagnostics.ProcessLaunched)
+        {
+            return "success";
+        }
+
+        var error = diagnostics.LastErrorMessage;
+        return string.IsNullOrWhiteSpace(error) ? "fail" : $"fail ({error})";
+    }
+
+    private static string FormatBaseUrl(string baseUrl)
+    {
+        if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            return $"{uri.Host}:{uri.Port}";
+        }
+
+        return baseUrl;
+    }
+
+    private static string FormatPathStatus(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "—";
+        }
+
+        var exists = File.Exists(path);
+        return $"{path} (exists: {exists})";
+    }
+
+    private static string FormatModelStatus(string? modelPath)
+    {
+        if (string.IsNullOrWhiteSpace(modelPath))
+        {
+            return "—";
+        }
+
+        try
+        {
+            var info = new FileInfo(modelPath);
+            var exists = info.Exists;
+            var sizeLabel = exists ? $"{info.Length} bytes" : "n/a";
+            return $"{modelPath} (exists: {exists}, size: {sizeLabel})";
+        }
+        catch (Exception)
+        {
+            return $"{modelPath} (exists: {File.Exists(modelPath)})";
+        }
     }
 
     private static string ResolveFailureCategory(bool modelFound, bool runtimeFound, LlamaRuntimeDiagnostics diagnostics)
@@ -332,7 +418,28 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             return diagnostics.FailureCategory;
         }
 
-        return "EndpointUnavailable";
+        if (!diagnostics.ProcessLaunched && !string.IsNullOrWhiteSpace(diagnostics.LastErrorMessage))
+        {
+            return "ProcessStartFailed";
+        }
+
+        if (!string.IsNullOrWhiteSpace(diagnostics.LastErrorMessage)
+            && diagnostics.LastErrorMessage.Contains("incompatible", StringComparison.OrdinalIgnoreCase))
+        {
+            return "RuntimeIncompatible";
+        }
+
+        if (diagnostics.LastModelsStatusCode.HasValue && diagnostics.LastModelsStatusCode.Value >= 400)
+        {
+            return "HttpError";
+        }
+
+        if (!string.IsNullOrWhiteSpace(diagnostics.LastModelsErrorMessage))
+        {
+            return "EndpointUnavailable";
+        }
+
+        return "Unknown";
     }
 
     private static string GetLastLines(string value, int maxLines)
@@ -350,6 +457,17 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
         var start = Math.Max(0, lines.Length - maxLines);
         return string.Join(Environment.NewLine, lines[start..]);
+    }
+
+    private static string TrimDiagnostics(string value)
+    {
+        if (value.Length <= MaxDiagnosticCharacters)
+        {
+            return value;
+        }
+
+        var truncatedLength = Math.Max(0, MaxDiagnosticCharacters - 15);
+        return $"{value.Substring(0, truncatedLength)}...(truncated)";
     }
 
     private sealed record EmbeddedLlamaRequest(
