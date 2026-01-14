@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -15,19 +16,21 @@ namespace Virgil.Services.Assistant;
 public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 {
     private static readonly TimeSpan DefaultHealthTimeout = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan DefaultReadinessTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DefaultReadinessTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan DefaultShutdownTimeout = TimeSpan.FromSeconds(5);
     private const string LocalHostAddress = "127.0.0.1";
     private const int DefaultPort = 8080;
     private const string RuntimeExecutableName = "llama-server.exe";
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
+    private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", "/v1/models" };
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string _baseArguments;
     private readonly string? _configuredApiKey;
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _healthTimeout;
+    private readonly TimeSpan _readinessTimeout;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly object _outputLock = new();
     private Process? _process;
@@ -47,6 +50,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         string? arguments = null,
         string? apiKey = null,
         TimeSpan? healthTimeout = null,
+        TimeSpan? readinessTimeout = null,
         HttpClient? httpClient = null)
     {
         _baseUrl = baseUrl;
@@ -56,6 +60,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         _baseArguments = SanitizeRuntimeArguments(arguments);
         _configuredApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         _healthTimeout = healthTimeout ?? DefaultHealthTimeout;
+        _readinessTimeout = readinessTimeout ?? DefaultReadinessTimeout;
 
         _httpClient = httpClient ?? new HttpClient
         {
@@ -243,7 +248,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private async Task<bool> ProbeHealthAsync(CancellationToken ct)
     {
-        foreach (var endpoint in new[] { "/health", "/v1/health", "/v1/models" })
+        foreach (var endpoint in ReadinessEndpoints)
         {
             try
             {
@@ -262,6 +267,44 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         return false;
+    }
+
+    private async Task<ReadinessProbeResult> ProbeReadinessAsync(CancellationToken ct)
+    {
+        HttpStatusCode? lastStatus = null;
+        string? lastEndpoint = null;
+
+        foreach (var endpoint in ReadinessEndpoints)
+        {
+            lastEndpoint = endpoint;
+            try
+            {
+                using var response = await _httpClient.GetAsync(endpoint, ct).ConfigureAwait(false);
+                lastStatus = response.StatusCode;
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    return new ReadinessProbeResult(true, endpoint, response.StatusCode);
+                }
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    continue;
+                }
+
+                if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+                {
+                    continue;
+                }
+            }
+            catch (HttpRequestException)
+            {
+            }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            {
+            }
+        }
+
+        return new ReadinessProbeResult(false, lastEndpoint, lastStatus);
     }
 
     private static string SanitizeRuntimeArguments(string? arguments)
@@ -561,7 +604,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 portOpen: false,
                 exitCode: null,
                 lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}");
-            return new RuntimeAttemptResult(false, null, string.Empty, $"Impossible de lancer le runtime: {ex.Message}");
+            return new RuntimeAttemptResult(false, null, string.Empty, $"Impossible de lancer le runtime: {ex.Message}", TimedOut: false);
         }
 
         if (_process is null)
@@ -571,7 +614,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 portOpen: false,
                 exitCode: null,
                 lastErrorMessage: "Impossible de lancer le runtime.");
-            return new RuntimeAttemptResult(false, null, string.Empty, "Impossible de lancer le runtime.");
+            return new RuntimeAttemptResult(false, null, string.Empty, "Impossible de lancer le runtime.", TimedOut: false);
         }
 
         _process.EnableRaisingEvents = true;
@@ -601,7 +644,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 : string.IsNullOrWhiteSpace(stderr)
                     ? $"Runtime terminé avec le code {exitCode}."
                     : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
-            return new RuntimeAttemptResult(false, exitCode, stderr, lastError);
+            return new RuntimeAttemptResult(false, exitCode, stderr, lastError, TimedOut: false);
         }
 
         var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
@@ -618,12 +661,15 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     portOpen: false,
                     exitCode: exitCode,
                     lastErrorMessage: readinessResult.LastErrorMessage);
-                await StopProcessAsync(ct).ConfigureAwait(false);
+                if (exitCode.HasValue || readinessResult.TimedOut)
+                {
+                    await StopProcessAsync(ct).ConfigureAwait(false);
+                }
                 return readinessResult;
             }
         }
 
-        return new RuntimeAttemptResult(true, null, string.Empty, null);
+        return new RuntimeAttemptResult(true, null, string.Empty, null, TimedOut: false);
     }
 
     private async Task StopProcessAsync(CancellationToken ct)
@@ -950,10 +996,13 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private async Task<RuntimeAttemptResult> WaitForReadinessAsync(CancellationToken ct)
     {
         var start = DateTimeOffset.UtcNow;
-        var delay = TimeSpan.FromMilliseconds(250);
-        var maxDelay = TimeSpan.FromMilliseconds(500);
+        var delay = TimeSpan.FromMilliseconds(200);
+        var maxDelay = TimeSpan.FromMilliseconds(1000);
+        var lastStatusCode = (HttpStatusCode?)null;
+        string? lastEndpoint = null;
+        var lastLog = DateTimeOffset.MinValue;
 
-        while (DateTimeOffset.UtcNow - start < DefaultReadinessTimeout)
+        while (DateTimeOffset.UtcNow - start < _readinessTimeout)
         {
             if (_process is not null && _process.HasExited)
             {
@@ -965,25 +1014,47 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     : string.IsNullOrWhiteSpace(stderr)
                         ? $"Runtime terminé avec le code {exitCode}."
                         : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
-                return new RuntimeAttemptResult(false, exitCode, stderr, lastError);
+                return new RuntimeAttemptResult(false, exitCode, stderr, lastError, TimedOut: false);
             }
 
-            var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
-            if (healthy)
+            var readinessProbe = await ProbeReadinessAsync(ct).ConfigureAwait(false);
+            lastStatusCode = readinessProbe.StatusCode;
+            lastEndpoint = readinessProbe.Endpoint;
+            if (readinessProbe.Ready)
             {
+                var warmupDuration = DateTimeOffset.UtcNow - start;
+                var readyStatus = readinessProbe.StatusCode.HasValue
+                    ? ((int)readinessProbe.StatusCode.Value).ToString()
+                    : "200";
+                Log.Info($"Llama runtime prêt après {warmupDuration.TotalSeconds:0.0}s via {readinessProbe.Endpoint} (HTTP {readyStatus}).");
                 UpdateDiagnostics(processLaunched: true, portOpen: true, exitCode: null, lastErrorMessage: string.Empty);
-                return new RuntimeAttemptResult(true, null, string.Empty, null);
+                return new RuntimeAttemptResult(true, null, string.Empty, null, TimedOut: false);
             }
 
-            UpdateDiagnostics(processLaunched: true, portOpen: false, exitCode: null, lastErrorMessage: "Runtime non prêt.");
+            var elapsed = DateTimeOffset.UtcNow - start;
+            var remaining = _readinessTimeout - elapsed;
+            var remainingSeconds = Math.Max(0, (int)Math.Ceiling(remaining.TotalSeconds));
+            var statusLabel = lastStatusCode.HasValue ? ((int)lastStatusCode.Value).ToString() : "aucun";
+            var readinessMessage = $"Démarrage IA: chargement du modèle... ~{remainingSeconds}s restantes (dernier HTTP {statusLabel}).";
+            UpdateDiagnostics(processLaunched: true, portOpen: false, exitCode: null, lastErrorMessage: readinessMessage);
+            if (DateTimeOffset.UtcNow - lastLog >= TimeSpan.FromSeconds(2))
+            {
+                Log.Info(readinessMessage);
+                lastLog = DateTimeOffset.UtcNow;
+            }
             await Task.Delay(delay, ct).ConfigureAwait(false);
-            var nextDelayMs = Math.Min(delay.TotalMilliseconds + 50, maxDelay.TotalMilliseconds);
-            delay = TimeSpan.FromMilliseconds(nextDelayMs);
+            delay = delay < TimeSpan.FromMilliseconds(500)
+                ? TimeSpan.FromMilliseconds(500)
+                : maxDelay;
         }
 
         var finalStderr = GetCapturedStderr();
         var finalMissingModelError = GetMissingModelErrorMessage(finalStderr);
-        return new RuntimeAttemptResult(false, null, finalStderr, finalMissingModelError ?? "Readiness check échoué.");
+        var finalWarmup = DateTimeOffset.UtcNow - start;
+        var finalStatus = lastStatusCode.HasValue ? ((int)lastStatusCode.Value).ToString() : "aucun";
+        var finalEndpoint = string.IsNullOrWhiteSpace(lastEndpoint) ? "aucun" : lastEndpoint;
+        Log.Info($"Readiness runtime expiré après {finalWarmup.TotalSeconds:0.0}s (dernier HTTP {finalStatus} sur {finalEndpoint}).");
+        return new RuntimeAttemptResult(false, null, finalStderr, finalMissingModelError ?? "Readiness check échoué.", TimedOut: true);
     }
 
     private sealed record RuntimeSecurityConfiguration(
@@ -996,5 +1067,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private sealed record HelpOutputResult(string Stdout, string Stderr, int ExitCode, string HelpText = "");
 
-    private sealed record RuntimeAttemptResult(bool Success, int? ExitCode, string Stderr, string? LastErrorMessage);
+    private sealed record RuntimeAttemptResult(bool Success, int? ExitCode, string Stderr, string? LastErrorMessage, bool TimedOut);
+
+    private sealed record ReadinessProbeResult(bool Ready, string? Endpoint, HttpStatusCode? StatusCode);
 }
