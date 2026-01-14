@@ -26,6 +26,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
     private const string ModelsEndpoint = "/v1/models";
+    private const string FailureCategoryNone = "None";
     private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", ModelsEndpoint };
     private readonly string _baseUrl;
     private readonly string _executablePath;
@@ -295,6 +296,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
+        if (!healthy && _readyConfirmed && IsProcessRunning())
+        {
+            Log.Warn("Runtime IA local: échec de health check après readiness (connection potentiellement refusée).");
+            return true;
+        }
+
         UpdateDiagnostics(
             processLaunched: null,
             portOpen: healthy,
@@ -305,12 +312,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         {
             if (IsProcessRunning())
             {
-                if (_readyConfirmed)
-                {
-                    Log.Warn("Runtime IA local: échec de health check après readiness (connection potentiellement refusée).");
-                    return true;
-                }
-
                 return false;
             }
 
@@ -757,7 +758,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var currentDiagnostics = LlamaRuntimeDiagnosticsStore.Latest;
         var resolvedLocalStatus = localStatus ?? currentDiagnostics.LocalStatus;
         var processRunning = IsProcessRunning();
-        if (_readyConfirmed && processRunning && resolvedLocalStatus != LocalStatus.Ready)
+        if (processRunning
+            && (currentDiagnostics.LocalStatus == LocalStatus.Ready || _readyConfirmed)
+            && resolvedLocalStatus != LocalStatus.Ready)
         {
             resolvedLocalStatus = LocalStatus.Ready;
         }
@@ -775,6 +778,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         if (string.IsNullOrWhiteSpace(resolvedFailureCategory) && !string.IsNullOrWhiteSpace(resolvedLastError))
         {
             resolvedFailureCategory = ClassifyFailureCategory(resolvedLastError, currentDiagnostics.Stderr);
+        }
+        if (resolvedLocalStatus == LocalStatus.Ready && string.IsNullOrWhiteSpace(resolvedFailureCategory))
+        {
+            resolvedFailureCategory = FailureCategoryNone;
         }
 
         LlamaRuntimeDiagnosticsStore.Update(existing => existing with
@@ -1382,10 +1389,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     lastErrorMessage: string.Empty,
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
-                    lastModelsErrorMessage: readinessProbe.ErrorMessage,
+                    lastModelsErrorMessage: null,
                     localStatus: LocalStatus.Ready,
                     localModelId: readinessProbe.ModelId,
-                    failureCategory: string.Empty);
+                    failureCategory: FailureCategoryNone);
                 return new RuntimeAttemptResult(true, null, string.Empty, null, TimedOut: false);
             }
 

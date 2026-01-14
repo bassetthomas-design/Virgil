@@ -25,7 +25,7 @@ using Virgil.Services.ModelPacks;
 
 namespace Virgil.App.ViewModels
 {
-    public class SettingsViewModel : INotifyPropertyChanged
+    public class SettingsViewModel : INotifyPropertyChanged, IDisposable
     {
         private const string FullPackDownloadUrl =
             "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf";
@@ -56,6 +56,7 @@ namespace Virgil.App.ViewModels
         private string _runtimeStderrText = string.Empty;
         private string _runtimeSecurityFlagsText = string.Empty;
         private string _runtimeSecurityStrategyText = string.Empty;
+        private string _localAiStatusText = string.Empty;
         private string _runtimeHelpText = "Cliquez sur \"Aide runtime\" pour afficher l'aide.";
         private string _openAiStatusText = string.Empty;
         private string _openAiKeyStatusText = string.Empty;
@@ -66,6 +67,7 @@ namespace Virgil.App.ViewModels
         private bool _isRuntimeHelpLoading;
         private ProviderPreference _selectedProviderPreference;
         private readonly IReadOnlyList<ProviderPreferenceOption> _providerPreferenceOptions;
+        private readonly SynchronizationContext? _uiContext;
 
         public SettingsViewModel(
             SettingsService svc,
@@ -103,6 +105,9 @@ namespace Virgil.App.ViewModels
             _packDownloader = new ModelPackDownloader(_modelLocator);
             _runtimeInstaller = new LlamaRuntimeInstaller();
             _packManifest = _svc.Settings.GetActiveFullManifest();
+
+            _uiContext = SynchronizationContext.Current;
+            LlamaRuntimeDiagnosticsStore.DiagnosticsUpdated += OnDiagnosticsUpdated;
 
             _isPackInstalled = _modelLocator.IsInstalled;
             _downloadStatusText = _isPackInstalled ? "Pack Full installé." : "Pack Full non installé.";
@@ -272,6 +277,12 @@ namespace Virgil.App.ViewModels
         {
             get => _runtimePortStatusText;
             private set { _runtimePortStatusText = value; OnPropertyChanged(); }
+        }
+
+        public string LocalAiStatusText
+        {
+            get => _localAiStatusText;
+            private set { _localAiStatusText = value; OnPropertyChanged(); }
         }
 
         public string RuntimeWarningText
@@ -899,6 +910,10 @@ namespace Virgil.App.ViewModels
                 ? "Port ouvert: OK"
                 : "Port ouvert: KO";
 
+            LocalAiStatusText = diagnostics.LocalStatus == LocalStatus.Ready
+                ? "IA locale prête"
+                : "IA locale non prête";
+
             RuntimeWarningText = string.IsNullOrWhiteSpace(diagnostics.WarningMessage)
                 ? "Warning runtime: —"
                 : $"Warning runtime: {diagnostics.WarningMessage}";
@@ -933,6 +948,22 @@ namespace Virgil.App.ViewModels
                 ? "Statut OpenAI: activé"
                 : "Statut OpenAI: désactivé";
             OpenAiKeyStatusText = _svc.Settings.HasOpenAiKey ? "Clé enregistrée ✅" : "Aucune clé ❌";
+        }
+
+        public void Dispose()
+        {
+            LlamaRuntimeDiagnosticsStore.DiagnosticsUpdated -= OnDiagnosticsUpdated;
+        }
+
+        private void OnDiagnosticsUpdated(object? sender, LlamaRuntimeDiagnostics diagnostics)
+        {
+            if (_uiContext is null)
+            {
+                RefreshAiStatuses();
+                return;
+            }
+
+            _uiContext.Post(_ => RefreshAiStatuses(), null);
         }
 
         private static string Truncate(string value, int maxLength)

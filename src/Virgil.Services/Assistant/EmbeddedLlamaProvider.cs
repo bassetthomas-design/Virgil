@@ -410,6 +410,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     private static string ResolveFailureCategory(bool modelFound, bool runtimeFound, LlamaRuntimeDiagnostics diagnostics)
     {
+        if (diagnostics.LocalStatus == LocalStatus.Ready)
+        {
+            return "None";
+        }
+
         if (!runtimeFound)
         {
             LlamaRuntimeDiagnosticsStore.Update(existing => existing with { FailureCategory = "RuntimeMissing" });
