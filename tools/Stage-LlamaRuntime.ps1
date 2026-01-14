@@ -55,7 +55,7 @@ elseif ([string]::IsNullOrWhiteSpace($ZipUrl)) {
         $zipSource = $defaultZipUrl
     }
     else {
-        $zipSource = "https://github.com/ggerganov/llama.cpp/releases/download/$Version/llama-$Version-bin-win-x64.zip"
+        $zipSource = "https://github.com/ggml-org/llama.cpp/releases/download/$Version/llama-$Version-bin-win-cpu-x64.zip"
     }
 }
 else {
@@ -74,12 +74,23 @@ try {
 
     Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
 
-    $runtimeExe = Get-ChildItem -Path $extractPath -Recurse -Filter "llama-server.exe" -File | Select-Object -First 1
+    $runtimeExe = Get-ChildItem -Path $extractPath -Recurse -Filter "llama-server.exe" -File |
+        Sort-Object Length -Descending |
+        Select-Object -First 1
     if (-not $runtimeExe) {
         throw "llama-server.exe not found in extracted archive."
     }
 
     $destinationExe = Join-Path $resolvedOutDir "llama-server.exe"
+    if (Test-Path -Path $destinationExe) {
+        Remove-Item -Path $destinationExe -Force -ErrorAction SilentlyContinue
+    }
+
+    $existingDlls = Get-ChildItem -Path $resolvedOutDir -Filter "*.dll" -File -ErrorAction SilentlyContinue
+    foreach ($dll in $existingDlls) {
+        Remove-Item -Path $dll.FullName -Force -ErrorAction SilentlyContinue
+    }
+
     Copy-Item -Path $runtimeExe.FullName -Destination $destinationExe -Force
 
     $runtimeDir = Split-Path -Path $runtimeExe.FullName -Parent
