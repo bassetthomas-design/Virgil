@@ -34,6 +34,7 @@ namespace Virgil.App.ViewModels
         private CancellationTokenSource? _downloadCts;
         private bool _isDownloadIndeterminate;
         private readonly ModelPackDownloader _packDownloader;
+        private readonly LlamaRuntimeInstaller _runtimeInstaller;
         private readonly ModelPackManifest _packManifest;
         private string _modelStatusText = string.Empty;
         private string _modelPathText = string.Empty;
@@ -95,6 +96,7 @@ namespace Virgil.App.ViewModels
             _openAiEnabled = s.OpenAiEnabled;
 
             _packDownloader = new ModelPackDownloader(_modelLocator);
+            _runtimeInstaller = new LlamaRuntimeInstaller();
             _packManifest = _svc.Settings.GetActiveFullManifest();
 
             _isPackInstalled = _modelLocator.IsInstalled;
@@ -538,6 +540,28 @@ namespace Virgil.App.ViewModels
                 if (!result.Success && !string.Equals(result.StatusText, "Téléchargement annulé.", StringComparison.OrdinalIgnoreCase))
                 {
                     NotifyChat(result.ErrorMessage ?? "Téléchargement Pack Full échoué.");
+                    return;
+                }
+
+                if (result.Success)
+                {
+                    IsDownloadIndeterminate = true;
+                    var runtimeProgress = new Progress<string>(status =>
+                    {
+                        DownloadStatusText = status;
+                    });
+
+                    var runtimeResult = await _runtimeInstaller.InstallAndVerifyAsync(runtimeProgress, ct).ConfigureAwait(false);
+                    DownloadStatusText = runtimeResult.StatusText;
+                    if (!runtimeResult.Success)
+                    {
+                        var errorMessage = runtimeResult.ErrorMessage ?? "Installation runtime échouée.";
+                        NotifyChat(errorMessage);
+                        if (!string.IsNullOrWhiteSpace(runtimeResult.Diagnostics))
+                        {
+                            NotifyChat(runtimeResult.Diagnostics);
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)
