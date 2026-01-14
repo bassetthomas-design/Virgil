@@ -25,13 +25,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
     private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", "/v1/models" };
-    private static readonly string[] CompatibilityMarkers =
-    {
-        "/v1/chat/completions",
-        "OpenAI",
-        "chat/completions",
-        "v1/models"
-    };
+    private const string OpenAiModelsMarker = "/v1/models";
+    private const string OpenAiChatCompletionsMarker = "/v1/chat/completions";
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string _baseArguments;
@@ -68,9 +63,17 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         TimeSpan? startupDelay = null)
     {
         _baseUrl = baseUrl;
-        _executablePath = string.IsNullOrWhiteSpace(executablePath)
-            ? DefaultRuntimePath
-            : executablePath;
+        var defaultRuntimePath = Path.GetFullPath(DefaultRuntimePath);
+        if (!string.IsNullOrWhiteSpace(executablePath))
+        {
+            var requestedPath = Path.GetFullPath(executablePath);
+            if (!string.Equals(requestedPath, defaultRuntimePath, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning($"Llama runtime path override ignored. Using packaged runtime at '{defaultRuntimePath}'. Requested: '{requestedPath}'.");
+            }
+        }
+
+        _executablePath = defaultRuntimePath;
         _baseArguments = SanitizeRuntimeArguments(arguments);
         _configuredApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         _healthTimeout = healthTimeout ?? DefaultHealthTimeout;
@@ -866,9 +869,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             throw new AssistantProviderUnavailableException(message);
         }
 
-        if (!ContainsCompatibilityMarker(helpResult.HelpText))
+        if (!ContainsOpenAiCompatibilityMarkers(helpResult.HelpText))
         {
-            var message = "Runtime IA incompatible: l’aide ne mentionne pas l’API OpenAI (/v1/chat/completions, v1/models, etc.).";
+            var message = "Runtime IA incompatible: pas d’API OpenAI (/v1/models, /v1/chat/completions).";
+            Log.Info($"Llama runtime incompatible. Path: {_executablePath}");
+            Log.Info($"Llama runtime help excerpt: {ExtractHelpExcerpt(helpResult.HelpText)}");
             UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: helpResult.ExitCode, lastErrorMessage: message);
             throw new AssistantProviderUnavailableException(message);
         }
@@ -1000,17 +1005,23 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         return $"{stdout}{Environment.NewLine}{stderr}";
     }
 
-    private static bool ContainsCompatibilityMarker(string helpText)
+    private static bool ContainsOpenAiCompatibilityMarkers(string helpText)
     {
-        foreach (var marker in CompatibilityMarkers)
+        return helpText.IndexOf(OpenAiModelsMarker, StringComparison.OrdinalIgnoreCase) >= 0
+            && helpText.IndexOf(OpenAiChatCompletionsMarker, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static string ExtractHelpExcerpt(string helpText, int maxLength = 800)
+    {
+        if (string.IsNullOrWhiteSpace(helpText))
         {
-            if (helpText.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return true;
-            }
+            return string.Empty;
         }
 
-        return false;
+        var trimmed = helpText.Trim();
+        return trimmed.Length <= maxLength
+            ? trimmed
+            : $"{trimmed.Substring(0, maxLength)}…";
     }
 
     private string? CreateTempApiKeyFile(string apiKey)
