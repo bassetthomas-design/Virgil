@@ -982,8 +982,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         var finalStderr = GetCapturedStderr();
-        var missingModelError = GetMissingModelErrorMessage(finalStderr);
-        return new RuntimeAttemptResult(false, null, finalStderr, missingModelError ?? "Readiness check échoué.");
+        var finalMissingModelError = GetMissingModelErrorMessage(finalStderr);
+        return new RuntimeAttemptResult(false, null, finalStderr, finalMissingModelError ?? "Readiness check échoué.");
     }
 
     private sealed record RuntimeSecurityConfiguration(
