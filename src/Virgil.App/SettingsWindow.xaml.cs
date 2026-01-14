@@ -24,6 +24,7 @@ namespace Virgil.App
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             _viewModel = new SettingsViewModel(_settingsService);
             DataContext = _viewModel;
+            Closed += OnClosed;
         }
 
         private void OpenConfigBtn_Click(object sender, RoutedEventArgs e)
@@ -90,6 +91,12 @@ namespace Virgil.App
         {
             DialogResult = false;
             Close();
+        }
+
+        private void OnClosed(object? sender, EventArgs e)
+        {
+            Closed -= OnClosed;
+            _viewModel.Dispose();
         }
     }
 }

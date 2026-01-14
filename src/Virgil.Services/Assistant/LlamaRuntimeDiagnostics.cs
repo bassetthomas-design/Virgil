@@ -50,6 +50,8 @@ public static class LlamaRuntimeDiagnosticsStore
     private static readonly object SyncRoot = new();
     private static LlamaRuntimeDiagnostics _latest = LlamaRuntimeDiagnostics.Empty;
 
+    public static event EventHandler<LlamaRuntimeDiagnostics>? DiagnosticsUpdated;
+
     public static LlamaRuntimeDiagnostics Latest
     {
         get
@@ -63,10 +65,19 @@ public static class LlamaRuntimeDiagnosticsStore
 
     public static void Set(LlamaRuntimeDiagnostics diagnostics)
     {
+        if (diagnostics is null)
+        {
+            return;
+        }
+
+        LlamaRuntimeDiagnostics latest;
         lock (SyncRoot)
         {
             _latest = diagnostics;
+            latest = _latest;
         }
+
+        DiagnosticsUpdated?.Invoke(null, latest);
     }
 
     public static void Update(Func<LlamaRuntimeDiagnostics, LlamaRuntimeDiagnostics> update)
@@ -76,9 +87,13 @@ public static class LlamaRuntimeDiagnosticsStore
             return;
         }
 
+        LlamaRuntimeDiagnostics latest;
         lock (SyncRoot)
         {
             _latest = update(_latest);
+            latest = _latest;
         }
+
+        DiagnosticsUpdated?.Invoke(null, latest);
     }
 }
