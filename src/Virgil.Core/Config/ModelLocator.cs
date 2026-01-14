@@ -33,6 +33,14 @@ public sealed class ModelLocator
 
     public string ModelHashPath => Path.Combine(ModelDirectory, $"{ExpectedFileName}.sha256");
 
+    public string PackManifestPath => Path.Combine(AppContext.BaseDirectory, "AI", "pack.manifest.json");
+
+    public string FallbackPackManifestPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "Virgil",
+        "AI",
+        "pack.manifest.json");
+
     public string GetHashPathForModel(string modelPath)
     {
         var directory = Path.GetDirectoryName(modelPath);
@@ -45,6 +53,12 @@ public sealed class ModelLocator
     {
         yield return Path.Combine(PreferredModelDirectory, ExpectedFileName);
         yield return Path.Combine(FallbackModelDirectory, ExpectedFileName);
+    }
+
+    public IEnumerable<string> GetPackManifestCandidatePaths()
+    {
+        yield return PackManifestPath;
+        yield return FallbackPackManifestPath;
     }
 
     public bool TryResolve(out string path, out string reason)
