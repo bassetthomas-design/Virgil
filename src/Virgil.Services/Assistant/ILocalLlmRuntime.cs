@@ -9,6 +9,7 @@ public interface ILocalLlmRuntime
     string RuntimePathUsed { get; }
     LlamaRuntimeDiagnostics Diagnostics { get; }
     string? ApiKey { get; }
+    void SetModelPath(string modelPath);
     Task StartAsync(CancellationToken ct = default);
     Task<bool> HealthCheckAsync(CancellationToken ct = default);
 }

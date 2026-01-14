@@ -20,6 +20,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string LocalHostAddress = "127.0.0.1";
     private const int DefaultPort = 8080;
     private const string RuntimeExecutableName = "llama-server.exe";
+    private const string MissingModelStderrMessage = "no model will be loaded in this process";
+    private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string _baseArguments;
@@ -33,6 +35,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private StringBuilder _stderrBuffer = new();
     private string? _tempApiKeyFilePath;
     private string? _apiKey;
+    private string? _modelPath;
     private string _securityFlagsDetected = string.Empty;
     private string _securityStrategy = string.Empty;
     private string _warningMessage = string.Empty;
@@ -78,6 +81,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     public string? ApiKey => _apiKey;
 
+    public void SetModelPath(string modelPath)
+    {
+        _modelPath = string.IsNullOrWhiteSpace(modelPath) ? null : modelPath.Trim();
+    }
+
     public async Task StartAsync(CancellationToken ct = default)
     {
         ThrowIfDisposed();
@@ -114,7 +122,14 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 throw new AssistantProviderUnavailableException(securityConfig.ErrorMessage ?? "Aucune configuration de sécurité valide trouvée.");
             }
 
-            var arguments = BuildArguments(_baseArguments, port, securityConfig.Arguments);
+            var modelPath = _modelPath;
+            if (string.IsNullOrWhiteSpace(modelPath))
+            {
+                UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: null, lastErrorMessage: MissingModelErrorMessage);
+                throw new AssistantProviderUnavailableException(MissingModelErrorMessage);
+            }
+
+            var arguments = BuildArguments(_baseArguments, port, securityConfig.Arguments, modelPath);
             var commandLine = BuildCommandLine(_executablePath, arguments);
 
             Log.Info($"Llama runtime security config selected: {securityConfig.StrategyLabel}");
@@ -260,6 +275,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--auth-token");
         sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--token");
         sanitizedArguments = RemoveFlag(sanitizedArguments, "--require-api-key");
+        sanitizedArguments = RemoveArgumentWithValue(sanitizedArguments, "--model");
+        sanitizedArguments = RemoveRouterArguments(sanitizedArguments);
         return sanitizedArguments.Trim();
     }
 
@@ -299,6 +316,18 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private static string NormalizeWhitespace(string value)
         => string.Join(' ', value.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+
+    private static string RemoveRouterArguments(string arguments)
+    {
+        var updated = arguments;
+        foreach (var flag in new[] { "--router", "--rpc", "--proxy", "--multi", "--routes", "--route" })
+        {
+            updated = RemoveArgumentWithValue(updated, flag);
+            updated = RemoveFlag(updated, flag);
+        }
+
+        return updated;
+    }
 
     private static string BuildCommandLine(string executablePath, string arguments)
     {
@@ -357,6 +386,15 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             return;
         }
 
+        if (isError && IsMissingModelLine(data))
+        {
+            UpdateDiagnostics(
+                processLaunched: null,
+                portOpen: null,
+                exitCode: null,
+                lastErrorMessage: MissingModelErrorMessage);
+        }
+
         string stdout;
         string stderr;
         lock (_outputLock)
@@ -403,7 +441,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         string? errorMessage = null;
-        if (exitCode != 0)
+        var missingModelError = GetMissingModelErrorMessage(stderr);
+        if (!string.IsNullOrWhiteSpace(missingModelError))
+        {
+            errorMessage = missingModelError;
+        }
+        else if (exitCode != 0)
         {
             errorMessage = string.IsNullOrWhiteSpace(stderr)
                 ? $"Runtime terminé avec le code {exitCode}."
@@ -440,6 +483,19 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private void UpdateDiagnostics(bool? processLaunched, bool? portOpen, int? exitCode, string? lastErrorMessage)
     {
+        var resolvedLastError = lastErrorMessage is null
+            ? LlamaRuntimeDiagnosticsStore.Latest.LastErrorMessage
+            : string.IsNullOrWhiteSpace(lastErrorMessage)
+                ? null
+                : lastErrorMessage;
+
+        if (LlamaRuntimeDiagnosticsStore.Latest.LastErrorMessage == MissingModelErrorMessage
+            && !string.IsNullOrWhiteSpace(resolvedLastError)
+            && resolvedLastError != MissingModelErrorMessage)
+        {
+            resolvedLastError = MissingModelErrorMessage;
+        }
+
         LlamaRuntimeDiagnosticsStore.Update(existing => existing with
         {
             ProcessLaunched = processLaunched ?? existing.ProcessLaunched,
@@ -451,11 +507,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             SecurityStrategy = string.IsNullOrWhiteSpace(_securityStrategy)
                 ? existing.SecurityStrategy
                 : _securityStrategy,
-            LastErrorMessage = lastErrorMessage is null
-                ? existing.LastErrorMessage
-                : string.IsNullOrWhiteSpace(lastErrorMessage)
-                    ? null
-                    : lastErrorMessage
+            LastErrorMessage = resolvedLastError
         });
     }
 
@@ -537,11 +589,18 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         {
             var exitCode = _process.ExitCode;
             var stderr = GetCapturedStderr();
-            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: exitCode, lastErrorMessage: null);
+            var missingModelError = GetMissingModelErrorMessage(stderr);
+            UpdateDiagnostics(
+                processLaunched: false,
+                portOpen: false,
+                exitCode: exitCode,
+                lastErrorMessage: missingModelError);
             await StopProcessAsync(ct).ConfigureAwait(false);
-            var lastError = string.IsNullOrWhiteSpace(stderr)
-                ? $"Runtime terminé avec le code {exitCode}."
-                : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
+            var lastError = !string.IsNullOrWhiteSpace(missingModelError)
+                ? missingModelError
+                : string.IsNullOrWhiteSpace(stderr)
+                    ? $"Runtime terminé avec le code {exitCode}."
+                    : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
             return new RuntimeAttemptResult(false, exitCode, stderr, lastError);
         }
 
@@ -600,9 +659,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
     }
 
-    private static string BuildArguments(string baseArguments, int port, string securityArguments)
+    private static string BuildArguments(string baseArguments, int port, string securityArguments, string modelPath)
     {
         var builder = new StringBuilder(baseArguments);
+        AppendArgument(builder, $"--model {QuoteIfNeeded(modelPath)}");
         AppendArgument(builder, $"--host {LocalHostAddress}");
         AppendArgument(builder, $"--port {port}");
         AppendArgument(builder, securityArguments);
@@ -876,7 +936,16 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private static bool IsRuntimeWarningLine(string line)
         => line.Contains("untrusted environments", StringComparison.OrdinalIgnoreCase)
-            || line.Contains("not recommended", StringComparison.OrdinalIgnoreCase);
+            || line.Contains("not recommended", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("note:", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsMissingModelLine(string line)
+        => line.Contains(MissingModelStderrMessage, StringComparison.OrdinalIgnoreCase);
+
+    private static string? GetMissingModelErrorMessage(string stderr)
+        => string.IsNullOrWhiteSpace(stderr) || !IsMissingModelLine(stderr)
+            ? null
+            : MissingModelErrorMessage;
 
     private async Task<RuntimeAttemptResult> WaitForReadinessAsync(CancellationToken ct)
     {
@@ -890,9 +959,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             {
                 var exitCode = _process.ExitCode;
                 var stderr = GetCapturedStderr();
-                var lastError = string.IsNullOrWhiteSpace(stderr)
-                    ? $"Runtime terminé avec le code {exitCode}."
-                    : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
+                var missingModelError = GetMissingModelErrorMessage(stderr);
+                var lastError = !string.IsNullOrWhiteSpace(missingModelError)
+                    ? missingModelError
+                    : string.IsNullOrWhiteSpace(stderr)
+                        ? $"Runtime terminé avec le code {exitCode}."
+                        : $"Runtime terminé avec le code {exitCode}: {GetLastLine(stderr)}";
                 return new RuntimeAttemptResult(false, exitCode, stderr, lastError);
             }
 
@@ -910,7 +982,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         var finalStderr = GetCapturedStderr();
-        return new RuntimeAttemptResult(false, null, finalStderr, "Readiness check échoué.");
+        var finalMissingModelError = GetMissingModelErrorMessage(finalStderr);
+        return new RuntimeAttemptResult(false, null, finalStderr, finalMissingModelError ?? "Readiness check échoué.");
     }
 
     private sealed record RuntimeSecurityConfiguration(
