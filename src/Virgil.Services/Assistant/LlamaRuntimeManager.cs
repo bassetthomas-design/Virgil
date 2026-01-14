@@ -536,6 +536,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             null,
             null,
             null,
+            null,
             null);
         LlamaRuntimeDiagnosticsStore.Set(diagnostics);
     }
@@ -709,6 +710,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         string? lastErrorMessage,
         int? lastModelsStatusCode = null,
         string? lastModelsResponseExcerpt = null,
+        string? lastModelsErrorMessage = null,
         string? failureCategory = null)
     {
         var resolvedLastError = lastErrorMessage is null
@@ -748,6 +750,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             LastErrorMessage = resolvedLastError,
             LastModelsStatusCode = lastModelsStatusCode ?? existing.LastModelsStatusCode,
             LastModelsResponseExcerpt = lastModelsResponseExcerpt ?? existing.LastModelsResponseExcerpt,
+            LastModelsErrorMessage = lastModelsErrorMessage ?? existing.LastModelsErrorMessage,
             FailureCategory = resolvedFailureCategory
         });
     }
@@ -1042,7 +1045,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         if (string.IsNullOrWhiteSpace(helpResult.HelpText))
         {
             var message = "Runtime IA incompatible: impossible de lire l’aide du binaire (llama-server.exe).";
-            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: helpResult.ExitCode, lastErrorMessage: message);
+            UpdateDiagnostics(
+                processLaunched: false,
+                portOpen: false,
+                exitCode: helpResult.ExitCode,
+                lastErrorMessage: message,
+                failureCategory: "RuntimeIncompatible");
             throw new AssistantProviderUnavailableException(message);
         }
 
@@ -1051,7 +1059,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             var message = "Runtime IA incompatible: pas d’API OpenAI (/v1/chat/completions).";
             Log.Info($"Llama runtime incompatible. Path: {_executablePath}");
             Log.Info($"Llama runtime help excerpt: {ExtractHelpExcerpt(helpResult.HelpText)}");
-            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: helpResult.ExitCode, lastErrorMessage: message);
+            UpdateDiagnostics(
+                processLaunched: false,
+                portOpen: false,
+                exitCode: helpResult.ExitCode,
+                lastErrorMessage: message,
+                failureCategory: "RuntimeIncompatible");
             throw new AssistantProviderUnavailableException(message);
         }
     }
@@ -1270,6 +1283,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var lastStatusCode = (HttpStatusCode?)null;
         string? lastResponseExcerpt = null;
         string? lastEndpoint = null;
+        string? lastModelsErrorMessage = null;
         var lastLog = DateTimeOffset.MinValue;
         var attempt = 0;
         var lastProbeException = string.Empty;
@@ -1310,6 +1324,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     lastErrorMessage: incompatibleMessage,
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
+                    lastModelsErrorMessage: readinessProbe.ErrorMessage,
                     failureCategory: "EndpointUnavailable");
                 LocalAiFileLog.Write("FAILED Cause=EndpointUnavailable");
                 return new RuntimeAttemptResult(false, null, GetCapturedStderr(), incompatibleMessage, TimedOut: false, ShouldStopProcess: true);
@@ -1328,7 +1343,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     exitCode: null,
                     lastErrorMessage: string.Empty,
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
-                    lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt);
+                    lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
+                    lastModelsErrorMessage: readinessProbe.ErrorMessage);
                 return new RuntimeAttemptResult(true, null, string.Empty, null, TimedOut: false);
             }
 
@@ -1343,7 +1359,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 exitCode: null,
                 lastErrorMessage: readinessMessage,
                 lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
-                lastModelsResponseExcerpt: lastResponseExcerpt);
+                lastModelsResponseExcerpt: lastResponseExcerpt,
+                lastModelsErrorMessage: readinessProbe.ErrorMessage);
             if (DateTimeOffset.UtcNow - lastLog >= TimeSpan.FromSeconds(2))
             {
                 Log.Info(readinessMessage);
