@@ -19,6 +19,7 @@ public sealed record LlamaRuntimeDiagnostics(
     int? LastModelsStatusCode,
     string? LastModelsResponseExcerpt,
     string? LastModelsErrorMessage,
+    string? LocalStatus,
     string? FailureCategory)
 {
     public static LlamaRuntimeDiagnostics Empty { get; } = new(
@@ -34,6 +35,7 @@ public sealed record LlamaRuntimeDiagnostics(
         null,
         false,
         false,
+        null,
         null,
         null,
         null,

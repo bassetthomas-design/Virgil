@@ -4,8 +4,12 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -14,6 +18,7 @@ using Virgil.App.Commands;
 using Virgil.App.Models;
 using Virgil.App.Services;
 using Virgil.Core.Config;
+using Virgil.Core.Logging;
 using Virgil.Services;
 using Virgil.Services.Assistant;
 using Virgil.Services.ModelPacks;
@@ -630,31 +635,284 @@ namespace Virgil.App.ViewModels
 
         private async Task TestAiAsync()
         {
-            var assistantService = _assistantService;
-            if (assistantService is null)
-            {
-                var factory = new AssistantProviderFactory(_svc, _secretStore);
-                var provider = factory.CreateProvider();
-                assistantService = provider is null ? null : new AssistantService(provider);
-            }
-
-            if (assistantService is null)
-            {
-                AiTestResponseText = "IA indisponible.";
-                return;
-            }
-
             try
             {
                 AiTestResponseText = "Test en cours…";
-                var reply = await assistantService.AskAsync("Dis juste: OK", AssistantContext.Empty).ConfigureAwait(false);
-                AiTestResponseText = string.IsNullOrWhiteSpace(reply.Text) ? "Réponse vide." : reply.Text;
+
+                var baseUrl = _svc.Settings.EmbeddedLlamaBaseUrl;
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    AiTestResponseText = "URL IA locale manquante.";
+                    return;
+                }
+
+                using var client = new HttpClient
+                {
+                    BaseAddress = new Uri(baseUrl, UriKind.Absolute),
+                    Timeout = TimeSpan.FromSeconds(_svc.Settings.EmbeddedLlamaTimeoutSeconds)
+                };
+                ConfigureLocalAuthHeaders(client, _svc.Settings.EmbeddedLlamaApiKey);
+
+                var modelsProbe = await ProbeLocalModelsAsync(client).ConfigureAwait(false);
+                if (!modelsProbe.Success)
+                {
+                    AiTestResponseText = modelsProbe.Message;
+                    return;
+                }
+
+                AiTestResponseText = "IA locale prête. Test chat en cours…";
+                var chatProbe = await ProbeLocalChatAsync(client, modelsProbe.ModelId).ConfigureAwait(false);
+                if (!chatProbe.Success)
+                {
+                    AiTestResponseText = chatProbe.Message;
+                    return;
+                }
+
+                var reply = string.IsNullOrWhiteSpace(chatProbe.Message) ? "Réponse vide." : chatProbe.Message;
+                AiTestResponseText = reply;
+                _chatService?.PostSystemMessage(reply, Virgil.App.Chat.MessageType.Info, Virgil.App.Chat.ChatKind.Info);
             }
             catch (Exception ex)
             {
                 AiTestResponseText = $"Erreur IA: {ex.Message}";
             }
         }
+
+        private static void ConfigureLocalAuthHeaders(HttpClient client, string? apiKey)
+        {
+            client.DefaultRequestHeaders.Authorization = null;
+            client.DefaultRequestHeaders.Remove("X-API-Key");
+
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return;
+            }
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        }
+
+        private static async Task<LocalModelsProbeResult> ProbeLocalModelsAsync(HttpClient client)
+        {
+            const string endpoint = "/v1/models";
+            Log.Info($"Test IA local: GET {endpoint}");
+
+            try
+            {
+                using var response = await client.GetAsync(endpoint).ConfigureAwait(false);
+                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var excerpt = Truncate(body, 400);
+                Log.Info($"Test IA local: GET {endpoint} -> HTTP {(int)response.StatusCode} {response.StatusCode} | {excerpt}");
+
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    var message = $"Readiness IA locale échoué (HTTP {(int)response.StatusCode}).";
+                    LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                    {
+                        LocalStatus = "NotReady",
+                        LastModelsStatusCode = (int)response.StatusCode,
+                        LastModelsResponseExcerpt = excerpt,
+                        LastModelsErrorMessage = message
+                    });
+                    return new LocalModelsProbeResult(false, string.Empty, message);
+                }
+
+                var modelId = TryExtractModelId(body);
+                if (string.IsNullOrWhiteSpace(modelId))
+                {
+                    var message = "Readiness IA locale OK mais aucun modèle détecté.";
+                    LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                    {
+                        LocalStatus = "NotReady",
+                        LastModelsStatusCode = (int)response.StatusCode,
+                        LastModelsResponseExcerpt = excerpt,
+                        LastModelsErrorMessage = message
+                    });
+                    return new LocalModelsProbeResult(false, string.Empty, message);
+                }
+
+                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                {
+                    LocalStatus = "Ready",
+                    LastModelsStatusCode = (int)response.StatusCode,
+                    LastModelsResponseExcerpt = excerpt,
+                    LastModelsErrorMessage = null,
+                    FailureCategory = null
+                });
+                return new LocalModelsProbeResult(true, modelId, "IA locale prête.");
+            }
+            catch (HttpRequestException ex)
+            {
+                var message = $"Readiness IA locale échoué: {ex.GetBaseException().Message}";
+                Log.Warn($"Test IA local: GET {endpoint} -> exception {message}");
+                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                {
+                    LocalStatus = "NotReady",
+                    LastModelsErrorMessage = message,
+                    FailureCategory = "EndpointUnavailable"
+                });
+                return new LocalModelsProbeResult(false, string.Empty, message);
+            }
+            catch (TaskCanceledException ex)
+            {
+                var message = $"Readiness IA locale timeout: {ex.GetBaseException().Message}";
+                Log.Warn($"Test IA local: GET {endpoint} -> timeout {message}");
+                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                {
+                    LocalStatus = "NotReady",
+                    LastModelsErrorMessage = message,
+                    FailureCategory = "TimeoutLoading"
+                });
+                return new LocalModelsProbeResult(false, string.Empty, message);
+            }
+        }
+
+        private static async Task<LocalChatProbeResult> ProbeLocalChatAsync(HttpClient client, string modelId)
+        {
+            const string endpoint = "/v1/chat/completions";
+            var payload = new
+            {
+                model = modelId,
+                messages = new[]
+                {
+                    new { role = "system", content = "You are Virgil." },
+                    new { role = "user", content = "ping" }
+                },
+                temperature = 0.2,
+                max_tokens = 32,
+                stream = false
+            };
+
+            var payloadJson = JsonSerializer.Serialize(payload);
+            Log.Info($"Test IA local: POST {endpoint} payload={payloadJson}");
+
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+                {
+                    Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
+                };
+
+                using var response = await client.SendAsync(request).ConfigureAwait(false);
+                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var excerpt = Truncate(body, 400);
+                Log.Info($"Test IA local: POST {endpoint} -> HTTP {(int)response.StatusCode} {response.StatusCode} | {excerpt}");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var message = $"Chat endpoint failed (HTTP {(int)response.StatusCode}).";
+                    var detail = string.IsNullOrWhiteSpace(excerpt) ? message : $"{message} {excerpt}";
+                    LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                    {
+                        LocalStatus = "Ready",
+                        LastErrorMessage = detail,
+                        FailureCategory = $"ChatEndpointError (HTTP {(int)response.StatusCode}): {excerpt}"
+                    });
+                    return new LocalChatProbeResult(false, "Chat endpoint failed.");
+                }
+
+                var content = TryExtractChatContent(body);
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    return new LocalChatProbeResult(true, "Réponse vide.");
+                }
+
+                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                {
+                    LocalStatus = "Ready",
+                    LastErrorMessage = null,
+                    FailureCategory = null
+                });
+                return new LocalChatProbeResult(true, content);
+            }
+            catch (HttpRequestException ex)
+            {
+                var message = $"Chat endpoint failed: {ex.GetBaseException().Message}";
+                Log.Warn($"Test IA local: POST {endpoint} -> exception {message}");
+                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                {
+                    LocalStatus = "Ready",
+                    LastErrorMessage = message,
+                    FailureCategory = $"ChatEndpointError: {message}"
+                });
+                return new LocalChatProbeResult(false, "Chat endpoint failed.");
+            }
+            catch (TaskCanceledException ex)
+            {
+                var message = $"Chat endpoint timeout: {ex.GetBaseException().Message}";
+                Log.Warn($"Test IA local: POST {endpoint} -> timeout {message}");
+                LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+                {
+                    LocalStatus = "Ready",
+                    LastErrorMessage = message,
+                    FailureCategory = $"ChatEndpointError: {message}"
+                });
+                return new LocalChatProbeResult(false, "Chat endpoint failed.");
+            }
+        }
+
+        private static string TryExtractModelId(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("data", out var dataElement)
+                    && dataElement.ValueKind == JsonValueKind.Array
+                    && dataElement.GetArrayLength() > 0)
+                {
+                    var first = dataElement[0];
+                    if (first.TryGetProperty("id", out var idElement))
+                    {
+                        return idElement.GetString() ?? string.Empty;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+            }
+
+            return string.Empty;
+        }
+
+        private static string TryExtractChatContent(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (!doc.RootElement.TryGetProperty("choices", out var choices)
+                    || choices.ValueKind != JsonValueKind.Array
+                    || choices.GetArrayLength() == 0)
+                {
+                    return string.Empty;
+                }
+
+                var first = choices[0];
+                if (first.TryGetProperty("message", out var message)
+                    && message.TryGetProperty("content", out var content))
+                {
+                    return content.GetString() ?? string.Empty;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+
+            return string.Empty;
+        }
+
+        private sealed record LocalModelsProbeResult(bool Success, string ModelId, string Message);
+
+        private sealed record LocalChatProbeResult(bool Success, string Message);
 
         private async Task TestOpenAiAsync()
         {
