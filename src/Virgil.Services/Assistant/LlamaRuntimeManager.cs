@@ -24,16 +24,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string RuntimeExecutableName = "llama-server.exe";
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
-    private static readonly string[] OpenAiChatCompletionsMarkers = { "/v1/chat/completions", "v1/chat/completions", "chat/completions" };
     private const string ModelsEndpoint = "/v1/models";
     private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", ModelsEndpoint };
-    private static readonly string[] CompatibilityMarkers =
-    {
-        "/v1/chat/completions",
-        "OpenAI",
-        "chat/completions",
-        "v1/models"
-    };
     private readonly string _baseUrl;
     private readonly string _executablePath;
     private readonly string _baseArguments;
@@ -1039,35 +1031,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             CanStart: true);
     }
 
-    private async Task ValidateRuntimeCompatibilityAsync(CancellationToken ct)
-    {
-        var helpResult = await GetHelpOutputAsync(ct).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(helpResult.HelpText))
-        {
-            var message = "Runtime IA incompatible: impossible de lire l’aide du binaire (llama-server.exe).";
-            UpdateDiagnostics(
-                processLaunched: false,
-                portOpen: false,
-                exitCode: helpResult.ExitCode,
-                lastErrorMessage: message,
-                failureCategory: "RuntimeIncompatible");
-            throw new AssistantProviderUnavailableException(message);
-        }
-
-        if (!ContainsOpenAiCompatibilityMarkers(helpResult.HelpText))
-        {
-            var message = "Runtime IA incompatible: pas d’API OpenAI (/v1/chat/completions).";
-            Log.Info($"Llama runtime incompatible. Path: {_executablePath}");
-            Log.Info($"Llama runtime help excerpt: {ExtractHelpExcerpt(helpResult.HelpText)}");
-            UpdateDiagnostics(
-                processLaunched: false,
-                portOpen: false,
-                exitCode: helpResult.ExitCode,
-                lastErrorMessage: message,
-                failureCategory: "RuntimeIncompatible");
-            throw new AssistantProviderUnavailableException(message);
-        }
-    }
+    private static Task ValidateRuntimeCompatibilityAsync(CancellationToken ct)
+        => Task.CompletedTask;
 
     private async Task LogRuntimeVersionAsync(CancellationToken ct)
     {
@@ -1195,28 +1160,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         return $"{stdout}{Environment.NewLine}{stderr}";
     }
 
-    private static bool ContainsOpenAiCompatibilityMarkers(string helpText)
-    {
-        return ContainsAnyMarker(helpText, OpenAiChatCompletionsMarkers);
-    }
-
-    private static bool ContainsAnyMarker(string text, IReadOnlyCollection<string> markers)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        foreach (var marker in markers)
-        {
-            if (text.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 
     private static string ExtractHelpExcerpt(string helpText, int maxLength = 800)
     {
