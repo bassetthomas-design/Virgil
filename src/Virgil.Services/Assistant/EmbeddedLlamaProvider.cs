@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -59,11 +60,15 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     public async Task<AssistantReply> AskAsync(string userMessage, AssistantContext ctx, CancellationToken ct = default)
     {
+        var modelFound = false;
+        var runtimeFound = false;
+        var runtimePathExpected = Path.Combine(AppContext.BaseDirectory, "AI", "Runtime", "llama-server.exe");
+        IReadOnlyCollection<string> modelTriedPaths = Array.Empty<string>();
         try
         {
             var modelLocator = new ModelLocator();
-            var modelTriedPaths = new List<string>(modelLocator.GetCandidatePaths());
-            var modelFound = modelLocator.TryResolve(out var modelPath, out _);
+            modelTriedPaths = new List<string>(modelLocator.GetCandidatePaths());
+            modelFound = modelLocator.TryResolve(out var modelPath, out _);
 
             Log.Info($"Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}");
             if (modelFound)
@@ -71,8 +76,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
                 Log.Info($"Modèle GGUF utilisé: {modelPath}");
             }
 
-            var runtimePathExpected = Path.Combine(AppContext.BaseDirectory, "AI", "Runtime", "llama-server.exe");
-            var runtimeFound = File.Exists(runtimePathExpected);
+            runtimeFound = File.Exists(runtimePathExpected);
 
             Log.Info($"Runtime IA attendu: {runtimePathExpected}");
             if (runtimeFound)
@@ -82,14 +86,20 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
             if (!modelFound || !runtimeFound)
             {
-                return UnavailableReply(
-                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
+                return BuildUnavailableReply(
+                    modelFound,
+                    modelTriedPaths,
+                    runtimeFound,
+                    runtimePathExpected);
             }
 
             if (!_runtimeManager.IsRuntimeAvailable())
             {
-                return UnavailableReply(
-                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
+                return BuildUnavailableReply(
+                    modelFound,
+                    modelTriedPaths,
+                    runtimeFound,
+                    runtimePathExpected);
             }
 
             if (modelFound)
@@ -101,8 +111,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             var healthy = await _runtimeManager.HealthCheckAsync(ct).ConfigureAwait(false);
             if (!healthy)
             {
-                return UnavailableReply(
-                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
+                return BuildUnavailableReply(
+                    modelFound,
+                    modelTriedPaths,
+                    runtimeFound,
+                    runtimePathExpected);
             }
 
             var prompt = BuildPrompt(ctx, userMessage);
@@ -117,8 +130,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
             if (!response.IsSuccessStatusCode)
             {
-                return UnavailableReply(
-                    BuildUnavailableMessage(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected));
+                return BuildUnavailableReply(
+                    modelFound,
+                    modelTriedPaths,
+                    runtimeFound,
+                    runtimePathExpected);
             }
 
             var rawResponse = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -126,7 +142,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (AssistantProviderUnavailableException)
         {
-            return UnavailableReply(AppendRuntimeDiagnostics("IA indisponible."));
+            return BuildUnavailableReply(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -134,11 +150,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (HttpRequestException)
         {
-            return UnavailableReply("IA indisponible.");
+            return BuildUnavailableReply(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
         catch (TaskCanceledException)
         {
-            return UnavailableReply("IA indisponible.");
+            return BuildUnavailableReply(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
     }
 
@@ -230,106 +246,110 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         return $"{systemPrompt}\nUtilisateur: {userMessage}\nAssistant:";
     }
 
-    private static AssistantReply UnavailableReply(string message)
-        => new(message, Array.Empty<ProposedAction>());
-
-    private static string BuildUnavailableMessage(
+    private AssistantReply BuildUnavailableReply(
         bool modelFound,
         IReadOnlyCollection<string> modelTriedPaths,
         bool runtimeFound,
         string runtimePathExpected)
     {
-        if (!modelFound && !runtimeFound)
-        {
-            return "IA indisponible: Modèle GGUF manquant + Runtime llama-server.exe manquant."
-                + $"{Environment.NewLine}Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}"
-                + $"{Environment.NewLine}Chemin runtime attendu: {runtimePathExpected}";
-        }
+        var diagnostics = BuildDiagnosticReport(modelFound, modelTriedPaths, runtimeFound, runtimePathExpected);
+        var action = new ProposedAction(
+            "copy_diagnostic",
+            "Copier diagnostic",
+            new Dictionary<string, string> { ["text"] = diagnostics },
+            RequiresConfirmation: false);
+        return new AssistantReply(
+            "IA indisponible. Utilisez « Copier diagnostic » pour obtenir le rapport détaillé.",
+            new[] { action });
+    }
 
-        if (!modelFound)
+    private string BuildDiagnosticReport(
+        bool modelFound,
+        IReadOnlyCollection<string> modelTriedPaths,
+        bool runtimeFound,
+        string runtimePathExpected)
+    {
+        var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+        var baseUrl = string.IsNullOrWhiteSpace(diagnostics.BaseUrl)
+            ? _httpClient.BaseAddress?.ToString() ?? string.Empty
+            : diagnostics.BaseUrl;
+        var runtimePath = string.IsNullOrWhiteSpace(diagnostics.ExecutablePath)
+            ? runtimePathExpected
+            : diagnostics.ExecutablePath;
+        var arguments = string.IsNullOrWhiteSpace(diagnostics.Arguments) ? "—" : diagnostics.Arguments;
+        var statusLabel = diagnostics.LastModelsStatusCode.HasValue
+            ? diagnostics.LastModelsStatusCode.Value.ToString()
+            : "aucun";
+        var modelsExcerpt = string.IsNullOrWhiteSpace(diagnostics.LastModelsResponseExcerpt)
+            ? "—"
+            : diagnostics.LastModelsResponseExcerpt;
+        var failureCategory = ResolveFailureCategory(modelFound, runtimeFound, diagnostics);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Diagnostic IA locale");
+        sb.AppendLine($"Cause: {failureCategory}");
+        sb.AppendLine($"Runtime: {runtimePath}");
+        sb.AppendLine($"Arguments: {arguments}");
+        sb.AppendLine($"Base URL: {baseUrl}");
+        sb.AppendLine($"Ping /v1/models: HTTP {statusLabel}");
+        sb.AppendLine($"Réponse /v1/models: {modelsExcerpt}");
+        sb.AppendLine($"Dernière erreur: {diagnostics.LastErrorMessage ?? "—"}");
+
+        if (!modelFound && modelTriedPaths.Count > 0)
         {
-            return "IA indisponible: Modèle GGUF manquant."
-                + $"{Environment.NewLine}Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}";
+            sb.AppendLine($"Chemins modèle testés: {string.Join(" | ", modelTriedPaths)}");
         }
 
         if (!runtimeFound)
         {
-            return "IA indisponible: Runtime IA manquant (llama-server.exe)."
-                + $"{Environment.NewLine}Chemin runtime attendu: {runtimePathExpected}";
+            sb.AppendLine($"Chemin runtime attendu: {runtimePathExpected}");
         }
 
-        return AppendRuntimeDiagnostics("IA indisponible.");
+        var stdoutTail = GetLastLines(diagnostics.Stdout, 12);
+        var stderrTail = GetLastLines(diagnostics.Stderr, 12);
+        sb.AppendLine($"Logs stdout (12 dernières lignes): {stdoutTail}");
+        sb.AppendLine($"Logs stderr (12 dernières lignes): {stderrTail}");
+
+        return sb.ToString().TrimEnd();
     }
 
-    private static string AppendRuntimeDiagnostics(string message)
+    private static string ResolveFailureCategory(bool modelFound, bool runtimeFound, LlamaRuntimeDiagnostics diagnostics)
     {
-        var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
-        if (!string.IsNullOrWhiteSpace(diagnostics.WarningMessage))
+        if (!runtimeFound)
         {
-            message = $"{message}{Environment.NewLine}Warning runtime: {diagnostics.WarningMessage}";
+            LlamaRuntimeDiagnosticsStore.Update(existing => existing with { FailureCategory = "RuntimeMissing" });
+            return "RuntimeMissing";
         }
 
-        if (!string.IsNullOrWhiteSpace(diagnostics.CommandLine))
+        if (!modelFound)
         {
-            message = $"{message}{Environment.NewLine}Commande runtime: {diagnostics.CommandLine}";
+            LlamaRuntimeDiagnosticsStore.Update(existing => existing with { FailureCategory = "ModelMissing" });
+            return "ModelMissing";
         }
 
-        if (diagnostics.ExitCode.HasValue)
+        if (!string.IsNullOrWhiteSpace(diagnostics.FailureCategory))
         {
-            message = $"{message}{Environment.NewLine}ExitCode runtime: {diagnostics.ExitCode}";
+            return diagnostics.FailureCategory;
         }
 
-        if (!string.IsNullOrWhiteSpace(diagnostics.Stderr))
-        {
-            message = $"{message}{Environment.NewLine}STDERR runtime: {Truncate(diagnostics.Stderr, 2000)}";
-        }
-
-        var lastError = diagnostics.LastErrorMessage;
-        if (string.IsNullOrWhiteSpace(lastError))
-        {
-            lastError = GetLastNonWarningLine(diagnostics.Stderr);
-        }
-
-        if (string.IsNullOrWhiteSpace(lastError))
-        {
-            return message;
-        }
-
-        return $"{message}{Environment.NewLine}Erreur runtime bloquante: {lastError}";
+        return "EndpointUnavailable";
     }
 
-    private static string GetLastNonWarningLine(string value)
+    private static string GetLastLines(string value, int maxLines)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return string.Empty;
+            return "—";
         }
 
         var lines = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-        for (var index = lines.Length - 1; index >= 0; index--)
+        if (lines.Length <= maxLines)
         {
-            if (!IsRuntimeWarningLine(lines[index]))
-            {
-                return lines[index];
-            }
+            return string.Join(Environment.NewLine, lines);
         }
 
-        return string.Empty;
-    }
-
-    private static bool IsRuntimeWarningLine(string line)
-        => line.Contains("untrusted environments", StringComparison.OrdinalIgnoreCase)
-            || line.Contains("not recommended", StringComparison.OrdinalIgnoreCase)
-            || line.Contains("note:", StringComparison.OrdinalIgnoreCase);
-
-    private static string Truncate(string value, int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
-        {
-            return value;
-        }
-
-        return $"{value.Substring(0, maxLength)}…";
+        var start = Math.Max(0, lines.Length - maxLines);
+        return string.Join(Environment.NewLine, lines[start..]);
     }
 
     private sealed record EmbeddedLlamaRequest(

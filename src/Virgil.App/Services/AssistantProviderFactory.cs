@@ -37,47 +37,14 @@ namespace Virgil.App.Services
             var preference = _settingsService.EffectiveProviderPreference;
             var localEnabled = _settingsService.IsLocalEnabled;
             var openAiEnabled = _settingsService.IsOpenAiEnabled;
-            var resolved = ProviderPreferenceResolver.Resolve(preference, localEnabled, openAiEnabled);
-
-            if (preference == ProviderPreference.LocalFirst)
-            {
-                if (localEnabled && TryEnsureLocalReady(embeddedRuntimeManager))
-                {
-                    return embeddedProvider;
-                }
-
-                if (openAiEnabled)
-                {
-                    return CreateOpenAiProvider(settings);
-                }
-
-                Log.Warn("IA indisponible: aucune option locale ou OpenAI active.");
-                return null;
-            }
-
-            if (preference == ProviderPreference.OpenAIFirst)
-            {
-                if (openAiEnabled)
-                {
-                    return CreateOpenAiProvider(settings);
-                }
-
-                if (localEnabled && TryEnsureLocalReady(embeddedRuntimeManager))
-                {
-                    return embeddedProvider;
-                }
-
-                Log.Warn("IA indisponible: aucune option locale ou OpenAI active.");
-                return null;
-            }
-
-            var provider = resolved switch
-            {
-                AiProvider.Disabled => null,
-                AiProvider.EmbeddedLlama => localEnabled && TryEnsureLocalReady(embeddedRuntimeManager) ? embeddedProvider : null,
-                AiProvider.OpenAI => openAiEnabled ? CreateOpenAiProvider(settings) : null,
-                _ => null
-            };
+            var router = new AssistantProviderRouter();
+            var provider = router.SelectProvider(
+                preference,
+                localEnabled,
+                openAiEnabled,
+                () => TryEnsureLocalReady(embeddedRuntimeManager),
+                () => embeddedProvider,
+                () => CreateOpenAiProvider(settings));
 
             if (provider is null)
             {
@@ -94,7 +61,7 @@ namespace Virgil.App.Services
                 apiKey,
                 settings.OpenAiModel,
                 TimeSpan.FromSeconds(settings.OpenAiTimeoutSeconds),
-                isProviderEnabled: !string.IsNullOrWhiteSpace(apiKey));
+                isProviderEnabled: settings.OpenAiEnabled && !string.IsNullOrWhiteSpace(apiKey));
         }
 
         private static bool TryEnsureLocalReady(ILocalLlmRuntime runtimeManager)

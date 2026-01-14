@@ -6,6 +6,7 @@ public sealed record LlamaRuntimeDiagnostics(
     string ExecutablePath,
     string Arguments,
     string CommandLine,
+    string BaseUrl,
     string SecurityFlagsDetected,
     string SecurityStrategy,
     string WarningMessage,
@@ -14,9 +15,13 @@ public sealed record LlamaRuntimeDiagnostics(
     int? ExitCode,
     bool ProcessLaunched,
     bool PortOpen,
-    string? LastErrorMessage)
+    string? LastErrorMessage,
+    int? LastModelsStatusCode,
+    string? LastModelsResponseExcerpt,
+    string? FailureCategory)
 {
     public static LlamaRuntimeDiagnostics Empty { get; } = new(
+        string.Empty,
         string.Empty,
         string.Empty,
         string.Empty,
@@ -28,6 +33,9 @@ public sealed record LlamaRuntimeDiagnostics(
         null,
         false,
         false,
+        null,
+        null,
+        null,
         null);
 }
 

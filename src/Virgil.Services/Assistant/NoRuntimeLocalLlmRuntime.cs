@@ -11,6 +11,7 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
         Diagnostics = LlamaRuntimeDiagnostics.Empty with
         {
             ExecutablePath = runtimePathUsed,
+            BaseUrl = string.Empty,
             ProcessLaunched = false,
             PortOpen = false
         };

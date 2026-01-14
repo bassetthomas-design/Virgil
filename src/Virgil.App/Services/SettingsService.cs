@@ -32,7 +32,8 @@ namespace Virgil.App.Services
             }
         }
 
-        public bool IsOpenAiEnabled => !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
+        public bool IsOpenAiEnabled
+            => Settings.OpenAiEnabled && !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
 
         public SettingsService(ISecretStore? secretStore = null, ModelLocator? modelLocator = null)
         {
