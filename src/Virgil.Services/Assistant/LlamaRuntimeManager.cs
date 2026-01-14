@@ -529,6 +529,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             null,
             null,
             null,
+            null,
             null);
         LlamaRuntimeDiagnosticsStore.Set(diagnostics);
     }
@@ -703,6 +704,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         int? lastModelsStatusCode = null,
         string? lastModelsResponseExcerpt = null,
         string? lastModelsErrorMessage = null,
+        string? localStatus = null,
         string? failureCategory = null)
     {
         var resolvedLastError = lastErrorMessage is null
@@ -719,9 +721,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         var currentDiagnostics = LlamaRuntimeDiagnosticsStore.Latest;
-        var resolvedFailureCategory = string.IsNullOrWhiteSpace(failureCategory)
-            ? currentDiagnostics.FailureCategory
-            : failureCategory;
+        var resolvedFailureCategory = failureCategory == string.Empty
+            ? null
+            : string.IsNullOrWhiteSpace(failureCategory)
+                ? currentDiagnostics.FailureCategory
+                : failureCategory;
 
         if (string.IsNullOrWhiteSpace(resolvedFailureCategory) && !string.IsNullOrWhiteSpace(resolvedLastError))
         {
@@ -743,6 +747,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             LastModelsStatusCode = lastModelsStatusCode ?? existing.LastModelsStatusCode,
             LastModelsResponseExcerpt = lastModelsResponseExcerpt ?? existing.LastModelsResponseExcerpt,
             LastModelsErrorMessage = lastModelsErrorMessage ?? existing.LastModelsErrorMessage,
+            LocalStatus = string.IsNullOrWhiteSpace(localStatus) ? existing.LocalStatus : localStatus,
             FailureCategory = resolvedFailureCategory
         });
     }
@@ -1272,6 +1277,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
                     lastModelsErrorMessage: readinessProbe.ErrorMessage,
+                    localStatus: "NotReady",
                     failureCategory: "EndpointUnavailable");
                 LocalAiFileLog.Write("FAILED Cause=EndpointUnavailable");
                 return new RuntimeAttemptResult(false, null, GetCapturedStderr(), incompatibleMessage, TimedOut: false, ShouldStopProcess: true);
@@ -1291,7 +1297,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     lastErrorMessage: string.Empty,
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
-                    lastModelsErrorMessage: readinessProbe.ErrorMessage);
+                    lastModelsErrorMessage: readinessProbe.ErrorMessage,
+                    localStatus: "Ready",
+                    failureCategory: string.Empty);
                 return new RuntimeAttemptResult(true, null, string.Empty, null, TimedOut: false);
             }
 
@@ -1307,7 +1315,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 lastErrorMessage: readinessMessage,
                 lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
                 lastModelsResponseExcerpt: lastResponseExcerpt,
-                lastModelsErrorMessage: readinessProbe.ErrorMessage);
+                lastModelsErrorMessage: readinessProbe.ErrorMessage,
+                localStatus: "NotReady");
             if (DateTimeOffset.UtcNow - lastLog >= TimeSpan.FromSeconds(2))
             {
                 Log.Info(readinessMessage);
@@ -1337,6 +1346,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             lastErrorMessage: finalMissingModelError ?? "Readiness check échoué.",
             lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
             lastModelsResponseExcerpt: lastResponseExcerpt,
+            localStatus: "NotReady",
             failureCategory: finalCause);
         LocalAiFileLog.Write($"FAILED Cause={finalCause}");
         return new RuntimeAttemptResult(false, null, finalStderr, finalMissingModelError ?? "Readiness check échoué.", TimedOut: true);
