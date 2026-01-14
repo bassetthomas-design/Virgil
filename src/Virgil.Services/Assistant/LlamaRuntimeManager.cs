@@ -24,6 +24,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string RuntimeExecutableName = "llama-server.exe";
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
+    private const string OpenAiModelsMarker = "/v1/models";
+    private const string OpenAiChatCompletionsMarker = "/v1/chat/completions";
     private const string ModelsEndpoint = "/v1/models";
     private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", ModelsEndpoint };
     private static readonly string[] CompatibilityMarkers =
@@ -75,7 +77,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             var requestedPath = Path.GetFullPath(executablePath);
             if (!string.Equals(requestedPath, defaultRuntimePath, StringComparison.OrdinalIgnoreCase))
             {
-                Log.Warning($"Llama runtime path override ignored. Using packaged runtime at '{defaultRuntimePath}'. Requested: '{requestedPath}'.");
+                Log.Warn($"Llama runtime path override ignored. Using packaged runtime at '{defaultRuntimePath}'. Requested: '{requestedPath}'.");
             }
         }
 
