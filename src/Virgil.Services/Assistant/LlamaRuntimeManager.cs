@@ -1287,6 +1287,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var lastLog = DateTimeOffset.MinValue;
         var attempt = 0;
         var lastProbeException = string.Empty;
+        string? lastModelsErrorMessage = null;
 
         while (DateTimeOffset.UtcNow - start < _readinessTimeout)
         {
@@ -1308,6 +1309,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             if (!string.IsNullOrWhiteSpace(readinessProbe.ExceptionMessage))
             {
                 lastProbeException = readinessProbe.ExceptionMessage;
+            }
+            if (!string.IsNullOrWhiteSpace(readinessProbe.ErrorMessage))
+            {
+                lastModelsErrorMessage = readinessProbe.ErrorMessage;
             }
             lastStatusCode = readinessProbe.StatusCode;
             lastResponseExcerpt = readinessProbe.ResponseExcerpt;
@@ -1378,6 +1383,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         var finalStatus = lastStatusCode.HasValue ? ((int)lastStatusCode.Value).ToString() : "aucun";
         var finalEndpoint = string.IsNullOrWhiteSpace(lastEndpoint) ? "aucun" : lastEndpoint;
         Log.Info($"Readiness runtime expiré après {finalWarmup.TotalSeconds:0.0}s (dernier HTTP {finalStatus} sur {finalEndpoint}).");
+        if (!string.IsNullOrWhiteSpace(lastModelsErrorMessage))
+        {
+            LocalAiFileLog.Write($"Readiness dernière erreur: {lastModelsErrorMessage}");
+        }
         var finalCause = ResolveReadinessFailureCause(lastStatusCode, lastProbeException, finalMissingModelError);
         UpdateDiagnostics(
             processLaunched: true,
