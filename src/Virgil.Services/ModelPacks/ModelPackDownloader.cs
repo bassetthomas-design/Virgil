@@ -161,7 +161,7 @@ public sealed class ModelPackDownloader
                 true,
                 false,
                 $"Hash calculé: {actual}{Environment.NewLine}Hash non vérifié (aucune référence).",
-                actualHash: actual);
+                ActualHash: actual);
         }
 
         if (string.Equals(expectedHash, actual, StringComparison.OrdinalIgnoreCase))
@@ -170,8 +170,8 @@ public sealed class ModelPackDownloader
                 true,
                 true,
                 $"Hash calculé: {actual}{Environment.NewLine}Vérification: OK",
-                actualHash: actual,
-                expectedHash: expectedHash);
+                ActualHash: actual,
+                ExpectedHash: expectedHash);
         }
 
         return new ModelPackVerificationResult(
@@ -179,8 +179,8 @@ public sealed class ModelPackDownloader
             true,
             $"Hash calculé: {actual}{Environment.NewLine}Vérification: KO",
             "Pack Full corrompu: hash incorrect.",
-            actualHash: actual,
-            expectedHash: expectedHash);
+            ActualHash: actual,
+            ExpectedHash: expectedHash);
     }
 
     public void CleanupTemporaryFiles()
