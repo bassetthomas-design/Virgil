@@ -13,7 +13,8 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
             ExecutablePath = runtimePathUsed,
             BaseUrl = string.Empty,
             ProcessLaunched = false,
-            PortOpen = false
+            PortOpen = false,
+            LocalStatus = LocalStatus.Stopped
         };
         LlamaRuntimeDiagnosticsStore.Set(Diagnostics);
     }

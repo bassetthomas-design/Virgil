@@ -167,10 +167,12 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
         catch (HttpRequestException)
         {
+            Log.Warn("Runtime IA local: échec réseau pendant la génération.");
             return BuildUnavailableReply(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
         catch (TaskCanceledException)
         {
+            Log.Warn("Runtime IA local: timeout pendant la génération.");
             return BuildUnavailableReply(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
         }
     }
@@ -271,6 +273,13 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         string runtimePathExpected)
     {
         var diagnostics = BuildDiagnosticReport(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
+        if (LlamaRuntimeDiagnosticsStore.Latest.LocalStatus == LocalStatus.Ready)
+        {
+            return new AssistantReply(
+                $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Diagnostic (auto):{Environment.NewLine}{diagnostics}",
+                Array.Empty<ProposedAction>());
+        }
+
         return new AssistantReply(
             $"IA indisponible (Local Llama).{Environment.NewLine}{Environment.NewLine}Diagnostic (auto):{Environment.NewLine}{diagnostics}",
             Array.Empty<ProposedAction>());

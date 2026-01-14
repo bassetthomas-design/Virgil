@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -48,6 +49,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private string _securityStrategy = "auth désactivée";
     private string _warningMessage = string.Empty;
     private bool _disposed;
+    private bool _readyConfirmed;
 
     public LlamaRuntimeManager(
         string baseUrl,
@@ -122,6 +124,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 return;
             }
 
+            _readyConfirmed = false;
+
             var runtimeFullPath = Path.GetFullPath(_executablePath);
             var runtimeExists = File.Exists(runtimeFullPath);
             var workingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory;
@@ -152,7 +156,13 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             if (!IsRuntimeAvailable())
             {
                 var missingRuntimeMessage = $"Llama runtime not found at '{_executablePath}'.";
-                UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: null, lastErrorMessage: missingRuntimeMessage, failureCategory: "RuntimeMissing");
+                UpdateDiagnostics(
+                    processLaunched: false,
+                    portOpen: false,
+                    exitCode: null,
+                    lastErrorMessage: missingRuntimeMessage,
+                    localStatus: LocalStatus.Failed,
+                    failureCategory: "RuntimeMissing");
                 LocalAiFileLog.Write("Arguments: (non construits, runtime manquant)");
                 LocalAiFileLog.Write("Process.Start: skipped (runtime manquant)");
                 LocalAiFileLog.Write("FAILED Cause=RuntimeMissing");
@@ -185,6 +195,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     portOpen: false,
                     exitCode: null,
                     lastErrorMessage: MissingModelErrorMessage,
+                    localStatus: LocalStatus.Failed,
                     failureCategory: "ModelMissing");
                 LocalAiFileLog.Write("Arguments: (non construits, modèle manquant)");
                 LocalAiFileLog.Write("Process.Start: skipped (modèle manquant)");
@@ -202,6 +213,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     portOpen: false,
                     exitCode: null,
                     lastErrorMessage: MissingModelErrorMessage,
+                    localStatus: LocalStatus.Failed,
                     failureCategory: "ModelMissing");
                 LocalAiFileLog.Write("Arguments: (non construits, modèle manquant)");
                 LocalAiFileLog.Write("Process.Start: skipped (modèle manquant)");
@@ -263,8 +275,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
         finally
         {
+            _readyConfirmed = false;
             _process?.Dispose();
             _process = null;
+            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Stopped);
             _gate.Release();
         }
     }
@@ -275,16 +289,28 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         await EnsureProcessRunningAsync(ct).ConfigureAwait(false);
 
+        if (_readyConfirmed && IsProcessRunning())
+        {
+            return true;
+        }
+
         var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
         UpdateDiagnostics(
             processLaunched: null,
             portOpen: healthy,
             exitCode: null,
-            lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.");
+            lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.",
+            localStatus: healthy ? LocalStatus.Ready : null);
         if (!healthy)
         {
             if (IsProcessRunning())
             {
+                if (_readyConfirmed)
+                {
+                    Log.Warn("Runtime IA local: échec de health check après readiness (connection potentiellement refusée).");
+                    return true;
+                }
+
                 return false;
             }
 
@@ -294,7 +320,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 processLaunched: null,
                 portOpen: healthy,
                 exitCode: null,
-                lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.");
+                lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.",
+                localStatus: healthy ? LocalStatus.Ready : null);
             return healthy;
         }
 
@@ -353,15 +380,17 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         try
         {
             using var response = await _httpClient.GetAsync(ModelsEndpoint, ct).ConfigureAwait(false);
-            var responseExcerpt = await ReadResponseExcerptAsync(response, ct).ConfigureAwait(false);
+            var responseContent = await ReadResponseContentAsync(response, ct).ConfigureAwait(false);
+            var responseExcerpt = responseContent.Excerpt;
+            var modelId = TryExtractModelId(responseContent.Content);
             if (response.StatusCode == HttpStatusCode.OK)
             {
-                return new ModelsProbeResult(true, false, response.StatusCode, null, responseExcerpt, null);
+                return new ModelsProbeResult(true, false, response.StatusCode, null, responseExcerpt, modelId, null);
             }
 
             if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
             {
-                return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt, null);
+                return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt, modelId, null);
             }
 
             if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
@@ -372,36 +401,37 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     response.StatusCode,
                     $"Runtime IA incompatible: endpoint {ModelsEndpoint} indisponible (HTTP {(int)response.StatusCode}).",
                     responseExcerpt,
+                    modelId,
                     null);
             }
 
-            return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt, null);
+            return new ModelsProbeResult(false, false, response.StatusCode, null, responseExcerpt, modelId, null);
         }
         catch (HttpRequestException ex)
         {
-            return new ModelsProbeResult(false, false, null, null, null, ex.GetBaseException().Message);
+            return new ModelsProbeResult(false, false, null, null, null, null, ex.GetBaseException().Message);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            return new ModelsProbeResult(false, false, null, null, null, ex.GetBaseException().Message);
+            return new ModelsProbeResult(false, false, null, null, null, null, ex.GetBaseException().Message);
         }
     }
 
-    private static async Task<string?> ReadResponseExcerptAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task<ResponseReadResult> ReadResponseContentAsync(HttpResponseMessage response, CancellationToken ct)
     {
         if (response.Content is null)
         {
-            return null;
+            return new ResponseReadResult(null, null);
         }
 
         try
         {
             var content = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            return TruncateForDiagnostics(content, 400);
+            return new ResponseReadResult(content, TruncateForDiagnostics(content, 400));
         }
         catch (Exception)
         {
-            return null;
+            return new ResponseReadResult(null, null);
         }
     }
 
@@ -529,6 +559,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             null,
             null,
             null,
+            LocalStatus.Starting,
             null,
             null);
         LlamaRuntimeDiagnosticsStore.Set(diagnostics);
@@ -620,7 +651,9 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             processLaunched: false,
             portOpen: false,
             exitCode: exitCode,
-            lastErrorMessage: errorMessage);
+            lastErrorMessage: errorMessage,
+            localStatus: exitCode == 0 ? LocalStatus.Stopped : LocalStatus.Failed);
+        _readyConfirmed = false;
     }
 
     private static void AppendOutputLine(StringBuilder builder, string line)
@@ -704,7 +737,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         int? lastModelsStatusCode = null,
         string? lastModelsResponseExcerpt = null,
         string? lastModelsErrorMessage = null,
-        string? localStatus = null,
+        LocalStatus? localStatus = null,
+        string? localModelId = null,
         string? failureCategory = null)
     {
         var resolvedLastError = lastErrorMessage is null
@@ -721,6 +755,17 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         var currentDiagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+        var resolvedLocalStatus = localStatus ?? currentDiagnostics.LocalStatus;
+        var processRunning = IsProcessRunning();
+        if (_readyConfirmed && processRunning && resolvedLocalStatus != LocalStatus.Ready)
+        {
+            resolvedLocalStatus = LocalStatus.Ready;
+        }
+        if (resolvedLocalStatus == LocalStatus.Ready)
+        {
+            _readyConfirmed = true;
+        }
+
         var resolvedFailureCategory = failureCategory == string.Empty
             ? null
             : string.IsNullOrWhiteSpace(failureCategory)
@@ -747,7 +792,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             LastModelsStatusCode = lastModelsStatusCode ?? existing.LastModelsStatusCode,
             LastModelsResponseExcerpt = lastModelsResponseExcerpt ?? existing.LastModelsResponseExcerpt,
             LastModelsErrorMessage = lastModelsErrorMessage ?? existing.LastModelsErrorMessage,
-            LocalStatus = string.IsNullOrWhiteSpace(localStatus) ? existing.LocalStatus : localStatus,
+            LocalStatus = resolvedLocalStatus,
+            LocalModelId = string.IsNullOrWhiteSpace(localModelId) ? existing.LocalModelId : localModelId,
             FailureCategory = resolvedFailureCategory
         });
     }
@@ -801,7 +847,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 processLaunched: false,
                 portOpen: false,
                 exitCode: null,
-                lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}");
+                lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}",
+                localStatus: LocalStatus.Failed);
             LocalAiFileLog.Write($"Process.Start: fail ({ex.GetType().Name}: {ex.Message})");
             return new RuntimeAttemptResult(false, null, string.Empty, $"Impossible de lancer le runtime: {ex.Message}", TimedOut: false);
         }
@@ -812,7 +859,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 processLaunched: false,
                 portOpen: false,
                 exitCode: null,
-                lastErrorMessage: "Impossible de lancer le runtime.");
+                lastErrorMessage: "Impossible de lancer le runtime.",
+                localStatus: LocalStatus.Failed);
             LocalAiFileLog.Write("Process.Start: fail (process null)");
             return new RuntimeAttemptResult(false, null, string.Empty, "Impossible de lancer le runtime.", TimedOut: false);
         }
@@ -826,7 +874,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
 
-        UpdateDiagnostics(processLaunched: true, portOpen: null, exitCode: null, lastErrorMessage: null);
+        UpdateDiagnostics(processLaunched: true, portOpen: null, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Starting);
 
         await Task.Delay(_startupDelay, ct).ConfigureAwait(false);
 
@@ -839,7 +887,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 processLaunched: false,
                 portOpen: false,
                 exitCode: exitCode,
-                lastErrorMessage: missingModelError);
+                lastErrorMessage: missingModelError,
+                localStatus: LocalStatus.Failed);
             await StopProcessAsync(ct).ConfigureAwait(false);
             var lastError = !string.IsNullOrWhiteSpace(missingModelError)
                 ? missingModelError
@@ -854,7 +903,12 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
-        UpdateDiagnostics(processLaunched: true, portOpen: healthy, exitCode: null, lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.");
+        UpdateDiagnostics(
+            processLaunched: true,
+            portOpen: healthy,
+            exitCode: null,
+            lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.",
+            localStatus: LocalStatus.Starting);
 
         var readinessResult = await WaitForReadinessAsync(ct).ConfigureAwait(false);
         if (!readinessResult.Success)
@@ -865,7 +919,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 processLaunched: false,
                 portOpen: false,
                 exitCode: exitCode,
-                lastErrorMessage: readinessResult.LastErrorMessage);
+                lastErrorMessage: readinessResult.LastErrorMessage,
+                localStatus: LocalStatus.Failed);
             if (exitCode.HasValue || readinessResult.TimedOut || readinessResult.ShouldStopProcess)
             {
                 await StopProcessAsync(ct).ConfigureAwait(false);
@@ -898,6 +953,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         {
             _process.Dispose();
             _process = null;
+            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Stopped);
+            _readyConfirmed = false;
         }
     }
 
@@ -1223,6 +1280,34 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             ? null
             : MissingModelErrorMessage;
 
+    private static string TryExtractModelId(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("data", out var dataElement)
+                && dataElement.ValueKind == JsonValueKind.Array
+                && dataElement.GetArrayLength() > 0)
+            {
+                var first = dataElement[0];
+                if (first.TryGetProperty("id", out var idElement))
+                {
+                    return idElement.GetString() ?? string.Empty;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return string.Empty;
+    }
+
     private async Task<RuntimeAttemptResult> WaitForReadinessAsync(CancellationToken ct)
     {
         var start = DateTimeOffset.UtcNow;
@@ -1277,7 +1362,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
                     lastModelsErrorMessage: readinessProbe.ErrorMessage,
-                    localStatus: "NotReady",
+                    localStatus: LocalStatus.Failed,
                     failureCategory: "EndpointUnavailable");
                 LocalAiFileLog.Write("FAILED Cause=EndpointUnavailable");
                 return new RuntimeAttemptResult(false, null, GetCapturedStderr(), incompatibleMessage, TimedOut: false, ShouldStopProcess: true);
@@ -1298,7 +1383,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
                     lastModelsErrorMessage: readinessProbe.ErrorMessage,
-                    localStatus: "Ready",
+                    localStatus: LocalStatus.Ready,
+                    localModelId: readinessProbe.ModelId,
                     failureCategory: string.Empty);
                 return new RuntimeAttemptResult(true, null, string.Empty, null, TimedOut: false);
             }
@@ -1316,7 +1402,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
                 lastModelsResponseExcerpt: lastResponseExcerpt,
                 lastModelsErrorMessage: readinessProbe.ErrorMessage,
-                localStatus: "NotReady");
+                localStatus: LocalStatus.Starting);
             if (DateTimeOffset.UtcNow - lastLog >= TimeSpan.FromSeconds(2))
             {
                 Log.Info(readinessMessage);
@@ -1346,7 +1432,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             lastErrorMessage: finalMissingModelError ?? "Readiness check échoué.",
             lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
             lastModelsResponseExcerpt: lastResponseExcerpt,
-            localStatus: "NotReady",
+            localStatus: LocalStatus.Failed,
             failureCategory: finalCause);
         LocalAiFileLog.Write($"FAILED Cause={finalCause}");
         return new RuntimeAttemptResult(false, null, finalStderr, finalMissingModelError ?? "Readiness check échoué.", TimedOut: true);
@@ -1370,7 +1456,10 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         HttpStatusCode? StatusCode,
         string? ErrorMessage,
         string? ResponseExcerpt,
+        string? ModelId,
         string? ExceptionMessage);
+
+    private sealed record ResponseReadResult(string? Content, string? Excerpt);
 
     private static string SanitizeArgumentsForLog(string arguments)
     {
