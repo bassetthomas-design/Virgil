@@ -24,7 +24,6 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     private const string RuntimeExecutableName = "llama-server.exe";
     private const string MissingModelStderrMessage = "no model will be loaded in this process";
     private const string MissingModelErrorMessage = "Modèle non chargé: argument --model manquant.";
-    private static readonly string[] OpenAiModelsMarkers = { "/v1/models", "v1/models" };
     private static readonly string[] OpenAiChatCompletionsMarkers = { "/v1/chat/completions", "v1/chat/completions", "chat/completions" };
     private const string ModelsEndpoint = "/v1/models";
     private static readonly string[] ReadinessEndpoints = { "/health", "/v1/health", ModelsEndpoint };
@@ -894,7 +893,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         if (!ContainsOpenAiCompatibilityMarkers(helpResult.HelpText))
         {
-            var message = "Runtime IA incompatible: pas d’API OpenAI (/v1/models, /v1/chat/completions).";
+            var message = "Runtime IA incompatible: pas d’API OpenAI (/v1/chat/completions).";
             Log.Info($"Llama runtime incompatible. Path: {_executablePath}");
             Log.Info($"Llama runtime help excerpt: {ExtractHelpExcerpt(helpResult.HelpText)}");
             UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: helpResult.ExitCode, lastErrorMessage: message);
@@ -1030,8 +1029,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
     private static bool ContainsOpenAiCompatibilityMarkers(string helpText)
     {
-        return ContainsAnyMarker(helpText, OpenAiModelsMarkers)
-            && ContainsAnyMarker(helpText, OpenAiChatCompletionsMarkers);
+        return ContainsAnyMarker(helpText, OpenAiChatCompletionsMarkers);
     }
 
     private static bool ContainsAnyMarker(string text, IReadOnlyCollection<string> markers)
