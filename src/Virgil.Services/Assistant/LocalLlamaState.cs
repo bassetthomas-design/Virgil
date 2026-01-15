@@ -55,6 +55,16 @@ public sealed class LocalLlamaState
         Update(current => Normalize(current, BuildSnapshot(current, diagnostics)));
     }
 
+    internal void UpdateModelId(string modelId)
+    {
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return;
+        }
+
+        Update(current => current with { ModelId = modelId });
+    }
+
     private void Update(Func<LocalLlamaStateSnapshot, LocalLlamaStateSnapshot> update)
     {
         if (update is null)
