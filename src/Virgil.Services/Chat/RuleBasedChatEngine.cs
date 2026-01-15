@@ -30,7 +30,13 @@ public sealed class RuleBasedChatEngine : IChatEngine
             return null;
         }
 
-        var lower = userText.ToLowerInvariant();
+        var trimmed = userText.TrimStart();
+        if (!IsCommandMode(trimmed, out var commandText))
+        {
+            return null;
+        }
+
+        var lower = commandText.ToLowerInvariant();
         if (lower.Contains("nettoyage") || lower.Contains("clean"))
         {
             return "clean_quick";
@@ -47,5 +53,26 @@ public sealed class RuleBasedChatEngine : IChatEngine
         }
 
         return null;
+    }
+
+    private static bool IsCommandMode(string userText, out string commandText)
+    {
+        commandText = userText;
+        if (string.IsNullOrWhiteSpace(userText))
+        {
+            return false;
+        }
+
+        var prefixes = new[] { "/cmd", "!cmd" };
+        foreach (var prefix in prefixes)
+        {
+            if (userText.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                commandText = userText[prefix.Length..].TrimStart();
+                return true;
+            }
+        }
+
+        return false;
     }
 }
