@@ -43,6 +43,7 @@ namespace Virgil.App.ViewModels
         public MonitoringViewModel Monitoring { get; }
         public ChatViewModel Chat { get; }
         public ActionsViewModel Actions { get; }
+        public ActionProgressService ActionProgress { get; } = ActionProgressService.Instance;
 
         public ICommand RunActionCommand { get; }
 
@@ -217,6 +218,7 @@ namespace Virgil.App.ViewModels
                 }
             }
 
+            ActionProgress.StartIndeterminate();
             try
             {
                 IsBusy = true;
@@ -255,6 +257,7 @@ namespace Virgil.App.ViewModels
             }
             finally
             {
+                ActionProgress.Complete();
                 IsBusy = false;
             }
         }
