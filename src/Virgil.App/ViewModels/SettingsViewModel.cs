@@ -105,7 +105,7 @@ namespace Virgil.App.ViewModels
             _packManifest = _svc.Settings.GetActiveFullManifest();
 
             _uiContext = SynchronizationContext.Current;
-            LlamaRuntimeDiagnosticsStore.DiagnosticsUpdated += OnDiagnosticsUpdated;
+            LocalLlamaState.Instance.StateUpdated += OnLocalLlamaStateUpdated;
 
             _isPackInstalled = _modelLocator.IsInstalled;
             _downloadStatusText = _isPackInstalled ? "Pack Full installé." : "Pack Full non installé.";
@@ -655,8 +655,8 @@ namespace Virgil.App.ViewModels
                     return;
                 }
 
-                var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
-                if (diagnostics.LocalStatus != LocalStatus.Ready)
+                var localState = LocalLlamaState.Instance;
+                if (localState.LocalStatus != LocalStatus.Ready)
                 {
                     AiTestResponseText = "IA locale non prête.";
                     return;
@@ -780,6 +780,7 @@ namespace Virgil.App.ViewModels
         {
             var availability = GetModelAvailability();
             var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+            var localState = LocalLlamaState.Instance;
             ProviderStatusText = _svc.EffectiveAiProvider switch
             {
                 AiProvider.EmbeddedLlama => "Provider actif: EmbeddedLlama",
@@ -796,7 +797,7 @@ namespace Virgil.App.ViewModels
                 ? "Statut runtime: présent"
                 : "Statut runtime: manquant";
 
-            RuntimeProcessStatusText = diagnostics.ProcessRunning
+            RuntimeProcessStatusText = localState.ProcessRunning
                 ? "Process lancé: OK"
                 : "Process lancé: KO";
 
@@ -804,7 +805,7 @@ namespace Virgil.App.ViewModels
                 ? "Port ouvert: OK"
                 : "Port ouvert: KO";
 
-            LocalAiStatusText = diagnostics.LocalStatus == LocalStatus.Ready
+            LocalAiStatusText = localState.LocalStatus == LocalStatus.Ready
                 ? "IA locale prête"
                 : "IA locale non prête";
 
@@ -846,10 +847,10 @@ namespace Virgil.App.ViewModels
 
         public void Dispose()
         {
-            LlamaRuntimeDiagnosticsStore.DiagnosticsUpdated -= OnDiagnosticsUpdated;
+            LocalLlamaState.Instance.StateUpdated -= OnLocalLlamaStateUpdated;
         }
 
-        private void OnDiagnosticsUpdated(object? sender, LlamaRuntimeDiagnostics diagnostics)
+        private void OnLocalLlamaStateUpdated(object? sender, LocalLlamaStateSnapshot state)
         {
             if (_uiContext is null)
             {

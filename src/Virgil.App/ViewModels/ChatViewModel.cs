@@ -211,14 +211,14 @@ namespace Virgil.App.ViewModels
                 return false;
             }
 
-            var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
-            if (diagnostics.LocalStatus != LocalStatus.Ready)
+            var localState = LocalLlamaState.Instance;
+            if (localState.LocalStatus != LocalStatus.Ready)
             {
                 return false;
             }
 
             var baseUrl = string.IsNullOrWhiteSpace(_settingsService.Settings.EmbeddedLlamaBaseUrl)
-                ? diagnostics.BaseUrl
+                ? localState.BaseUrl
                 : _settingsService.Settings.EmbeddedLlamaBaseUrl;
             if (string.IsNullOrWhiteSpace(baseUrl))
             {
