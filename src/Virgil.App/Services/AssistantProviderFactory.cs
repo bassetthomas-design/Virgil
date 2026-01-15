@@ -35,7 +35,8 @@ namespace Virgil.App.Services
                 TimeSpan.FromSeconds(settings.EmbeddedLlamaTimeoutSeconds),
                 providerPreference: _settingsService.EffectiveProviderPreference.ToString(),
                 localEnabled: _settingsService.IsLocalEnabled,
-                openAiEnabled: _settingsService.IsOpenAiEnabled);
+                openAiEnabled: _settingsService.IsOpenAiEnabled,
+                maxTokens: settings.LocalMaxTokens);
 
             var preference = _settingsService.EffectiveProviderPreference;
             var localEnabled = _settingsService.IsLocalEnabled;

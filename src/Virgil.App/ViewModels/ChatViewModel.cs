@@ -31,7 +31,9 @@ namespace Virgil.App.ViewModels
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
         private string _inputText = string.Empty;
         private bool _isBusy;
-        private int _defaultTtlMs = 60000;
+        private const int MinChatTtlMs = 180000;
+        private const int ExpireRetrySeconds = 5;
+        private int _defaultTtlMs = MinChatTtlMs;
 
         public ChatViewModel(
             ChatService chat,
@@ -53,22 +55,27 @@ namespace Virgil.App.ViewModels
             _chat.HistoryCleared += OnHistoryCleared;
             SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
             ExecuteProposedActionCommand = new AsyncRelayCommand(ExecuteProposedActionAsync);
+            CopyMessageCommand = new RelayCommand(param => CopyMessage(param as MessageItem));
+
+            ApplySettingsTtl();
         }
 
         public ICommand SendCommand { get; }
         public ICommand ExecuteProposedActionCommand { get; }
+        public ICommand CopyMessageCommand { get; }
 
         public int DefaultTtlMs
         {
             get => _defaultTtlMs;
             set
             {
-                if (_defaultTtlMs == value)
+                var clamped = Math.Max(value, MinChatTtlMs);
+                if (_defaultTtlMs == clamped)
                 {
                     return;
                 }
 
-                _defaultTtlMs = value;
+                _defaultTtlMs = clamped;
                 OnPropertyChanged();
             }
         }
@@ -107,13 +114,14 @@ namespace Virgil.App.ViewModels
 
         private void OnMessagePosted(string text, MessageType type, bool pinned, int? ttlMs)
         {
+            var effectiveTtlMs = Math.Max(ttlMs ?? DefaultTtlMs, MinChatTtlMs);
             var item = new MessageItem
             {
                 Text = text,
                 Type = type,
                 Pinned = pinned,
                 Created = DateTime.Now,
-                TtlMs = ttlMs ?? DefaultTtlMs,
+                TtlMs = effectiveTtlMs,
                 Role = "assistant"
             };
 
@@ -124,18 +132,7 @@ namespace Virgil.App.ViewModels
                 var t = new Timer(item.TtlMs) { AutoReset = false };
                 t.Elapsed += (_, __) =>
                 {
-                    _dispatcher.Invoke(() =>
-                    {
-                        item.IsExpired = true;
-                        OnPropertyChanged(nameof(Messages));
-                        var remover = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
-                        remover.Tick += (_, __) =>
-                        {
-                            remover.Stop();
-                            Messages.Remove(item);
-                        };
-                        remover.Start();
-                    });
+                    _dispatcher.Invoke(() => AttemptExpireMessage(item));
                 };
                 t.Start();
             }
@@ -233,7 +230,7 @@ namespace Virgil.App.ViewModels
             LocalLlamaHttpClientConfigurator.ConfigureAuthHeaders(client, _settingsService.Settings.EmbeddedLlamaApiKey);
 
             var llamaClient = new LocalLlamaClient(client);
-            var probe = await llamaClient.ChatAsync(message).ConfigureAwait(false);
+            var probe = await llamaClient.ChatAsync(message, _settingsService.Settings.LocalMaxTokens).ConfigureAwait(false);
             if (probe.Success)
             {
                 var reply = string.IsNullOrWhiteSpace(probe.Content) ? "Réponse vide." : probe.Content;
@@ -306,6 +303,65 @@ namespace Virgil.App.ViewModels
 
             _dispatcher.Invoke(() => Messages.Add(item));
             _chat.RecordMessage("assistant", text);
+        }
+
+        private void AttemptExpireMessage(MessageItem item)
+        {
+            if (item.Pinned || item.IsExpired || !Messages.Contains(item))
+            {
+                return;
+            }
+
+            if (IsBusy)
+            {
+                var retry = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ExpireRetrySeconds) };
+                retry.Tick += (_, __) =>
+                {
+                    retry.Stop();
+                    AttemptExpireMessage(item);
+                };
+                retry.Start();
+                return;
+            }
+
+            item.IsExpired = true;
+            OnPropertyChanged(nameof(Messages));
+            var remover = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+            remover.Tick += (_, __) =>
+            {
+                remover.Stop();
+                Messages.Remove(item);
+            };
+            remover.Start();
+        }
+
+        private void ApplySettingsTtl()
+        {
+            if (_settingsService is null)
+            {
+                DefaultTtlMs = MinChatTtlMs;
+                return;
+            }
+
+            var ttlSeconds = Math.Max(_settingsService.Settings.ChatMessageTTLSeconds, MinChatTtlMs / 1000);
+            DefaultTtlMs = ttlSeconds * 1000;
+            _chat.AutoEraseDelay = TimeSpan.FromSeconds(ttlSeconds);
+        }
+
+        private void CopyMessage(MessageItem? item)
+        {
+            if (item is null || string.IsNullOrWhiteSpace(item.Text))
+            {
+                return;
+            }
+
+            try
+            {
+                System.Windows.Clipboard.SetText(item.Text);
+            }
+            catch
+            {
+            }
         }
 
         private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(InputText);

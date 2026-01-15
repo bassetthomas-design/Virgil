@@ -29,6 +29,7 @@ namespace Virgil.App.ViewModels
             "https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf";
         private const int RuntimeHelpMaxLength = 6000;
         private const string RuntimeHelpLogFileName = "runtime-help.log";
+        private const int MinChatTtlSeconds = 180;
         private readonly SettingsService _svc;
         private readonly AppChatService? _chatService;
         private readonly IAssistantService? _assistantService;
@@ -83,7 +84,8 @@ namespace Virgil.App.ViewModels
 
             _monitoringIntervalMinutesMin = s.MonitoringIntervalMinutesMin;
             _monitoringIntervalMinutesMax = s.MonitoringIntervalMinutesMax;
-            _defaultMessageTtlMs = s.DefaultMessageTtlMs;
+            _chatMessageTtlSeconds = s.ChatMessageTTLSeconds;
+            _localMaxTokens = s.LocalMaxTokens;
             _companionTalkative = s.CompanionTalkative;
             _enableBeatPulse = s.EnableBeatPulse;
             _selectedProviderPreference = s.ProviderPreference ?? ProviderPreference.LocalFirst;
@@ -137,11 +139,18 @@ namespace Virgil.App.ViewModels
             set { _monitoringIntervalMinutesMax = value; OnPropertyChanged(); }
         }
 
-        private int _defaultMessageTtlMs;
-        public int DefaultMessageTtlMs
+        private int _chatMessageTtlSeconds;
+        public int ChatMessageTTLSeconds
         {
-            get => _defaultMessageTtlMs;
-            set { _defaultMessageTtlMs = value; OnPropertyChanged(); }
+            get => _chatMessageTtlSeconds;
+            set { _chatMessageTtlSeconds = value; OnPropertyChanged(); }
+        }
+
+        private int _localMaxTokens;
+        public int LocalMaxTokens
+        {
+            get => _localMaxTokens;
+            set { _localMaxTokens = value; OnPropertyChanged(); }
         }
 
         private bool _companionTalkative;
@@ -485,7 +494,10 @@ namespace Virgil.App.ViewModels
 
             s.MonitoringIntervalMinutesMin = minMinutes;
             s.MonitoringIntervalMinutesMax = maxMinutes;
-            s.DefaultMessageTtlMs = _defaultMessageTtlMs;
+            var chatTtlSeconds = Math.Max(_chatMessageTtlSeconds, MinChatTtlSeconds);
+            s.ChatMessageTTLSeconds = chatTtlSeconds;
+            s.DefaultMessageTtlMs = chatTtlSeconds * 1000;
+            s.LocalMaxTokens = _localMaxTokens;
             s.CompanionTalkative = _companionTalkative;
             s.EnableBeatPulse = _enableBeatPulse;
 
@@ -675,7 +687,7 @@ namespace Virgil.App.ViewModels
 
                 AiTestResponseText = "IA locale prête. Test chat en cours…";
                 var llamaClient = new LocalLlamaClient(client);
-                var chatProbe = await llamaClient.ChatAsync("Bonjour Virgil, réponds en une phrase.").ConfigureAwait(false);
+                var chatProbe = await llamaClient.ChatAsync("Bonjour Virgil, réponds en une phrase.", _svc.Settings.LocalMaxTokens).ConfigureAwait(false);
                 if (!chatProbe.Success)
                 {
                     var errorMessage = string.IsNullOrWhiteSpace(chatProbe.ErrorMessage)

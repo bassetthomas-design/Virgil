@@ -60,7 +60,7 @@
 
         <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="10" Padding="8" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0.5">
             <Grid>
-                <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto" CanContentScroll="False">
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -83,7 +83,7 @@
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
-                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
+                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" TextTrimming="None">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
@@ -94,6 +94,13 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </TextBlock.Style>
+                                            <TextBlock.ContextMenu>
+                                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                    <MenuItem Header="Copier le message"
+                                                              Command="{Binding DataContext.CopyMessageCommand, RelativeSource={RelativeSource AncestorType=views:ChatView}}"
+                                                              CommandParameter="{Binding}" />
+                                                </ContextMenu>
+                                            </TextBlock.ContextMenu>
                                         </TextBlock>
                                     </Border>
                                     <ItemsControl ItemsSource="{Binding ProposedActions}"

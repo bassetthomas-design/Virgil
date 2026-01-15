@@ -18,7 +18,9 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 {
     private const string DefaultBaseUrl = "http://localhost:8080";
     private const int DefaultTimeoutSeconds = 30;
-    private const int DefaultMaxTokens = 512;
+    private const int DefaultMaxTokens = 768;
+    private const int MaxContinuations = 2;
+    private const string ContinuationPrompt = "Continue exactement là où tu t'es arrêté, sans répéter.";
     private const int MaxDiagnosticCharacters = 3500;
     private const int DiagnosticTailLines = 30;
     private const int ErrorSnippetLength = 2000;
@@ -29,6 +31,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
     private readonly string _providerPreference;
     private readonly bool _localEnabled;
     private readonly bool _openAiEnabled;
+    private readonly int _maxTokens;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -45,12 +48,14 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         HttpClient? httpClient = null,
         string? providerPreference = null,
         bool localEnabled = true,
-        bool openAiEnabled = true)
+        bool openAiEnabled = true,
+        int? maxTokens = null)
     {
         _runtimeManager = runtimeManager ?? throw new ArgumentNullException(nameof(runtimeManager));
         _providerPreference = string.IsNullOrWhiteSpace(providerPreference) ? "—" : providerPreference;
         _localEnabled = localEnabled;
         _openAiEnabled = openAiEnabled;
+        _maxTokens = maxTokens.GetValueOrDefault(DefaultMaxTokens);
 
         var resolvedBaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl;
         if (httpClient is not null)
@@ -165,42 +170,37 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
             messages.Add(new LocalChatMessage("user", userMessage));
 
-            var payload = new LocalChatRequest(
-                modelResult.ModelId,
-                messages.ToArray(),
-                DefaultMaxTokens,
-                false);
-
-            var payloadJson = JsonSerializer.Serialize(payload, _jsonRequestOptions);
             var endpointUrl = _httpClient.BaseAddress is null
                 ? ChatCompletionsEndpoint
                 : new Uri(_httpClient.BaseAddress, ChatCompletionsEndpoint).ToString();
 
-            Log.Info($"Local Llama chat: POST {endpointUrl} model={modelResult.ModelId} stream=false max_tokens={DefaultMaxTokens}");
+            Log.Info($"Local Llama chat: POST {endpointUrl} model={modelResult.ModelId} stream=false max_tokens={_maxTokens}");
 
-            var stopwatch = Stopwatch.StartNew();
-            using var request = new HttpRequestMessage(HttpMethod.Post, ChatCompletionsEndpoint)
+            var combined = new StringBuilder();
+            var continuationCount = 0;
+            while (true)
             {
-                Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
-            };
+                var responseResult = await SendChatAsync(modelResult.ModelId, messages, endpointUrl, ct).ConfigureAwait(false);
+                if (!responseResult.Success)
+                {
+                    return new AssistantReply(responseResult.ErrorMessage ?? "IA locale prête. Erreur génération.", Array.Empty<ProposedAction>());
+                }
 
-            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
-            var rawResponse = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            stopwatch.Stop();
+                if (!string.IsNullOrWhiteSpace(responseResult.Content))
+                {
+                    combined.Append(responseResult.Content);
+                }
 
-            if (response.StatusCode != System.Net.HttpStatusCode.OK)
-            {
-                var snippet = Truncate(rawResponse, ErrorSnippetLength);
-                Log.Warn($"Local Llama chat: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms | {snippet}");
-                var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
-                var message = string.IsNullOrWhiteSpace(snippet)
-                    ? $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel}"
-                    : $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel} {snippet}";
-                return new AssistantReply(message, Array.Empty<ProposedAction>());
+                if (!string.Equals(responseResult.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
+                    || continuationCount >= MaxContinuations)
+                {
+                    return ParseResponse(combined.ToString());
+                }
+
+                continuationCount++;
+                messages.Add(new LocalChatMessage("assistant", combined.ToString()));
+                messages.Add(new LocalChatMessage("system", ContinuationPrompt));
             }
-
-            Log.Info($"Local Llama chat: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms");
-            return ParseResponse(rawResponse);
         }
         catch (AssistantProviderUnavailableException)
         {
@@ -236,12 +236,12 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
 
         var content = ExtractAssistantContent(rawResponse);
-        if (string.IsNullOrWhiteSpace(content))
+        if (!string.IsNullOrWhiteSpace(content))
         {
-            return AssistantReply.Empty;
+            return AssistantResponseParser.Parse(content);
         }
 
-        return AssistantResponseParser.Parse(content);
+        return AssistantResponseParser.Parse(rawResponse);
     }
 
     private AssistantReply? TryParseDirectResponse(string rawResponse)
@@ -533,6 +533,46 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     private sealed record LocalChatMessage(string Role, string Content);
 
+    private async Task<ChatCompletionResult> SendChatAsync(
+        string modelId,
+        List<LocalChatMessage> messages,
+        string endpointUrl,
+        CancellationToken ct)
+    {
+        var payload = new LocalChatRequest(
+            modelId,
+            messages.ToArray(),
+            _maxTokens,
+            false);
+
+        var payloadJson = JsonSerializer.Serialize(payload, _jsonRequestOptions);
+        var stopwatch = Stopwatch.StartNew();
+        using var request = new HttpRequestMessage(HttpMethod.Post, ChatCompletionsEndpoint)
+        {
+            Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
+        };
+
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        var rawResponse = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        stopwatch.Stop();
+
+        if (response.StatusCode != System.Net.HttpStatusCode.OK)
+        {
+            var snippet = Truncate(rawResponse, ErrorSnippetLength);
+            Log.Warn($"Local Llama chat: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms | {snippet}");
+            var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
+            var message = string.IsNullOrWhiteSpace(snippet)
+                ? $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel}"
+                : $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel} {snippet}";
+            return new ChatCompletionResult(false, string.Empty, null, message);
+        }
+
+        var content = ExtractAssistantContent(rawResponse);
+        var finishReason = ExtractFinishReason(rawResponse);
+        Log.Info($"Local Llama chat: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms | finish_reason={finishReason ?? "n/a"}");
+        return new ChatCompletionResult(true, content, finishReason, null);
+    }
+
     private void ConfigureAuthHeaders()
     {
         _httpClient.DefaultRequestHeaders.Authorization = null;
@@ -556,4 +596,30 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
         return value.Substring(0, maxLength);
     }
+
+    private static string? ExtractFinishReason(string rawResponse)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(rawResponse);
+            if (doc.RootElement.TryGetProperty("choices", out var choices)
+                && choices.ValueKind == JsonValueKind.Array
+                && choices.GetArrayLength() > 0)
+            {
+                var choice = choices[0];
+                if (choice.TryGetProperty("finish_reason", out var finishReason)
+                    && finishReason.ValueKind == JsonValueKind.String)
+                {
+                    return finishReason.GetString();
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return null;
+    }
+
+    private sealed record ChatCompletionResult(bool Success, string Content, string? FinishReason, string? ErrorMessage);
 }

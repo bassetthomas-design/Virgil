@@ -16,7 +16,7 @@ namespace Virgil.App.Controls
     {
         public string Text { get; set; } = "";
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-        public int TtlMs { get; set; } = 5000;
+        public int TtlMs { get; set; } = 180000;
         public FrameworkElement? Container { get; set; }   // attaché au visuel réel
     }
 
@@ -61,7 +61,7 @@ namespace Virgil.App.Controls
             if (string.IsNullOrWhiteSpace(text)) return;
 
             var target = ChatItemsSource ??= new ObservableCollection<ChatMessage>();
-            var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 5000 };
+            var msg = new ChatMessage { Text = text, TtlMs = ttlMs ?? 180000 };
             target.Add(msg);
 
             // attendre que le conteneur visuel existe puis programmer la disparition
@@ -74,6 +74,27 @@ namespace Virgil.App.Controls
                     _ = ScheduleVanish(msg);
                 }
             }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private void OnCopyMessage(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.MenuItem menuItem)
+            {
+                return;
+            }
+
+            if (menuItem.DataContext is not ChatMessage message || string.IsNullOrWhiteSpace(message.Text))
+            {
+                return;
+            }
+
+            try
+            {
+                Clipboard.SetText(message.Text);
+            }
+            catch
+            {
+            }
         }
 
         private FrameworkElement? FindContainerFor(ChatMessage msg)
