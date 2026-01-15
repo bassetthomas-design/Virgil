@@ -31,6 +31,24 @@
                     <StackPanel Margin="8,0,0,0">
                         <TextBlock Text="Chat" FontWeight="Bold" FontSize="16" />
                         <TextBlock Text="Discutez avec Virgil" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" />
+                        <StackPanel Margin="0,6,0,0" HorizontalAlignment="Left">
+                            <Border x:Name="AiStatusPill"
+                                    CornerRadius="999"
+                                    Padding="10,6"
+                                    Background="{Binding AiPillBackground}"
+                                    BorderBrush="#22FFFFFF"
+                                    BorderThickness="0.5"
+                                    ToolTip="{Binding AiStatusTooltip}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Fill="{Binding AiStatusBrush}" Margin="0,0,6,0" />
+                                    <TextBlock Text="{Binding AiStatusText}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12" />
+                                </StackPanel>
+                            </Border>
+                            <ProgressBar Height="4"
+                                         Margin="0,4,0,0"
+                                         IsIndeterminate="True"
+                                         Visibility="{Binding IsAiLoading, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">

@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Virgil.App.Chat;
 using Virgil.App.Commands;
@@ -31,6 +32,13 @@ namespace Virgil.App.ViewModels
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
         private string _inputText = string.Empty;
         private bool _isBusy;
+        private string _aiStatusText = "État IA : Chargement…";
+        private Brush _aiStatusBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFA43A"));
+        private bool _isAiLoading = true;
+        private string? _aiStatusTooltip;
+        private static readonly Brush ReadyBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3CCB7F"));
+        private static readonly Brush StartingBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFA43A"));
+        private static readonly Brush FailedBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF5A5A"));
         private const int MinChatTtlMs = 180000;
         private const int ExpireRetrySeconds = 5;
         private int _defaultTtlMs = MinChatTtlMs;
@@ -56,6 +64,11 @@ namespace Virgil.App.ViewModels
             SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
             ExecuteProposedActionCommand = new AsyncRelayCommand(ExecuteProposedActionAsync);
             CopyMessageCommand = new RelayCommand(param => CopyMessage(param as MessageItem));
+
+            AiPillBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#22FFFFFF"));
+            var localState = LocalLlamaStateService.Instance;
+            localState.StateUpdated += OnLocalLlamaStateUpdated;
+            UpdateAiStatus(localState.Snapshot);
 
             ApplySettingsTtl();
         }
@@ -109,6 +122,101 @@ namespace Virgil.App.ViewModels
                 _isBusy = value;
                 OnPropertyChanged();
                 RaiseCanExecuteChanged();
+            }
+        }
+
+        public string AiStatusText
+        {
+            get => _aiStatusText;
+            private set
+            {
+                if (_aiStatusText == value)
+                {
+                    return;
+                }
+
+                _aiStatusText = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public Brush AiStatusBrush
+        {
+            get => _aiStatusBrush;
+            private set
+            {
+                if (Equals(_aiStatusBrush, value))
+                {
+                    return;
+                }
+
+                _aiStatusBrush = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool IsAiLoading
+        {
+            get => _isAiLoading;
+            private set
+            {
+                if (_isAiLoading == value)
+                {
+                    return;
+                }
+
+                _isAiLoading = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public Brush AiPillBackground { get; }
+
+        public string? AiStatusTooltip
+        {
+            get => _aiStatusTooltip;
+            private set
+            {
+                if (_aiStatusTooltip == value)
+                {
+                    return;
+                }
+
+                _aiStatusTooltip = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private void OnLocalLlamaStateUpdated(object? sender, LocalLlamaStateSnapshot snapshot)
+        {
+            _dispatcher.Invoke(() => UpdateAiStatus(snapshot));
+        }
+
+        private void UpdateAiStatus(LocalLlamaStateSnapshot snapshot)
+        {
+            switch (snapshot.Status)
+            {
+                case LocalStatus.Ready:
+                    AiStatusText = "État IA : Prête";
+                    AiStatusBrush = ReadyBrush;
+                    IsAiLoading = false;
+                    AiStatusTooltip = null;
+                    break;
+                case LocalStatus.Failed:
+                case LocalStatus.Stopped:
+                    AiStatusText = "État IA : Indisponible";
+                    AiStatusBrush = FailedBrush;
+                    IsAiLoading = false;
+                    AiStatusTooltip = string.IsNullOrWhiteSpace(snapshot.LastFailure)
+                        ? null
+                        : $"Dernière erreur: {snapshot.LastFailure}";
+                    break;
+                default:
+                    AiStatusText = "État IA : Chargement…";
+                    AiStatusBrush = StartingBrush;
+                    IsAiLoading = true;
+                    AiStatusTooltip = null;
+                    break;
             }
         }
 
