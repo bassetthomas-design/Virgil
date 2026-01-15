@@ -137,9 +137,9 @@
                      HorizontalAlignment="Left"
                      VerticalAlignment="Bottom"
                      Margin="16"
-                     IsIndeterminate="{Binding ActionProgress.IsIndeterminate}"
+                     IsIndeterminate="{Binding ActionProgress.IsIndeterminate, Mode=OneWay}"
                      Minimum="0"
                      Maximum="100"
-                     Value="{Binding ActionProgress.ProgressValue}" />
+                     Value="{Binding ActionProgress.ProgressValue, Mode=OneWay}" />
     </Grid>
 </Window>
