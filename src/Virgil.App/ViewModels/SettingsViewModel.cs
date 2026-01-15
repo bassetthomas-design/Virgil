@@ -669,28 +669,24 @@ namespace Virgil.App.ViewModels
                 };
                 LocalLlamaHttpClientConfigurator.ConfigureAuthHeaders(client, _svc.Settings.EmbeddedLlamaApiKey);
 
-                var modelResult = await LocalChatCompletionProbe.FetchModelIdAsync(client).ConfigureAwait(false);
-                if (!modelResult.Success || string.IsNullOrWhiteSpace(modelResult.ModelId))
-                {
-                    AiTestResponseText = string.IsNullOrWhiteSpace(modelResult.ErrorMessage)
-                        ? "Modèle IA local introuvable."
-                        : modelResult.ErrorMessage;
-                    return;
-                }
-
                 AiTestResponseText = "IA locale prête. Test chat en cours…";
-                var chatProbe = await LocalChatCompletionProbe.RunAsync(client, modelResult.ModelId).ConfigureAwait(false);
+                var llamaClient = new LocalLlamaClient(client);
+                var chatProbe = await llamaClient.ChatAsync("Bonjour Virgil, réponds en 1 phrase.").ConfigureAwait(false);
                 if (!chatProbe.Success)
                 {
-                    var message = string.IsNullOrWhiteSpace(chatProbe.ErrorMessage) ? "generation failed" : chatProbe.ErrorMessage;
+                    var message = string.IsNullOrWhiteSpace(chatProbe.ErrorMessage)
+                        ? "generation failed"
+                        : chatProbe.ErrorMessage;
                     AiTestResponseText = message;
                     _chatService?.PostSystemMessage(message, Virgil.App.Chat.MessageType.Warning, Virgil.App.Chat.ChatKind.Warning);
                     return;
                 }
 
-                var reply = string.IsNullOrWhiteSpace(chatProbe.Content) ? "Réponse vide." : chatProbe.Content;
+                var reply = string.IsNullOrWhiteSpace(chatProbe.Content)
+                    ? "Réponse vide."
+                    : chatProbe.Content;
                 AiTestResponseText = reply;
-                _chatService?.PostSystemMessage($"Local Llama: {chatProbe.Content}", Virgil.App.Chat.MessageType.Info, Virgil.App.Chat.ChatKind.Info);
+                _chatService?.PostSystemMessage($"Local Llama: {reply}", Virgil.App.Chat.MessageType.Info, Virgil.App.Chat.ChatKind.Info);
             }
             catch (Exception ex)
             {
