@@ -211,8 +211,8 @@ namespace Virgil.App.ViewModels
                 return false;
             }
 
-            var localState = LocalLlamaState.Instance;
-            if (localState.LocalStatus != LocalStatus.Ready)
+            var localState = LocalLlamaStateService.Instance;
+            if (localState.Status != LocalStatus.Ready)
             {
                 return false;
             }
@@ -232,17 +232,8 @@ namespace Virgil.App.ViewModels
             };
             LocalLlamaHttpClientConfigurator.ConfigureAuthHeaders(client, _settingsService.Settings.EmbeddedLlamaApiKey);
 
-            var modelResult = await LocalChatCompletionProbe.FetchModelIdAsync(client).ConfigureAwait(false);
-            if (!modelResult.Success || string.IsNullOrWhiteSpace(modelResult.ModelId))
-            {
-                var errorMessage = string.IsNullOrWhiteSpace(modelResult.ErrorMessage)
-                    ? "Modèle IA local introuvable."
-                    : modelResult.ErrorMessage;
-                _chat.PostSystemMessage(errorMessage, MessageType.Warning, ChatKind.Warning);
-                return true;
-            }
-
-            var probe = await LocalChatCompletionProbe.RunAsync(client, modelResult.ModelId).ConfigureAwait(false);
+            var llamaClient = new LocalLlamaClient(client);
+            var probe = await llamaClient.ChatAsync("Bonjour Virgil, réponds en une phrase.").ConfigureAwait(false);
             if (probe.Success)
             {
                 _chat.PostSystemMessage($"Local Llama: {probe.Content}", MessageType.Info, ChatKind.Info);

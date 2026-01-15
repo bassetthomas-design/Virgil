@@ -9,8 +9,8 @@ internal static class AssistantPromptBuilder
     {
         var builder = new StringBuilder();
         builder.AppendLine("Tu es l'assistant système Virgil.");
-        builder.AppendLine("You are Virgil, a conversational assistant.");
-        builder.AppendLine("You do not execute commands unless user explicitly uses /cmd. Otherwise answer conversationally.");
+        builder.AppendLine("You are Virgil, a conversational Windows assistant.");
+        builder.AppendLine("Do NOT execute commands unless user explicitly uses /cmd.");
         builder.AppendLine("User messages should be interpreted as natural language conversation by default.");
         builder.AppendLine("Réponds uniquement en JSON strict, sans texte additionnel.");
         builder.AppendLine("Format attendu:");
@@ -20,7 +20,7 @@ internal static class AssistantPromptBuilder
         builder.AppendLine("- Maximum 3 actions proposées.");
         builder.AppendLine("- Si aucune action pertinente, proposedActions doit être [].");
         builder.AppendLine("- Par défaut: mode conversationnel.");
-        builder.AppendLine("- Mode commande UNIQUEMENT si l'utilisateur tape /cmd en préfixe.");
+        builder.AppendLine("- Mode commande UNIQUEMENT si l'utilisateur tape /cmd (avec espace) en préfixe.");
         builder.AppendLine("- En mode commande, propose une commande mais n'exécute jamais automatiquement (demande confirmation UI).");
         builder.AppendLine();
         builder.AppendLine("Catalogue d'actions disponibles:");

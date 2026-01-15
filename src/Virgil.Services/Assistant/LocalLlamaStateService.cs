@@ -2,17 +2,15 @@ using System;
 
 namespace Virgil.Services.Assistant;
 
-public sealed record LocalLlamaFailure(string Cause, string Details);
-
 public sealed record LocalLlamaStateSnapshot(
-    LocalStatus LocalStatus,
+    LocalStatus Status,
     bool ProcessRunning,
     string BaseUrl,
     string ModelId,
     int? LastReadinessStatusCode,
-    LocalLlamaFailure? LastFailure);
+    string? LastFailure);
 
-public sealed class LocalLlamaState
+public sealed class LocalLlamaStateService
 {
     private static readonly object SyncRoot = new();
     private LocalLlamaStateSnapshot _snapshot = new(
@@ -23,16 +21,16 @@ public sealed class LocalLlamaState
         null,
         null);
 
-    public static LocalLlamaState Instance { get; } = new();
+    public static LocalLlamaStateService Instance { get; } = new();
 
     public event EventHandler<LocalLlamaStateSnapshot>? StateUpdated;
 
-    public LocalStatus LocalStatus => Snapshot.LocalStatus;
+    public LocalStatus Status => Snapshot.Status;
     public bool ProcessRunning => Snapshot.ProcessRunning;
     public string BaseUrl => Snapshot.BaseUrl;
     public string ModelId => Snapshot.ModelId;
     public int? LastReadinessStatusCode => Snapshot.LastReadinessStatusCode;
-    public LocalLlamaFailure? LastFailure => Snapshot.LastFailure;
+    public string? LastFailure => Snapshot.LastFailure;
 
     public LocalLlamaStateSnapshot Snapshot
     {
@@ -65,6 +63,24 @@ public sealed class LocalLlamaState
         Update(current => current with { ModelId = modelId });
     }
 
+    internal void MarkReadyFromModels(string? baseUrl, string modelId)
+    {
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return;
+        }
+
+        Update(current => Normalize(current, current with
+        {
+            Status = LocalStatus.Ready,
+            ProcessRunning = true,
+            BaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? current.BaseUrl : baseUrl,
+            ModelId = modelId,
+            LastReadinessStatusCode = 200,
+            LastFailure = null
+        }));
+    }
+
     private void Update(Func<LocalLlamaStateSnapshot, LocalLlamaStateSnapshot> update)
     {
         if (update is null)
@@ -87,7 +103,7 @@ public sealed class LocalLlamaState
         var baseUrl = string.IsNullOrWhiteSpace(diagnostics.BaseUrl) ? current.BaseUrl : diagnostics.BaseUrl;
         var modelId = string.IsNullOrWhiteSpace(diagnostics.LocalModelId) ? current.ModelId : diagnostics.LocalModelId;
         var lastReadinessStatus = diagnostics.LastReadinessHttpStatus ?? current.LastReadinessStatusCode;
-        var failure = ResolveFailure(current, diagnostics.LocalStatus, diagnostics.FailureCategory, diagnostics.LastErrorMessage);
+        var failure = ResolveFailure(current, diagnostics.LocalStatus, diagnostics.ProcessRunning, diagnostics.LastErrorMessage);
 
         return new LocalLlamaStateSnapshot(
             diagnostics.LocalStatus,
@@ -98,10 +114,10 @@ public sealed class LocalLlamaState
             failure);
     }
 
-    private static LocalLlamaFailure? ResolveFailure(
+    private static string? ResolveFailure(
         LocalLlamaStateSnapshot current,
         LocalStatus status,
-        string? failureCategory,
+        bool processRunning,
         string? lastErrorMessage)
     {
         if (status == LocalStatus.Ready)
@@ -109,13 +125,11 @@ public sealed class LocalLlamaState
             return null;
         }
 
-        if (status == LocalStatus.Failed)
+        if (status == LocalStatus.Failed && !processRunning)
         {
-            var cause = string.IsNullOrWhiteSpace(failureCategory) ? "Unknown" : failureCategory;
-            var details = string.IsNullOrWhiteSpace(lastErrorMessage)
+            return string.IsNullOrWhiteSpace(lastErrorMessage)
                 ? "Erreur runtime local."
                 : lastErrorMessage;
-            return new LocalLlamaFailure(cause, details);
         }
 
         return current.LastFailure;
@@ -123,20 +137,32 @@ public sealed class LocalLlamaState
 
     private static LocalLlamaStateSnapshot Normalize(LocalLlamaStateSnapshot current, LocalLlamaStateSnapshot proposed)
     {
-        if (current.LocalStatus == LocalStatus.Ready
-            && proposed.LocalStatus == LocalStatus.Failed
-            && (current.ProcessRunning || proposed.ProcessRunning))
+        var hasModelsReady = proposed.LastReadinessStatusCode == 200
+            && (proposed.ProcessRunning || current.ProcessRunning)
+            && proposed.Status != LocalStatus.Stopped;
+        if (hasModelsReady)
         {
-            return proposed with
+            proposed = proposed with
             {
-                LocalStatus = LocalStatus.Ready,
+                Status = LocalStatus.Ready,
+                ProcessRunning = true,
+                LastFailure = null
+            };
+        }
+
+        if ((current.ProcessRunning || proposed.ProcessRunning) && proposed.Status == LocalStatus.Failed)
+        {
+            var fallbackStatus = current.Status == LocalStatus.Stopped ? LocalStatus.Starting : current.Status;
+            proposed = proposed with
+            {
+                Status = fallbackStatus,
                 LastFailure = current.LastFailure
             };
         }
 
-        if (proposed.LocalStatus == LocalStatus.Ready)
+        if (proposed.Status == LocalStatus.Ready)
         {
-            return proposed with { LastFailure = null };
+            return proposed with { ProcessRunning = true, LastFailure = null };
         }
 
         return proposed;

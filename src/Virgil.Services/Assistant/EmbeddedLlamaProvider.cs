@@ -143,7 +143,8 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
             ConfigureAuthHeaders();
 
-            var modelResult = await LocalChatCompletionProbe.FetchModelIdAsync(_httpClient, ct).ConfigureAwait(false);
+            var localClient = new LocalLlamaClient(_httpClient);
+            var modelResult = await localClient.FetchModelIdAsync(ct).ConfigureAwait(false);
             if (!modelResult.Success || string.IsNullOrWhiteSpace(modelResult.ModelId))
             {
                 var message = string.IsNullOrWhiteSpace(modelResult.ErrorMessage)
@@ -305,7 +306,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         string runtimePathExpected)
     {
         var diagnostics = BuildDiagnosticReport(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
-        if (LocalLlamaState.Instance.LocalStatus == LocalStatus.Ready)
+        if (LocalLlamaStateService.Instance.Status == LocalStatus.Ready)
         {
             return new AssistantReply(
                 $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Diagnostic (auto):{Environment.NewLine}{diagnostics}",
@@ -442,7 +443,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     private static string ResolveFailureCategory(bool modelFound, bool runtimeFound, LlamaRuntimeDiagnostics diagnostics)
     {
-        if (LocalLlamaState.Instance.LocalStatus == LocalStatus.Ready)
+        if (LocalLlamaStateService.Instance.Status == LocalStatus.Ready)
         {
             return "None";
         }
