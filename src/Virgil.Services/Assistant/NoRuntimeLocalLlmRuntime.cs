@@ -12,7 +12,7 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
         {
             ExecutablePath = runtimePathUsed,
             BaseUrl = string.Empty,
-            ProcessLaunched = false,
+            ProcessRunning = false,
             PortOpen = false,
             LocalStatus = LocalStatus.Stopped
         };

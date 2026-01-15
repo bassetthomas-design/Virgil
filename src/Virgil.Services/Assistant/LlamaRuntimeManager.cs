@@ -158,7 +158,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             {
                 var missingRuntimeMessage = $"Llama runtime not found at '{_executablePath}'.";
                 UpdateDiagnostics(
-                    processLaunched: false,
+                    processRunning: false,
                     portOpen: false,
                     exitCode: null,
                     lastErrorMessage: missingRuntimeMessage,
@@ -192,7 +192,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             if (string.IsNullOrWhiteSpace(resolvedModelPath))
             {
                 UpdateDiagnostics(
-                    processLaunched: false,
+                    processRunning: false,
                     portOpen: false,
                     exitCode: null,
                     lastErrorMessage: MissingModelErrorMessage,
@@ -210,7 +210,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             {
                 var missingModelMessage = $"Modèle introuvable: {resolvedModelPath}";
                 UpdateDiagnostics(
-                    processLaunched: false,
+                    processRunning: false,
                     portOpen: false,
                     exitCode: null,
                     lastErrorMessage: MissingModelErrorMessage,
@@ -279,7 +279,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             _readyConfirmed = false;
             _process?.Dispose();
             _process = null;
-            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Stopped);
+            UpdateDiagnostics(processRunning: false, portOpen: false, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Stopped);
             _gate.Release();
         }
     }
@@ -303,7 +303,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         UpdateDiagnostics(
-            processLaunched: null,
+            processRunning: null,
             portOpen: healthy,
             exitCode: null,
             lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.",
@@ -318,7 +318,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             await EnsureProcessRunningAsync(ct).ConfigureAwait(false);
             healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
             UpdateDiagnostics(
-                processLaunched: null,
+                processRunning: null,
                 portOpen: healthy,
                 exitCode: null,
                 lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.",
@@ -584,7 +584,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         if (isError && IsMissingModelLine(data))
         {
             UpdateDiagnostics(
-                processLaunched: null,
+                processRunning: null,
                 portOpen: null,
                 exitCode: null,
                 lastErrorMessage: MissingModelErrorMessage);
@@ -649,7 +649,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
 
         UpdateDiagnostics(
-            processLaunched: false,
+            processRunning: false,
             portOpen: false,
             exitCode: exitCode,
             lastErrorMessage: errorMessage,
@@ -731,11 +731,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
     }
 
     private void UpdateDiagnostics(
-        bool? processLaunched,
+        bool? processRunning,
         bool? portOpen,
         int? exitCode,
         string? lastErrorMessage,
-        int? lastModelsStatusCode = null,
+        int? lastReadinessHttpStatus = null,
         string? lastModelsResponseExcerpt = null,
         string? lastModelsErrorMessage = null,
         LocalStatus? localStatus = null,
@@ -757,8 +757,8 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         var currentDiagnostics = LlamaRuntimeDiagnosticsStore.Latest;
         var resolvedLocalStatus = localStatus ?? currentDiagnostics.LocalStatus;
-        var processRunning = IsProcessRunning();
-        if (processRunning
+        var resolvedProcessRunning = processRunning ?? IsProcessRunning();
+        if (resolvedProcessRunning
             && (currentDiagnostics.LocalStatus == LocalStatus.Ready || _readyConfirmed)
             && resolvedLocalStatus != LocalStatus.Ready)
         {
@@ -784,10 +784,16 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             resolvedFailureCategory = FailureCategoryNone;
         }
 
+        var resolvedPortOpen = portOpen ?? currentDiagnostics.PortOpen;
+        if (!resolvedProcessRunning && resolvedPortOpen)
+        {
+            resolvedPortOpen = false;
+        }
+
         LlamaRuntimeDiagnosticsStore.Update(existing => existing with
         {
-            ProcessLaunched = processLaunched ?? existing.ProcessLaunched,
-            PortOpen = portOpen ?? existing.PortOpen,
+            ProcessRunning = resolvedProcessRunning,
+            PortOpen = resolvedPortOpen,
             ExitCode = exitCode ?? existing.ExitCode,
             SecurityFlagsDetected = string.IsNullOrWhiteSpace(_securityFlagsDetected)
                 ? existing.SecurityFlagsDetected
@@ -796,7 +802,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 ? existing.SecurityStrategy
                 : _securityStrategy,
             LastErrorMessage = resolvedLastError,
-            LastModelsStatusCode = lastModelsStatusCode ?? existing.LastModelsStatusCode,
+            LastReadinessHttpStatus = lastReadinessHttpStatus ?? existing.LastReadinessHttpStatus,
             LastModelsResponseExcerpt = lastModelsResponseExcerpt ?? existing.LastModelsResponseExcerpt,
             LastModelsErrorMessage = lastModelsErrorMessage ?? existing.LastModelsErrorMessage,
             LocalStatus = resolvedLocalStatus,
@@ -851,7 +857,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         catch (Exception ex)
         {
             UpdateDiagnostics(
-                processLaunched: false,
+                processRunning: false,
                 portOpen: false,
                 exitCode: null,
                 lastErrorMessage: $"Impossible de lancer le runtime: {ex.Message}",
@@ -863,7 +869,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         if (_process is null)
         {
             UpdateDiagnostics(
-                processLaunched: false,
+                processRunning: false,
                 portOpen: false,
                 exitCode: null,
                 lastErrorMessage: "Impossible de lancer le runtime.",
@@ -881,7 +887,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
 
-        UpdateDiagnostics(processLaunched: true, portOpen: null, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Starting);
+        UpdateDiagnostics(processRunning: true, portOpen: null, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Starting);
 
         await Task.Delay(_startupDelay, ct).ConfigureAwait(false);
 
@@ -891,7 +897,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             var stderr = GetCapturedStderr();
             var missingModelError = GetMissingModelErrorMessage(stderr);
             UpdateDiagnostics(
-                processLaunched: false,
+                processRunning: false,
                 portOpen: false,
                 exitCode: exitCode,
                 lastErrorMessage: missingModelError,
@@ -911,7 +917,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
 
         var healthy = await ProbeHealthAsync(ct).ConfigureAwait(false);
         UpdateDiagnostics(
-            processLaunched: true,
+            processRunning: true,
             portOpen: healthy,
             exitCode: null,
             lastErrorMessage: healthy ? string.Empty : "Port fermé ou runtime non prêt.",
@@ -923,7 +929,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             var stderr = readinessResult.Stderr;
             var exitCode = readinessResult.ExitCode;
             UpdateDiagnostics(
-                processLaunched: false,
+                processRunning: false,
                 portOpen: false,
                 exitCode: exitCode,
                 lastErrorMessage: readinessResult.LastErrorMessage,
@@ -960,7 +966,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         {
             _process.Dispose();
             _process = null;
-            UpdateDiagnostics(processLaunched: false, portOpen: false, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Stopped);
+            UpdateDiagnostics(processRunning: false, portOpen: false, exitCode: null, lastErrorMessage: null, localStatus: LocalStatus.Stopped);
             _readyConfirmed = false;
         }
     }
@@ -1362,11 +1368,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 var incompatibleMessage = readinessProbe.ErrorMessage
                     ?? $"Runtime IA incompatible: endpoint {ModelsEndpoint} indisponible.";
                 UpdateDiagnostics(
-                    processLaunched: true,
+                    processRunning: true,
                     portOpen: false,
                     exitCode: null,
                     lastErrorMessage: incompatibleMessage,
-                    lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
+                    lastReadinessHttpStatus: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
                     lastModelsErrorMessage: readinessProbe.ErrorMessage,
                     localStatus: LocalStatus.Failed,
@@ -1383,11 +1389,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                     : "200";
                 Log.Info($"Llama runtime prêt après {warmupDuration.TotalSeconds:0.0}s via {ModelsEndpoint} (HTTP {readyStatus}).");
                 UpdateDiagnostics(
-                    processLaunched: true,
+                    processRunning: true,
                     portOpen: true,
                     exitCode: null,
                     lastErrorMessage: string.Empty,
-                    lastModelsStatusCode: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
+                    lastReadinessHttpStatus: readinessProbe.StatusCode.HasValue ? (int)readinessProbe.StatusCode.Value : null,
                     lastModelsResponseExcerpt: readinessProbe.ResponseExcerpt,
                     lastModelsErrorMessage: null,
                     localStatus: LocalStatus.Ready,
@@ -1402,11 +1408,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
             var statusLabel = lastStatusCode.HasValue ? ((int)lastStatusCode.Value).ToString() : "aucun";
             var readinessMessage = $"Démarrage IA: chargement du modèle... ~{remainingSeconds}s restantes (dernier HTTP {statusLabel}).";
             UpdateDiagnostics(
-                processLaunched: true,
+                processRunning: true,
                 portOpen: false,
                 exitCode: null,
                 lastErrorMessage: readinessMessage,
-                lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
+                lastReadinessHttpStatus: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
                 lastModelsResponseExcerpt: lastResponseExcerpt,
                 lastModelsErrorMessage: readinessProbe.ErrorMessage,
                 localStatus: LocalStatus.Starting);
@@ -1433,11 +1439,11 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
         }
         var finalCause = ResolveReadinessFailureCause(lastStatusCode, lastProbeException, finalMissingModelError);
         UpdateDiagnostics(
-            processLaunched: true,
+            processRunning: true,
             portOpen: false,
             exitCode: null,
             lastErrorMessage: finalMissingModelError ?? "Readiness check échoué.",
-            lastModelsStatusCode: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
+            lastReadinessHttpStatus: lastStatusCode.HasValue ? (int)lastStatusCode.Value : null,
             lastModelsResponseExcerpt: lastResponseExcerpt,
             localStatus: LocalStatus.Failed,
             failureCategory: finalCause);
