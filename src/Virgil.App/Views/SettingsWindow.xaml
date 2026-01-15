@@ -64,6 +64,7 @@
                            Visibility="{Binding OpenAiEnabled, Converter={StaticResource BoolToVisibility}}"/>
                 <WrapPanel Margin="0,0,0,6">
                     <Button Content="Aide runtime" Command="{Binding RuntimeHelpCommand}" Margin="0,0,8,8"/>
+                    <Button Content="Effacer mémoire" Command="{Binding ClearMemoryCommand}" Margin="0,0,8,8"/>
                 </WrapPanel>
                 <Border BorderBrush="#DDDDDD" BorderThickness="1" Padding="6" Margin="0,0,0,8">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Height="160">

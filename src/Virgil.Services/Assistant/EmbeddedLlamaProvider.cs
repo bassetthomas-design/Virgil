@@ -153,15 +153,21 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
                 return new AssistantReply(message, Array.Empty<ProposedAction>());
             }
 
-            var messages = new[]
+            var messages = new List<LocalChatMessage>
             {
-                new LocalChatMessage("system", AssistantPromptBuilder.BuildSystemPrompt(ctx)),
-                new LocalChatMessage("user", userMessage)
+                new("system", AssistantPromptBuilder.BuildSystemPrompt(ctx))
             };
+            var memoryMessage = ConversationMemoryStore.BuildMemorySystemMessage();
+            if (!string.IsNullOrWhiteSpace(memoryMessage))
+            {
+                messages.Add(new LocalChatMessage("system", memoryMessage));
+            }
+
+            messages.Add(new LocalChatMessage("user", userMessage));
 
             var payload = new LocalChatRequest(
                 modelResult.ModelId,
-                messages,
+                messages.ToArray(),
                 DefaultMaxTokens,
                 false);
 

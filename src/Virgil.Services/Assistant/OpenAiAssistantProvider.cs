@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -67,13 +68,21 @@ public sealed class OpenAiAssistantProvider : IAssistantProvider
         }
 
         var prompt = AssistantPromptBuilder.BuildSystemPrompt(ctx);
+        var messages = new List<OpenAiChatMessage>
+        {
+            new("system", prompt)
+        };
+        var memoryMessage = ConversationMemoryStore.BuildMemorySystemMessage();
+        if (!string.IsNullOrWhiteSpace(memoryMessage))
+        {
+            messages.Add(new OpenAiChatMessage("system", memoryMessage));
+        }
+
+        messages.Add(new OpenAiChatMessage("user", userMessage));
+
         var payload = new OpenAiChatRequest(
             _model,
-            new[]
-            {
-                new OpenAiChatMessage("system", prompt),
-                new OpenAiChatMessage("user", userMessage)
-            },
+            messages.ToArray(),
             new OpenAiResponseFormat("json_object"));
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions");

@@ -120,6 +120,7 @@ namespace Virgil.App.ViewModels
             _saveAiSettingsCommand = new RelayCommand(_ => SaveAiSettings());
             _testOpenAiCommand = new AsyncRelayCommand(_ => TestOpenAiAsync(), _ => !IsDownloading);
             _runtimeHelpCommand = new AsyncRelayCommand(_ => ShowRuntimeHelpAsync(), _ => !IsRuntimeHelpLoading);
+            _clearMemoryCommand = new RelayCommand(_ => ClearMemory());
         }
 
         private int _monitoringIntervalMinutesMin;
@@ -456,6 +457,9 @@ namespace Virgil.App.ViewModels
 
         private readonly AsyncRelayCommand _runtimeHelpCommand;
         public ICommand RuntimeHelpCommand => _runtimeHelpCommand;
+
+        private readonly RelayCommand _clearMemoryCommand;
+        public ICommand ClearMemoryCommand => _clearMemoryCommand;
 
         /// <summary>
         /// Applique les valeurs au SettingsService et persiste.
@@ -900,6 +904,11 @@ namespace Virgil.App.ViewModels
             {
                 IsRuntimeHelpLoading = false;
             }
+        }
+
+        private void ClearMemory()
+        {
+            ConversationMemoryStore.Clear();
         }
 
         private static async Task<RuntimeHelpResult> ReadRuntimeHelpAsync(string runtimePath)
