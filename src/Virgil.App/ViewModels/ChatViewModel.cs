@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ using System.Windows.Threading;
 using Virgil.App.Chat;
 using Virgil.App.Commands;
 using Virgil.App.Models;
+using Virgil.App.Services;
 using Virgil.Services.Assistant;
 
 namespace Virgil.App.ViewModels
@@ -23,6 +25,7 @@ namespace Virgil.App.ViewModels
         private readonly Virgil.Services.Chat.ChatActionBridge? _actionBridge;
         private readonly Virgil.Services.Chat.IChatEngine? _chatEngine;
         private readonly IAssistantService? _assistantService;
+        private readonly SettingsService? _settingsService;
         private readonly Func<AssistantContext>? _assistantContextProvider;
         private readonly Func<string, Dictionary<string, string>?, CancellationToken, Task<ActionResult>>? _actionExecutor;
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -36,7 +39,8 @@ namespace Virgil.App.ViewModels
             Virgil.Services.Chat.IChatEngine? engine = null,
             IAssistantService? assistantService = null,
             Func<AssistantContext>? assistantContextProvider = null,
-            Func<string, Dictionary<string, string>?, CancellationToken, Task<ActionResult>>? actionExecutor = null)
+            Func<string, Dictionary<string, string>?, CancellationToken, Task<ActionResult>>? actionExecutor = null,
+            SettingsService? settingsService = null)
         {
             _chat = chat;
             _actionBridge = bridge;
@@ -44,6 +48,7 @@ namespace Virgil.App.ViewModels
             _assistantService = assistantService;
             _assistantContextProvider = assistantContextProvider;
             _actionExecutor = actionExecutor;
+            _settingsService = settingsService;
             _chat.MessagePosted += OnMessagePosted;
             _chat.HistoryCleared += OnHistoryCleared;
             SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
@@ -162,6 +167,11 @@ namespace Virgil.App.ViewModels
             IsBusy = true;
             try
             {
+                if (await TryRunLocalSmokeTestAsync().ConfigureAwait(false))
+                {
+                    return;
+                }
+
                 if (_assistantService is not null && _assistantContextProvider is not null && _actionExecutor is not null)
                 {
                     var assistantContext = _assistantContextProvider();
@@ -192,6 +202,52 @@ namespace Virgil.App.ViewModels
             {
                 IsBusy = false;
             }
+        }
+
+        private async Task<bool> TryRunLocalSmokeTestAsync()
+        {
+            if (_settingsService is null)
+            {
+                return false;
+            }
+
+            var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+            if (diagnostics.LocalStatus != LocalStatus.Ready)
+            {
+                return false;
+            }
+
+            var modelId = diagnostics.LocalModelId;
+            if (string.IsNullOrWhiteSpace(modelId))
+            {
+                return false;
+            }
+
+            var baseUrl = string.IsNullOrWhiteSpace(_settingsService.Settings.EmbeddedLlamaBaseUrl)
+                ? diagnostics.BaseUrl
+                : _settingsService.Settings.EmbeddedLlamaBaseUrl;
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                return false;
+            }
+
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri(baseUrl, UriKind.Absolute),
+                Timeout = TimeSpan.FromSeconds(_settingsService.Settings.EmbeddedLlamaTimeoutSeconds)
+            };
+            LocalLlamaHttpClientConfigurator.ConfigureAuthHeaders(client, _settingsService.Settings.EmbeddedLlamaApiKey);
+
+            var probe = await LocalChatCompletionProbe.RunAsync(client, modelId).ConfigureAwait(false);
+            if (probe.Success)
+            {
+                _chat.PostSystemMessage($"Local Llama: {probe.Content}", MessageType.Info, ChatKind.Info);
+                return true;
+            }
+
+            var message = string.IsNullOrWhiteSpace(probe.ErrorMessage) ? "generation failed" : probe.ErrorMessage;
+            _chat.PostSystemMessage(message, MessageType.Warning, ChatKind.Warning);
+            return true;
         }
 
         private void AppendAssistantReply(AssistantReply reply)
