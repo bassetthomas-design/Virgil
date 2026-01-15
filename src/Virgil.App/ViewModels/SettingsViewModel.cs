@@ -674,11 +674,11 @@ namespace Virgil.App.ViewModels
                 var chatProbe = await llamaClient.ChatAsync("Bonjour Virgil, réponds en une phrase.").ConfigureAwait(false);
                 if (!chatProbe.Success)
                 {
-                    var message = string.IsNullOrWhiteSpace(chatProbe.ErrorMessage)
-                        ? "generation failed"
+                    var errorMessage = string.IsNullOrWhiteSpace(chatProbe.ErrorMessage)
+                        ? "Erreur génération: réponse vide."
                         : chatProbe.ErrorMessage;
-                    AiTestResponseText = message;
-                    _chatService?.PostSystemMessage(message, Virgil.App.Chat.MessageType.Warning, Virgil.App.Chat.ChatKind.Warning);
+                    AiTestResponseText = errorMessage;
+                    _chatService?.PostSystemMessage(errorMessage, Virgil.App.Chat.MessageType.Warning, Virgil.App.Chat.ChatKind.Warning);
                     return;
                 }
 
@@ -690,8 +690,8 @@ namespace Virgil.App.ViewModels
             }
             catch (Exception ex)
             {
-                Log.Warn($"Test IA local: exception {ex.Message}");
-                AiTestResponseText = "generation failed";
+                Log.Warn($"Test IA local: exception {ex}");
+                AiTestResponseText = $"Erreur génération: {ex.Message}";
             }
         }
 
