@@ -17,7 +17,8 @@ public sealed class LocalLlamaClient
     private const string ChatCompletionsEndpoint = "/v1/chat/completions";
     private const int ErrorSnippetLength = 2000;
     private const string SystemPrompt =
-        "You are Virgil, a helpful conversational Windows assistant. Do not execute commands unless explicitly asked.";
+        "You are Virgil, a helpful conversational Windows assistant. " +
+        "You do not execute commands unless user explicitly uses /cmd. Otherwise answer conversationally.";
 
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonRequestOptions = new()
