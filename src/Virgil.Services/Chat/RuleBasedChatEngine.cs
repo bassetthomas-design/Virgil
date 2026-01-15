@@ -63,14 +63,11 @@ public sealed class RuleBasedChatEngine : IChatEngine
             return false;
         }
 
-        var prefixes = new[] { "/cmd", "!cmd" };
-        foreach (var prefix in prefixes)
+        const string prefix = "/cmd";
+        if (userText.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
-            if (userText.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                commandText = userText[prefix.Length..].TrimStart();
-                return true;
-            }
+            commandText = userText[prefix.Length..].TrimStart();
+            return true;
         }
 
         return false;
