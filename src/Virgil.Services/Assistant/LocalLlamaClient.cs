@@ -18,8 +18,11 @@ public sealed class LocalLlamaClient
     private const string ChatCompletionsEndpoint = "/v1/chat/completions";
     private const int ErrorSnippetLength = 2000;
     private const string SystemPrompt =
-        "You are Virgil, a conversational Windows assistant. " +
-        "Do NOT execute commands unless user explicitly uses /cmd.";
+        "Tu es VIRGIL, un assistant Windows local, utile et franc. " +
+        "Réponds en français, concis et structuré. " +
+        "N'invente pas et propose une vérification si besoin. " +
+        "N'exécute JAMAIS de commandes système par défaut; mode commande uniquement si le message commence par /cmd. " +
+        "Si le message ressemble à une commande mais ne commence pas par /cmd, demande ce que l'utilisateur veut faire.";
 
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonRequestOptions = new()
