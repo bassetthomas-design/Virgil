@@ -6,10 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -676,134 +673,28 @@ namespace Virgil.App.ViewModels
                     BaseAddress = new Uri(baseUrl, UriKind.Absolute),
                     Timeout = TimeSpan.FromSeconds(_svc.Settings.EmbeddedLlamaTimeoutSeconds)
                 };
-                ConfigureLocalAuthHeaders(client, _svc.Settings.EmbeddedLlamaApiKey);
+                LocalLlamaHttpClientConfigurator.ConfigureAuthHeaders(client, _svc.Settings.EmbeddedLlamaApiKey);
 
                 AiTestResponseText = "IA locale prête. Test chat en cours…";
-                var chatProbe = await ProbeLocalChatAsync(client, modelId).ConfigureAwait(false);
+                var chatProbe = await LocalChatCompletionProbe.RunAsync(client, modelId).ConfigureAwait(false);
                 if (!chatProbe.Success)
                 {
-                    AiTestResponseText = "Erreur génération";
+                    var message = string.IsNullOrWhiteSpace(chatProbe.ErrorMessage) ? "generation failed" : chatProbe.ErrorMessage;
+                    AiTestResponseText = message;
+                    _chatService?.PostSystemMessage(message, Virgil.App.Chat.MessageType.Warning, Virgil.App.Chat.ChatKind.Warning);
                     return;
                 }
 
-                var reply = string.IsNullOrWhiteSpace(chatProbe.Message) ? "Réponse vide." : chatProbe.Message;
+                var reply = string.IsNullOrWhiteSpace(chatProbe.Content) ? "Réponse vide." : chatProbe.Content;
                 AiTestResponseText = reply;
-                _chatService?.PostSystemMessage(reply, Virgil.App.Chat.MessageType.Info, Virgil.App.Chat.ChatKind.Info);
+                _chatService?.PostSystemMessage($"Local Llama: {chatProbe.Content}", Virgil.App.Chat.MessageType.Info, Virgil.App.Chat.ChatKind.Info);
             }
             catch (Exception ex)
             {
                 Log.Warn($"Test IA local: exception {ex.Message}");
-                AiTestResponseText = "Erreur génération";
+                AiTestResponseText = "generation failed";
             }
         }
-
-        private static void ConfigureLocalAuthHeaders(HttpClient client, string? apiKey)
-        {
-            client.DefaultRequestHeaders.Authorization = null;
-            client.DefaultRequestHeaders.Remove("X-API-Key");
-
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                return;
-            }
-
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
-        }
-
-        private static async Task<LocalChatProbeResult> ProbeLocalChatAsync(HttpClient client, string modelId)
-        {
-            const string endpoint = "/v1/chat/completions";
-            var payload = new
-            {
-                model = modelId,
-                messages = new[]
-                {
-                    new { role = "system", content = "You are Virgil." },
-                    new { role = "user", content = "ping" }
-                },
-                temperature = 0.2,
-                max_tokens = 32,
-                stream = false
-            };
-
-            var payloadJson = JsonSerializer.Serialize(payload);
-            Log.Info($"Test IA local: POST {endpoint} payload={payloadJson}");
-
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-                {
-                    Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
-                };
-
-                using var response = await client.SendAsync(request).ConfigureAwait(false);
-                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var excerpt = Truncate(body, 400);
-                Log.Info($"Test IA local: POST {endpoint} -> HTTP {(int)response.StatusCode} {response.StatusCode} | {excerpt}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var message = $"Chat endpoint failed (HTTP {(int)response.StatusCode}).";
-                    var detail = string.IsNullOrWhiteSpace(excerpt) ? message : $"{message} {excerpt}";
-                    Log.Warn($"Test IA local: POST {endpoint} -> {detail}");
-                    return new LocalChatProbeResult(false, "Chat endpoint failed.");
-                }
-
-                var content = TryExtractChatContent(body);
-                if (string.IsNullOrWhiteSpace(content))
-                {
-                    return new LocalChatProbeResult(true, "Réponse vide.");
-                }
-
-                return new LocalChatProbeResult(true, content);
-            }
-            catch (HttpRequestException ex)
-            {
-                var message = $"Chat endpoint failed: {ex.GetBaseException().Message}";
-                Log.Warn($"Test IA local: POST {endpoint} -> exception {message}");
-                return new LocalChatProbeResult(false, "Chat endpoint failed.");
-            }
-            catch (TaskCanceledException ex)
-            {
-                var message = $"Chat endpoint timeout: {ex.GetBaseException().Message}";
-                Log.Warn($"Test IA local: POST {endpoint} -> timeout {message}");
-                return new LocalChatProbeResult(false, "Chat endpoint failed.");
-            }
-        }
-
-        private static string TryExtractChatContent(string json)
-        {
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return string.Empty;
-            }
-
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                if (!doc.RootElement.TryGetProperty("choices", out var choices)
-                    || choices.ValueKind != JsonValueKind.Array
-                    || choices.GetArrayLength() == 0)
-                {
-                    return string.Empty;
-                }
-
-                var first = choices[0];
-                if (first.TryGetProperty("message", out var message)
-                    && message.TryGetProperty("content", out var content))
-                {
-                    return content.GetString() ?? string.Empty;
-                }
-            }
-            catch (JsonException)
-            {
-            }
-
-            return string.Empty;
-        }
-
-        private sealed record LocalChatProbeResult(bool Success, string Message);
 
         private async Task TestOpenAiAsync()
         {

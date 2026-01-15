@@ -108,7 +108,8 @@ namespace Virgil.App.ViewModels
                 chatEngine,
                 assistantService,
                 BuildAssistantContext,
-                RunActionAsync);
+                RunActionAsync,
+                settingsService);
 
             RunActionCommand = new AsyncRelayCommand(async param =>
             {
