@@ -10,6 +10,7 @@ using Virgil.Core.Logging;
 namespace Virgil.Services.Assistant;
 
 public sealed record LocalLlamaChatResult(bool Success, string Content, string? ErrorMessage);
+public sealed record LocalModelFetchResult(bool Success, string? ModelId, string? ErrorMessage);
 
 public sealed class LocalLlamaClient
 {
@@ -17,8 +18,8 @@ public sealed class LocalLlamaClient
     private const string ChatCompletionsEndpoint = "/v1/chat/completions";
     private const int ErrorSnippetLength = 2000;
     private const string SystemPrompt =
-        "You are Virgil, a helpful conversational Windows assistant. " +
-        "You do not execute commands unless user explicitly uses /cmd. Otherwise answer conversationally.";
+        "You are Virgil, a conversational Windows assistant. " +
+        "Do NOT execute commands unless user explicitly uses /cmd.";
 
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonRequestOptions = new()
@@ -106,7 +107,7 @@ public sealed class LocalLlamaClient
         }
     }
 
-    private async Task<LocalModelFetchResult> FetchModelIdAsync(CancellationToken ct)
+    public async Task<LocalModelFetchResult> FetchModelIdAsync(CancellationToken ct = default)
     {
         var endpointUrl = _httpClient.BaseAddress is null
             ? ModelsEndpoint
@@ -135,7 +136,8 @@ public sealed class LocalLlamaClient
                 return new LocalModelFetchResult(false, null, "Modèle IA local introuvable.");
             }
 
-            LocalLlamaState.Instance.UpdateModelId(modelId);
+            var baseUrl = _httpClient.BaseAddress?.ToString();
+            LocalLlamaStateService.Instance.MarkReadyFromModels(baseUrl, modelId);
             return new LocalModelFetchResult(true, modelId, null);
         }
         catch (HttpRequestException ex)
