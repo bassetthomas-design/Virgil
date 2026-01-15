@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -18,8 +18,11 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 {
     private const string DefaultBaseUrl = "http://localhost:8080";
     private const int DefaultTimeoutSeconds = 30;
+    private const int DefaultMaxTokens = 512;
     private const int MaxDiagnosticCharacters = 3500;
     private const int DiagnosticTailLines = 30;
+    private const int ErrorSnippetLength = 2000;
+    private const string ChatCompletionsEndpoint = "/v1/chat/completions";
 
     private readonly ILocalLlmRuntime _runtimeManager;
     private readonly HttpClient _httpClient;
@@ -29,6 +32,10 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
+    };
+    private readonly JsonSerializerOptions _jsonRequestOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
     public EmbeddedLlamaProvider(
@@ -134,27 +141,58 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
                     runtimePathExpected);
             }
 
-            var prompt = BuildPrompt(ctx, userMessage);
-            var payload = new EmbeddedLlamaRequest(
-                prompt,
-                false);
-
             ConfigureAuthHeaders();
 
-            using var response = await _httpClient.PostAsJsonAsync("/completion", payload, _jsonOptions, ct)
-                .ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
+            var modelResult = await LocalChatCompletionProbe.FetchModelIdAsync(_httpClient, ct).ConfigureAwait(false);
+            if (!modelResult.Success || string.IsNullOrWhiteSpace(modelResult.ModelId))
             {
-                return BuildUnavailableReply(
-                    modelFound,
-                    resolvedModelPath,
-                    modelTriedPaths,
-                    runtimeFound,
-                    runtimePathExpected);
+                var message = string.IsNullOrWhiteSpace(modelResult.ErrorMessage)
+                    ? "IA locale prête. Erreur génération."
+                    : $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}{modelResult.ErrorMessage}";
+                return new AssistantReply(message, Array.Empty<ProposedAction>());
             }
 
+            var messages = new[]
+            {
+                new LocalChatMessage("system", AssistantPromptBuilder.BuildSystemPrompt(ctx)),
+                new LocalChatMessage("user", userMessage)
+            };
+
+            var payload = new LocalChatRequest(
+                modelResult.ModelId,
+                messages,
+                DefaultMaxTokens,
+                false);
+
+            var payloadJson = JsonSerializer.Serialize(payload, _jsonRequestOptions);
+            var endpointUrl = _httpClient.BaseAddress is null
+                ? ChatCompletionsEndpoint
+                : new Uri(_httpClient.BaseAddress, ChatCompletionsEndpoint).ToString();
+
+            Log.Info($"Local Llama chat: POST {endpointUrl} model={modelResult.ModelId} stream=false max_tokens={DefaultMaxTokens}");
+
+            var stopwatch = Stopwatch.StartNew();
+            using var request = new HttpRequestMessage(HttpMethod.Post, ChatCompletionsEndpoint)
+            {
+                Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
+            };
+
+            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
             var rawResponse = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            stopwatch.Stop();
+
+            if (response.StatusCode != System.Net.HttpStatusCode.OK)
+            {
+                var snippet = Truncate(rawResponse, ErrorSnippetLength);
+                Log.Warn($"Local Llama chat: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms | {snippet}");
+                var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
+                var message = string.IsNullOrWhiteSpace(snippet)
+                    ? $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel}"
+                    : $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel} {snippet}";
+                return new AssistantReply(message, Array.Empty<ProposedAction>());
+            }
+
+            Log.Info($"Local Llama chat: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms");
             return ParseResponse(rawResponse);
         }
         catch (AssistantProviderUnavailableException)
@@ -257,12 +295,6 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         }
 
         return string.Empty;
-    }
-
-    private static string BuildPrompt(AssistantContext ctx, string userMessage)
-    {
-        var systemPrompt = AssistantPromptBuilder.BuildSystemPrompt(ctx);
-        return $"{systemPrompt}\nUtilisateur: {userMessage}\nAssistant:";
     }
 
     private AssistantReply BuildUnavailableReply(
@@ -484,11 +516,15 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         return $"{value.Substring(0, truncatedLength)}...(truncated)";
     }
 
-    private sealed record EmbeddedLlamaRequest(
-        [property: JsonPropertyName("prompt")] string Prompt,
-        [property: JsonPropertyName("stream")] bool Stream);
-
     private sealed record EmbeddedLlamaResponse(string? Text, IReadOnlyList<ProposedAction>? ProposedActions);
+
+    private sealed record LocalChatRequest(
+        string Model,
+        LocalChatMessage[] Messages,
+        [property: JsonPropertyName("max_tokens")] int MaxTokens,
+        bool Stream);
+
+    private sealed record LocalChatMessage(string Role, string Content);
 
     private void ConfigureAuthHeaders()
     {
@@ -502,5 +538,15 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _runtimeManager.ApiKey);
         _httpClient.DefaultRequestHeaders.Add("X-API-Key", _runtimeManager.ApiKey);
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value.Substring(0, maxLength);
     }
 }
