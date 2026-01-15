@@ -300,8 +300,8 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             ? runtimePathExpected
             : diagnostics.ExecutablePath;
         var arguments = string.IsNullOrWhiteSpace(diagnostics.Arguments) ? "—" : diagnostics.Arguments;
-        var statusLabel = diagnostics.LastModelsStatusCode.HasValue
-            ? $"HTTP {diagnostics.LastModelsStatusCode.Value}"
+        var statusLabel = diagnostics.LastReadinessHttpStatus.HasValue
+            ? $"HTTP {diagnostics.LastReadinessHttpStatus.Value}"
             : string.Empty;
         var lastModelsError = string.IsNullOrWhiteSpace(diagnostics.LastModelsErrorMessage)
             ? string.Empty
@@ -358,7 +358,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     private static string FormatProcessStart(LlamaRuntimeDiagnostics diagnostics)
     {
-        if (diagnostics.ProcessLaunched)
+        if (diagnostics.ProcessRunning)
         {
             return "success";
         }
@@ -432,7 +432,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             return diagnostics.FailureCategory;
         }
 
-        if (!diagnostics.ProcessLaunched && !string.IsNullOrWhiteSpace(diagnostics.LastErrorMessage))
+        if (!diagnostics.ProcessRunning && !string.IsNullOrWhiteSpace(diagnostics.LastErrorMessage))
         {
             return "ProcessStartFailed";
         }
@@ -443,7 +443,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             return "RuntimeIncompatible";
         }
 
-        if (diagnostics.LastModelsStatusCode.HasValue && diagnostics.LastModelsStatusCode.Value >= 400)
+        if (diagnostics.LastReadinessHttpStatus.HasValue && diagnostics.LastReadinessHttpStatus.Value >= 400)
         {
             return "HttpError";
         }

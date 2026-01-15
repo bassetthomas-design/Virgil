@@ -794,7 +794,7 @@ namespace Virgil.App.ViewModels
                 ? "Statut runtime: présent"
                 : "Statut runtime: manquant";
 
-            RuntimeProcessStatusText = diagnostics.ProcessLaunched
+            RuntimeProcessStatusText = diagnostics.ProcessRunning
                 ? "Process lancé: OK"
                 : "Process lancé: KO";
 
