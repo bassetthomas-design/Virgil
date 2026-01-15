@@ -18,7 +18,9 @@ public sealed class AssistantService : IAssistantService
     public async Task<AssistantReply> AskAsync(string userMessage, AssistantContext ctx, CancellationToken ct = default)
     {
         var reply = await _provider.AskAsync(userMessage, ctx, ct).ConfigureAwait(false);
-        return ValidateReply(reply, ctx, userMessage);
+        var validated = ValidateReply(reply, ctx, userMessage);
+        ConversationMemoryStore.UpdateSessionSummary(userMessage, validated.Text);
+        return validated;
     }
 
     private static AssistantReply ValidateReply(AssistantReply reply, AssistantContext ctx, string userMessage)

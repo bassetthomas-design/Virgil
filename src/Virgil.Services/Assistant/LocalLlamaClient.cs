@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
@@ -51,14 +52,22 @@ public sealed class LocalLlamaClient
             return new LocalLlamaChatResult(false, string.Empty, messageText);
         }
 
+        var memoryMessage = ConversationMemoryStore.BuildMemorySystemMessage();
+        var messages = new List<object>
+        {
+            new { role = "system", content = SystemPrompt }
+        };
+        if (!string.IsNullOrWhiteSpace(memoryMessage))
+        {
+            messages.Add(new { role = "system", content = memoryMessage });
+        }
+
+        messages.Add(new { role = "user", content = message });
+
         var payload = new
         {
             model = modelResult.ModelId,
-            messages = new[]
-            {
-                new { role = "system", content = SystemPrompt },
-                new { role = "user", content = message }
-            },
+            messages,
             temperature = 0.3,
             max_tokens = 128,
             stream = false
@@ -90,6 +99,11 @@ public sealed class LocalLlamaClient
             Log.Info($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms");
 
             var content = TryExtractChatContent(body);
+            if (!string.IsNullOrWhiteSpace(content))
+            {
+                ConversationMemoryStore.UpdateSessionSummary(message, content);
+            }
+
             return new LocalLlamaChatResult(true, content ?? string.Empty, null);
         }
         catch (Exception ex)
