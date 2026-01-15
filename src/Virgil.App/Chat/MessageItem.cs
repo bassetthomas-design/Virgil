@@ -10,7 +10,7 @@ namespace Virgil.App.Chat
         public string Role { get; set; } = "assistant";
         public bool Pinned { get; set; }
         public DateTime Created { get; set; }
-        public int TtlMs { get; set; } = 60000;
+        public int TtlMs { get; set; } = 180000;
         public bool IsExpired { get; set; }
         public bool IsUser => Role.Equals("user", StringComparison.OrdinalIgnoreCase);
         public IReadOnlyList<ProposedActionItem> ProposedActions { get; set; } = Array.Empty<ProposedActionItem>();

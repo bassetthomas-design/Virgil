@@ -23,7 +23,8 @@ namespace Virgil.App.Models
         public int MonitoringIntervalMs { get; set; } = 7000;
         public int MonitoringIntervalMinutesMin { get; set; } = 5;
         public int MonitoringIntervalMinutesMax { get; set; } = 10;
-        public int DefaultMessageTtlMs { get; set; } = 60000;
+        public int DefaultMessageTtlMs { get; set; } = 180000;
+        public int ChatMessageTTLSeconds { get; set; } = 180;
         public MoodThreshold Mood { get; set; } = new();
         public bool ShowMiniHud { get; set; } = true;
         public bool CompanionTalkative { get; set; } = false;
@@ -38,6 +39,7 @@ namespace Virgil.App.Models
         public string EmbeddedLlamaBaseUrl { get; set; } = "http://localhost:8080";
         public int EmbeddedLlamaTimeoutSeconds { get; set; } = 30;
         public string? EmbeddedLlamaApiKey { get; set; }
+        public int LocalMaxTokens { get; set; } = 768;
         public bool AiPackFullEnabled { get; set; } = true;
         public string AiPackFullDownloadUrl { get; set; } = string.Empty;
         public string AiPackFullSha256 { get; set; } = string.Empty;

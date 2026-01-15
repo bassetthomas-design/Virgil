@@ -11,6 +11,7 @@ namespace Virgil.App.Services
 {
     public class SettingsService
     {
+        private const int MinChatTtlSeconds = 180;
         private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virgil", "settings.json");
         private readonly ISecretStore _secretStore;
         private readonly ModelLocator _modelLocator;
@@ -73,6 +74,12 @@ namespace Virgil.App.Services
             {
                 Settings = new AppSettings();
             }
+
+            var resolvedChatTtlSeconds = Settings.ChatMessageTTLSeconds > 0
+                ? Settings.ChatMessageTTLSeconds
+                : (int)Math.Round(TimeSpan.FromMilliseconds(Settings.DefaultMessageTtlMs).TotalSeconds);
+            Settings.ChatMessageTTLSeconds = Math.Max(MinChatTtlSeconds, resolvedChatTtlSeconds);
+            Settings.DefaultMessageTtlMs = Settings.ChatMessageTTLSeconds * 1000;
 
             Settings.HasOpenAiKey = !string.IsNullOrWhiteSpace(_secretStore.LoadOpenAiApiKey());
             _effectiveAiProvider = ResolveAiProvider(Settings.AiProvider);

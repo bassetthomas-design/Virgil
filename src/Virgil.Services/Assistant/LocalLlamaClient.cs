@@ -17,13 +17,17 @@ public sealed class LocalLlamaClient
 {
     private const string ModelsEndpoint = "/v1/models";
     private const string ChatCompletionsEndpoint = "/v1/chat/completions";
+    private const int DefaultMaxTokens = 768;
     private const int ErrorSnippetLength = 2000;
+    private const int MaxContinuations = 2;
     private const string SystemPrompt =
         "Tu es VIRGIL, un assistant Windows local, utile et franc. " +
-        "Réponds en français, concis et structuré. " +
+        "Tu réponds en français avec un ton légèrement sarcastique et punchliner, mais tu restes utile. " +
+        "Commente brièvement chaque action système lancée (ex: \"Je lance le scan…\", \"Nettoyage terminé…\"). " +
         "N'invente pas et propose une vérification si besoin. " +
         "N'exécute JAMAIS de commandes système par défaut; mode commande uniquement si le message commence par /cmd. " +
         "Si le message ressemble à une commande mais ne commence pas par /cmd, demande ce que l'utilisateur veut faire.";
+    private const string ContinuationPrompt = "Continue exactement là où tu t'es arrêté, sans répéter.";
 
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonRequestOptions = new()
@@ -36,7 +40,7 @@ public sealed class LocalLlamaClient
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
-    public async Task<LocalLlamaChatResult> ChatAsync(string message, CancellationToken ct = default)
+    public async Task<LocalLlamaChatResult> ChatAsync(string message, int? maxTokens = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -64,53 +68,38 @@ public sealed class LocalLlamaClient
 
         messages.Add(new { role = "user", content = message });
 
-        var payload = new
+        var resolvedMaxTokens = maxTokens.GetValueOrDefault(DefaultMaxTokens);
+        var combined = new StringBuilder();
+        var continuationCount = 0;
+
+        while (true)
         {
-            model = modelResult.ModelId,
-            messages,
-            temperature = 0.3,
-            max_tokens = 128,
-            stream = false
-        };
-
-        var payloadJson = JsonSerializer.Serialize(payload, _jsonRequestOptions);
-        var stopwatch = Stopwatch.StartNew();
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Post, ChatCompletionsEndpoint)
+            var responseResult = await SendChatAsync(modelResult.ModelId, messages, resolvedMaxTokens, ct).ConfigureAwait(false);
+            if (!responseResult.Success)
             {
-                Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
-            };
-
-            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            stopwatch.Stop();
-
-            var responseSnippet = Truncate(body, ErrorSnippetLength);
-            var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
-            var elapsedMs = stopwatch.ElapsedMilliseconds;
-
-            if (response.StatusCode != System.Net.HttpStatusCode.OK)
-            {
-                Log.Warn($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms | {responseSnippet}");
-                return new LocalLlamaChatResult(false, string.Empty, BuildErrorMessage("/v1/chat/completions", response, responseSnippet));
+                return new LocalLlamaChatResult(false, string.Empty, responseResult.ErrorMessage ?? "Erreur génération.");
             }
 
-            Log.Info($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms");
-
-            var content = TryExtractChatContent(body);
-            if (!string.IsNullOrWhiteSpace(content))
+            if (!string.IsNullOrWhiteSpace(responseResult.Content))
             {
-                ConversationMemoryStore.UpdateSessionSummary(message, content);
+                combined.Append(responseResult.Content);
             }
 
-            return new LocalLlamaChatResult(true, content ?? string.Empty, null);
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
-            Log.Warn($"[LLAMA] POST /v1/chat/completions -> exception after {stopwatch.ElapsedMilliseconds}ms: {ex}");
-            return new LocalLlamaChatResult(false, string.Empty, $"Erreur génération: {ex.GetBaseException().Message}");
+            if (!string.Equals(responseResult.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
+                || continuationCount >= MaxContinuations)
+            {
+                var combinedText = combined.ToString();
+                if (!string.IsNullOrWhiteSpace(combinedText))
+                {
+                    ConversationMemoryStore.UpdateSessionSummary(message, combinedText);
+                }
+
+                return new LocalLlamaChatResult(true, combinedText, null);
+            }
+
+            continuationCount++;
+            messages.Add(new { role = "assistant", content = combined.ToString() });
+            messages.Add(new { role = "system", content = ContinuationPrompt });
         }
     }
 
@@ -180,11 +169,11 @@ public sealed class LocalLlamaClient
         return string.Empty;
     }
 
-    private static string? TryExtractChatContent(string json)
+    private static ChatResult TryExtractChatResult(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return string.Empty;
+            return new ChatResult(string.Empty, null);
         }
 
         try
@@ -194,21 +183,28 @@ public sealed class LocalLlamaClient
                 || choices.ValueKind != JsonValueKind.Array
                 || choices.GetArrayLength() == 0)
             {
-                return string.Empty;
+                return new ChatResult(string.Empty, null);
             }
 
             var first = choices[0];
+            string? finishReason = null;
+            if (first.TryGetProperty("finish_reason", out var finishReasonElement)
+                && finishReasonElement.ValueKind == JsonValueKind.String)
+            {
+                finishReason = finishReasonElement.GetString();
+            }
+
             if (first.TryGetProperty("message", out var message)
                 && message.TryGetProperty("content", out var content))
             {
-                return content.GetString() ?? string.Empty;
+                return new ChatResult(content.GetString() ?? string.Empty, finishReason);
             }
         }
         catch (JsonException)
         {
         }
 
-        return string.Empty;
+        return new ChatResult(string.Empty, null);
     }
 
     private static string BuildErrorMessage(string endpoint, HttpResponseMessage response, string snippet)
@@ -228,4 +224,58 @@ public sealed class LocalLlamaClient
 
         return value.Substring(0, maxLength);
     }
+
+    private async Task<ChatCompletionResult> SendChatAsync(
+        string modelId,
+        List<object> messages,
+        int maxTokens,
+        CancellationToken ct)
+    {
+        var payload = new
+        {
+            model = modelId,
+            messages,
+            temperature = 0.3,
+            max_tokens = maxTokens,
+            stream = false
+        };
+
+        var payloadJson = JsonSerializer.Serialize(payload, _jsonRequestOptions);
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, ChatCompletionsEndpoint)
+            {
+                Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
+            };
+
+            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            stopwatch.Stop();
+
+            var responseSnippet = Truncate(body, ErrorSnippetLength);
+            var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
+            var elapsedMs = stopwatch.ElapsedMilliseconds;
+
+            if (response.StatusCode != System.Net.HttpStatusCode.OK)
+            {
+                Log.Warn($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms | {responseSnippet}");
+                return new ChatCompletionResult(false, string.Empty, null, BuildErrorMessage("/v1/chat/completions", response, responseSnippet));
+            }
+
+            var result = TryExtractChatResult(body);
+            Log.Info($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms | finish_reason={result.FinishReason ?? "n/a"}");
+
+            return new ChatCompletionResult(true, result.Content, result.FinishReason, null);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            Log.Warn($"[LLAMA] POST /v1/chat/completions -> exception after {stopwatch.ElapsedMilliseconds}ms: {ex}");
+            return new ChatCompletionResult(false, string.Empty, null, $"Erreur génération: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private sealed record ChatCompletionResult(bool Success, string Content, string? FinishReason, string? ErrorMessage);
+    private sealed record ChatResult(string Content, string? FinishReason);
 }

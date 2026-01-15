@@ -16,7 +16,7 @@ namespace Virgil.App.Chat
         private CancellationTokenSource? _thanosTimerCts;
         private int _activityVersion;
 
-        internal TimeSpan AutoEraseDelay { get; set; } = TimeSpan.FromSeconds(30);
+        internal TimeSpan AutoEraseDelay { get; set; } = TimeSpan.FromSeconds(180);
 
         /// <summary>
         /// Clears the entire chat history. If <paramref name="applyThanosEffect"/> is true,

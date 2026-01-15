@@ -165,7 +165,9 @@ namespace Virgil.App.ViewModels
 
             OnPropertyChanged(nameof(MonitoringToggleLabel));
 
-            Chat.DefaultTtlMs = _settingsService.Settings.DefaultMessageTtlMs;
+            var chatTtlSeconds = Math.Max(_settingsService.Settings.ChatMessageTTLSeconds, 180);
+            Chat.DefaultTtlMs = chatTtlSeconds * 1000;
+            _chat.AutoEraseDelay = TimeSpan.FromSeconds(chatTtlSeconds);
 
             if (_settingsService.Settings.ShowMiniHud != _isHudVisible)
             {
@@ -218,6 +220,10 @@ namespace Virgil.App.ViewModels
             try
             {
                 IsBusy = true;
+                if (isServiceAction)
+                {
+                    PostActionNarrationStart(definition.DisplayName);
+                }
 
                 var result = await definition.ExecuteAsync(args ?? new Dictionary<string, string>(), ct).ConfigureAwait(false);
                 LastActionSuccess = result.Status != ActionResultStatus.Failed;
@@ -226,6 +232,10 @@ namespace Virgil.App.ViewModels
                 if (!isServiceAction)
                 {
                     PostLocalActionResult(result);
+                }
+                else
+                {
+                    PostActionNarrationEnd(definition.DisplayName, result);
                 }
                 return result;
             }
@@ -236,6 +246,10 @@ namespace Virgil.App.ViewModels
                 LastActionMessage = failure.Message;
                 LastActionResult = failure;
                 PostLocalActionResult(failure);
+                if (isServiceAction)
+                {
+                    PostActionNarrationEnd(definition.DisplayName, failure);
+                }
                 Utils.StartupLog.Write($"Action {key} a échoué", ex);
                 return failure;
             }
@@ -497,6 +511,28 @@ namespace Virgil.App.ViewModels
 
             var message = string.IsNullOrWhiteSpace(result.Message) ? result.Title : result.Message;
             _chat.PostSystemMessage(message, type, kind);
+        }
+
+        private void PostActionNarrationStart(string actionTitle)
+        {
+            if (string.IsNullOrWhiteSpace(actionTitle))
+            {
+                return;
+            }
+
+            _chat.PostSystemMessage($"Je lance « {actionTitle} »…", MessageType.Info, ChatKind.Info);
+        }
+
+        private void PostActionNarrationEnd(string actionTitle, ActionResult result)
+        {
+            if (string.IsNullOrWhiteSpace(actionTitle))
+            {
+                return;
+            }
+
+            var summary = string.IsNullOrWhiteSpace(result.Message) ? result.Title : result.Message;
+            var statusLabel = result.Status == ActionResultStatus.Failed ? "Échec" : "Terminé";
+            _chat.PostSystemMessage($"{statusLabel} : {summary}", result.Status == ActionResultStatus.Failed ? MessageType.Warning : MessageType.Info, ChatKind.Info);
         }
     }
 }
