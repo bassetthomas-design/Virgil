@@ -662,13 +662,6 @@ namespace Virgil.App.ViewModels
                     return;
                 }
 
-                var modelId = diagnostics.LocalModelId;
-                if (string.IsNullOrWhiteSpace(modelId))
-                {
-                    AiTestResponseText = "Modèle IA local introuvable.";
-                    return;
-                }
-
                 using var client = new HttpClient
                 {
                     BaseAddress = new Uri(baseUrl, UriKind.Absolute),
@@ -676,8 +669,17 @@ namespace Virgil.App.ViewModels
                 };
                 LocalLlamaHttpClientConfigurator.ConfigureAuthHeaders(client, _svc.Settings.EmbeddedLlamaApiKey);
 
+                var modelResult = await LocalChatCompletionProbe.FetchModelIdAsync(client).ConfigureAwait(false);
+                if (!modelResult.Success || string.IsNullOrWhiteSpace(modelResult.ModelId))
+                {
+                    AiTestResponseText = string.IsNullOrWhiteSpace(modelResult.ErrorMessage)
+                        ? "Modèle IA local introuvable."
+                        : modelResult.ErrorMessage;
+                    return;
+                }
+
                 AiTestResponseText = "IA locale prête. Test chat en cours…";
-                var chatProbe = await LocalChatCompletionProbe.RunAsync(client, modelId).ConfigureAwait(false);
+                var chatProbe = await LocalChatCompletionProbe.RunAsync(client, modelResult.ModelId).ConfigureAwait(false);
                 if (!chatProbe.Success)
                 {
                     var message = string.IsNullOrWhiteSpace(chatProbe.ErrorMessage) ? "generation failed" : chatProbe.ErrorMessage;
