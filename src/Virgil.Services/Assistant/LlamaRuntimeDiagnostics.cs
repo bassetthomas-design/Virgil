@@ -77,6 +77,7 @@ public static class LlamaRuntimeDiagnosticsStore
             latest = _latest;
         }
 
+        LocalLlamaState.Instance.UpdateFromDiagnostics(latest);
         DiagnosticsUpdated?.Invoke(null, latest);
     }
 
@@ -94,6 +95,7 @@ public static class LlamaRuntimeDiagnosticsStore
             latest = _latest;
         }
 
+        LocalLlamaState.Instance.UpdateFromDiagnostics(latest);
         DiagnosticsUpdated?.Invoke(null, latest);
     }
 }

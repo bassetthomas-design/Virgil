@@ -305,7 +305,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         string runtimePathExpected)
     {
         var diagnostics = BuildDiagnosticReport(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
-        if (LlamaRuntimeDiagnosticsStore.Latest.LocalStatus == LocalStatus.Ready)
+        if (LocalLlamaState.Instance.LocalStatus == LocalStatus.Ready)
         {
             return new AssistantReply(
                 $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Diagnostic (auto):{Environment.NewLine}{diagnostics}",
@@ -442,7 +442,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
 
     private static string ResolveFailureCategory(bool modelFound, bool runtimeFound, LlamaRuntimeDiagnostics diagnostics)
     {
-        if (diagnostics.LocalStatus == LocalStatus.Ready)
+        if (LocalLlamaState.Instance.LocalStatus == LocalStatus.Ready)
         {
             return "None";
         }
