@@ -62,12 +62,6 @@ public sealed class LocalLlamaClient
         };
 
         var payloadJson = JsonSerializer.Serialize(payload, _jsonRequestOptions);
-        var endpointUrl = _httpClient.BaseAddress is null
-            ? ChatCompletionsEndpoint
-            : new Uri(_httpClient.BaseAddress, ChatCompletionsEndpoint).ToString();
-
-        Log.Info($"Local Llama chat test: POST {endpointUrl} payload={payloadJson}");
-
         var stopwatch = Stopwatch.StartNew();
         try
         {
@@ -81,39 +75,31 @@ public sealed class LocalLlamaClient
             stopwatch.Stop();
 
             var responseSnippet = Truncate(body, ErrorSnippetLength);
+            var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
+            var elapsedMs = stopwatch.ElapsedMilliseconds;
 
-            if (!response.IsSuccessStatusCode)
+            if (response.StatusCode != System.Net.HttpStatusCode.OK)
             {
-                Log.Warn($"Local Llama chat test: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms | {responseSnippet}");
+                Log.Warn($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms | {responseSnippet}");
                 return new LocalLlamaChatResult(false, string.Empty, BuildErrorMessage("/v1/chat/completions", response, responseSnippet));
             }
 
-            Log.Info($"Local Llama chat test: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms | {responseSnippet}");
+            Log.Info($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms");
 
             var content = TryExtractChatContent(body);
             return new LocalLlamaChatResult(true, content ?? string.Empty, null);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex)
         {
             stopwatch.Stop();
-            Log.Warn($"Local Llama chat test: POST {endpointUrl} -> exception after {stopwatch.ElapsedMilliseconds}ms: {ex.GetBaseException().Message}");
-            return new LocalLlamaChatResult(false, string.Empty, "generation failed");
-        }
-        catch (TaskCanceledException ex)
-        {
-            stopwatch.Stop();
-            Log.Warn($"Local Llama chat test: POST {endpointUrl} -> timeout after {stopwatch.ElapsedMilliseconds}ms: {ex.GetBaseException().Message}");
-            return new LocalLlamaChatResult(false, string.Empty, "generation failed");
+            Log.Warn($"[LLAMA] POST /v1/chat/completions -> exception after {stopwatch.ElapsedMilliseconds}ms: {ex}");
+            return new LocalLlamaChatResult(false, string.Empty, $"Erreur génération: {ex.GetBaseException().Message}");
         }
     }
 
     public async Task<LocalModelFetchResult> FetchModelIdAsync(CancellationToken ct = default)
     {
-        var endpointUrl = _httpClient.BaseAddress is null
-            ? ModelsEndpoint
-            : new Uri(_httpClient.BaseAddress, ModelsEndpoint).ToString();
-
-        Log.Info($"Local Llama chat test: GET {endpointUrl}");
+        Log.Info($"[LLAMA] GET /v1/models");
 
         try
         {
@@ -123,16 +109,16 @@ public sealed class LocalLlamaClient
 
             if (!response.IsSuccessStatusCode)
             {
-                Log.Warn($"Local Llama chat test: GET {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} | {responseSnippet}");
+                Log.Warn($"[LLAMA] GET /v1/models -> {(int)response.StatusCode} {response.StatusCode} | {responseSnippet}");
                 return new LocalModelFetchResult(false, null, BuildErrorMessage("/v1/models", response, responseSnippet));
             }
 
-            Log.Info($"Local Llama chat test: GET {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} | {responseSnippet}");
+            Log.Info($"[LLAMA] GET /v1/models -> {(int)response.StatusCode} {response.StatusCode}");
 
             var modelId = TryExtractModelId(body);
             if (string.IsNullOrWhiteSpace(modelId))
             {
-                Log.Warn($"Local Llama chat test: GET {endpointUrl} -> no model id in response.");
+                Log.Warn("[LLAMA] GET /v1/models -> no model id in response.");
                 return new LocalModelFetchResult(false, null, "Modèle IA local introuvable.");
             }
 
@@ -140,15 +126,10 @@ public sealed class LocalLlamaClient
             LocalLlamaStateService.Instance.MarkReadyFromModels(baseUrl, modelId);
             return new LocalModelFetchResult(true, modelId, null);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex)
         {
-            Log.Warn($"Local Llama chat test: GET {endpointUrl} -> exception: {ex.GetBaseException().Message}");
-            return new LocalModelFetchResult(false, null, "generation failed");
-        }
-        catch (TaskCanceledException ex)
-        {
-            Log.Warn($"Local Llama chat test: GET {endpointUrl} -> timeout: {ex.GetBaseException().Message}");
-            return new LocalModelFetchResult(false, null, "generation failed");
+            Log.Warn($"[LLAMA] GET /v1/models -> exception: {ex}");
+            return new LocalModelFetchResult(false, null, $"Erreur génération: {ex.GetBaseException().Message}");
         }
     }
 

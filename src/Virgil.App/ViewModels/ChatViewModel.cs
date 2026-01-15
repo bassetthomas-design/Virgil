@@ -167,7 +167,7 @@ namespace Virgil.App.ViewModels
             IsBusy = true;
             try
             {
-                if (await TryRunLocalSmokeTestAsync().ConfigureAwait(false))
+                if (await TryRunLocalChatAsync(message).ConfigureAwait(false))
                 {
                     return;
                 }
@@ -204,7 +204,7 @@ namespace Virgil.App.ViewModels
             }
         }
 
-        private async Task<bool> TryRunLocalSmokeTestAsync()
+        private async Task<bool> TryRunLocalChatAsync(string message)
         {
             if (_settingsService is null)
             {
@@ -233,15 +233,18 @@ namespace Virgil.App.ViewModels
             LocalLlamaHttpClientConfigurator.ConfigureAuthHeaders(client, _settingsService.Settings.EmbeddedLlamaApiKey);
 
             var llamaClient = new LocalLlamaClient(client);
-            var probe = await llamaClient.ChatAsync("Bonjour Virgil, réponds en une phrase.").ConfigureAwait(false);
+            var probe = await llamaClient.ChatAsync(message).ConfigureAwait(false);
             if (probe.Success)
             {
-                _chat.PostSystemMessage($"Local Llama: {probe.Content}", MessageType.Info, ChatKind.Info);
+                var reply = string.IsNullOrWhiteSpace(probe.Content) ? "Réponse vide." : probe.Content;
+                _chat.PostSystemMessage(reply, MessageType.Info, ChatKind.Info);
                 return true;
             }
 
-            var message = string.IsNullOrWhiteSpace(probe.ErrorMessage) ? "generation failed" : probe.ErrorMessage;
-            _chat.PostSystemMessage(message, MessageType.Warning, ChatKind.Warning);
+            var errorMessage = string.IsNullOrWhiteSpace(probe.ErrorMessage)
+                ? "Erreur génération: réponse vide."
+                : probe.ErrorMessage;
+            _chat.PostSystemMessage(errorMessage, MessageType.Warning, ChatKind.Warning);
             return true;
         }
 
