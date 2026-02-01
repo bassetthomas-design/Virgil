@@ -152,10 +152,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             var modelResult = await localClient.FetchModelIdAsync(ct).ConfigureAwait(false);
             if (!modelResult.Success || string.IsNullOrWhiteSpace(modelResult.ModelId))
             {
-                var message = string.IsNullOrWhiteSpace(modelResult.ErrorMessage)
-                    ? "IA locale prête. Erreur génération."
-                    : $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}{modelResult.ErrorMessage}";
-                return new AssistantReply(message, Array.Empty<ProposedAction>());
+                return new AssistantReply("IA locale prête. Erreur génération.", Array.Empty<ProposedAction>());
             }
 
             var messages = new List<LocalChatMessage>
@@ -312,16 +309,25 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         string runtimePathExpected)
     {
         var diagnostics = BuildDiagnosticReport(modelFound, resolvedModelPath, modelTriedPaths, runtimeFound, runtimePathExpected);
+        var actions = new[]
+        {
+            new ProposedAction(
+                "copy_diagnostic",
+                "Copier diagnostic",
+                new Dictionary<string, string> { ["text"] = diagnostics },
+                RequiresConfirmation: false)
+        };
+
         if (LocalLlamaStateService.Instance.Status == LocalStatus.Ready)
         {
             return new AssistantReply(
-                $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Diagnostic (auto):{Environment.NewLine}{diagnostics}",
-                Array.Empty<ProposedAction>());
+                "IA locale prête. Erreur génération.",
+                actions);
         }
 
         return new AssistantReply(
-            $"IA indisponible (Local Llama).{Environment.NewLine}{Environment.NewLine}Diagnostic (auto):{Environment.NewLine}{diagnostics}",
-            Array.Empty<ProposedAction>());
+            "IA indisponible (Local Llama).",
+            actions);
     }
 
     private string BuildDiagnosticReport(
@@ -561,9 +567,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
             var snippet = Truncate(rawResponse, ErrorSnippetLength);
             Log.Warn($"Local Llama chat: POST {endpointUrl} -> HTTP {(int)response.StatusCode} {response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms | {snippet}");
             var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
-            var message = string.IsNullOrWhiteSpace(snippet)
-                ? $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel}"
-                : $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel} {snippet}";
+            var message = $"IA locale prête. Erreur génération.{Environment.NewLine}{Environment.NewLine}Erreur /v1/chat/completions: {statusLabel}";
             return new ChatCompletionResult(false, string.Empty, null, message);
         }
 

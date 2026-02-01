@@ -116,6 +116,7 @@ public sealed class LocalLlamaClient
             if (!response.IsSuccessStatusCode)
             {
                 Log.Warn($"[LLAMA] GET /v1/models -> {(int)response.StatusCode} {response.StatusCode} | {responseSnippet}");
+                RecordModelsFailure(response, responseSnippet);
                 return new LocalModelFetchResult(false, null, BuildErrorMessage("/v1/models", response, responseSnippet));
             }
 
@@ -135,6 +136,7 @@ public sealed class LocalLlamaClient
         catch (Exception ex)
         {
             Log.Warn($"[LLAMA] GET /v1/models -> exception: {ex}");
+            RecordModelsFailure(ex.GetBaseException().Message);
             return new LocalModelFetchResult(false, null, $"Erreur génération: {ex.GetBaseException().Message}");
         }
     }
@@ -210,9 +212,7 @@ public sealed class LocalLlamaClient
     private static string BuildErrorMessage(string endpoint, HttpResponseMessage response, string snippet)
     {
         var statusLabel = $"{(int)response.StatusCode} {response.StatusCode}";
-        return string.IsNullOrWhiteSpace(snippet)
-            ? $"Erreur {endpoint}: {statusLabel}"
-            : $"Erreur {endpoint}: {statusLabel} {snippet}";
+        return $"Erreur {endpoint}: {statusLabel}";
     }
 
     private static string Truncate(string value, int maxLength)
@@ -260,6 +260,7 @@ public sealed class LocalLlamaClient
             if (response.StatusCode != System.Net.HttpStatusCode.OK)
             {
                 Log.Warn($"[LLAMA] POST /v1/chat/completions -> {statusLabel} in {elapsedMs}ms | {responseSnippet}");
+                RecordChatFailure(statusLabel, responseSnippet);
                 return new ChatCompletionResult(false, string.Empty, null, BuildErrorMessage("/v1/chat/completions", response, responseSnippet));
             }
 
@@ -272,8 +273,43 @@ public sealed class LocalLlamaClient
         {
             stopwatch.Stop();
             Log.Warn($"[LLAMA] POST /v1/chat/completions -> exception after {stopwatch.ElapsedMilliseconds}ms: {ex}");
+            RecordChatFailure("exception", ex.GetBaseException().Message);
             return new ChatCompletionResult(false, string.Empty, null, $"Erreur génération: {ex.GetBaseException().Message}");
         }
+    }
+
+    private static void RecordModelsFailure(HttpResponseMessage response, string responseSnippet)
+    {
+        LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+        {
+            LastModelsResponseExcerpt = string.IsNullOrWhiteSpace(responseSnippet)
+                ? existing.LastModelsResponseExcerpt
+                : responseSnippet,
+            LastModelsErrorMessage = $"HTTP {(int)response.StatusCode} {response.StatusCode}",
+            LastReadinessHttpStatus = (int)response.StatusCode
+        });
+    }
+
+    private static void RecordModelsFailure(string errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return;
+        }
+
+        LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+        {
+            LastModelsErrorMessage = errorMessage
+        });
+    }
+
+    private static void RecordChatFailure(string statusLabel, string details)
+    {
+        var composed = string.IsNullOrWhiteSpace(details) ? statusLabel : $"{statusLabel} | {details}";
+        LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+        {
+            LastErrorMessage = string.IsNullOrWhiteSpace(composed) ? existing.LastErrorMessage : composed
+        });
     }
 
     private sealed record ChatCompletionResult(bool Success, string Content, string? FinishReason, string? ErrorMessage);
