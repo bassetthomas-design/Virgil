@@ -338,6 +338,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         string runtimePathExpected)
     {
         var diagnostics = LlamaRuntimeDiagnosticsStore.Latest;
+        var localState = LocalLlamaStateService.Instance.Snapshot;
         var baseUrl = string.IsNullOrWhiteSpace(diagnostics.BaseUrl)
             ? _httpClient.BaseAddress?.ToString() ?? string.Empty
             : diagnostics.BaseUrl;
@@ -366,6 +367,7 @@ public sealed class EmbeddedLlamaProvider : IAssistantProvider
         sb.AppendLine($"BaseUrl: {FormatBaseUrl(baseUrl)}");
         sb.AppendLine($"ProcessStart: {FormatProcessStart(diagnostics)}");
         sb.AppendLine($"Readiness /v1/models: {FormatReadinessStatus(statusLabel, lastModelsError)}");
+        sb.AppendLine($"StartRequestedUtc: {(localState.StartRequestedUtc?.ToString("u") ?? "—")}, LastStateChangeUtc: {localState.LastStateChangeUtc:u}, AttemptCount: {localState.StartAttemptCount}");
         sb.AppendLine($"ExitCode: {(diagnostics.ExitCode.HasValue ? diagnostics.ExitCode.Value.ToString() : "—")}");
         sb.AppendLine($"Stdout tail ({DiagnosticTailLines} lignes): {GetLastLines(diagnostics.Stdout, DiagnosticTailLines)}");
         sb.AppendLine($"Stderr tail ({DiagnosticTailLines} lignes): {GetLastLines(diagnostics.Stderr, DiagnosticTailLines)}");

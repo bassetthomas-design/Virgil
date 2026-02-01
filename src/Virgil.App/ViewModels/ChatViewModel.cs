@@ -38,6 +38,8 @@ namespace Virgil.App.ViewModels
         private bool _isAiLoading = true;
         private string? _aiStatusTooltip;
         private bool _isChatReady;
+        private LocalLlamaStateSnapshot _latestLlamaSnapshot;
+        private readonly DispatcherTimer _aiStatusTimer;
         private static readonly Brush ReadyBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3CCB7F"));
         private static readonly Brush StartingBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFA43A"));
         private static readonly Brush FailedBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF5A5A"));
@@ -70,7 +72,13 @@ namespace Virgil.App.ViewModels
             AiPillBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#22FFFFFF"));
             var localState = LocalLlamaStateService.Instance;
             localState.StateUpdated += OnLocalLlamaStateUpdated;
-            UpdateAiStatus(localState.Snapshot);
+            _latestLlamaSnapshot = localState.Snapshot;
+            _aiStatusTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _aiStatusTimer.Tick += (_, _) => UpdateAiStatus(_latestLlamaSnapshot);
+            UpdateAiStatus(_latestLlamaSnapshot);
 
             ApplySettingsTtl();
         }
@@ -212,6 +220,7 @@ namespace Virgil.App.ViewModels
 
         private void UpdateAiStatus(LocalLlamaStateSnapshot snapshot)
         {
+            _latestLlamaSnapshot = snapshot;
             IsChatReady = snapshot.Status == LocalStatus.Ready;
 
             switch (snapshot.Status)
@@ -221,6 +230,7 @@ namespace Virgil.App.ViewModels
                     AiStatusBrush = ReadyBrush;
                     IsAiLoading = false;
                     AiStatusTooltip = null;
+                    _aiStatusTimer.Stop();
                     break;
                 case LocalStatus.Failed:
                 case LocalStatus.Stopped:
@@ -230,14 +240,36 @@ namespace Virgil.App.ViewModels
                     AiStatusTooltip = string.IsNullOrWhiteSpace(snapshot.LastFailure)
                         ? null
                         : $"Dernière erreur: {snapshot.LastFailure}";
+                    _aiStatusTimer.Stop();
                     break;
                 default:
-                    AiStatusText = "État IA : Chargement…";
+                    AiStatusText = BuildLoadingStatus(snapshot);
                     AiStatusBrush = StartingBrush;
                     IsAiLoading = true;
                     AiStatusTooltip = null;
+                    if (!_aiStatusTimer.IsEnabled)
+                    {
+                        _aiStatusTimer.Start();
+                    }
                     break;
             }
+        }
+
+        private static string BuildLoadingStatus(LocalLlamaStateSnapshot snapshot)
+        {
+            if (snapshot.StartRequestedUtc.HasValue)
+            {
+                var elapsed = DateTimeOffset.UtcNow - snapshot.StartRequestedUtc.Value;
+                if (elapsed.TotalSeconds > 60)
+                {
+                    return "État IA : Chargement… (lent)";
+                }
+
+                var seconds = Math.Max(0, (int)elapsed.TotalSeconds);
+                return $"État IA : Chargement… ({seconds}s)";
+            }
+
+            return "État IA : Chargement…";
         }
 
         private void OnMessagePosted(string text, MessageType type, bool pinned, int? ttlMs)

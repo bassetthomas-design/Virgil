@@ -56,6 +56,7 @@ namespace Virgil.App
                 uiChat);
             var assistantProvider = assistantProviderFactory.CreateProvider();
             var assistantService = assistantProvider is null ? null : new AssistantService(assistantProvider);
+            _ = assistantProviderFactory.StartLocalLlamaAsync();
 
             var mainVm = new MainViewModel(
                 _chatService,
