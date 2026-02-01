@@ -63,6 +63,7 @@ namespace Virgil.App.Views
             var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));
             var assistantProvider = assistantProviderFactory.CreateProvider();
             _assistantService = assistantProvider is null ? null : new AssistantService(assistantProvider);
+            _ = assistantProviderFactory.StartLocalLlamaAsync();
 
             var mainVm = new MainViewModel(
                 _chatService,

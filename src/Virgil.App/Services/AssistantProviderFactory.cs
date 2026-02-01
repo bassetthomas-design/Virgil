@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Virgil.Core.Config;
 using Virgil.Core.Logging;
 using Virgil.App.Models;
@@ -12,6 +13,9 @@ namespace Virgil.App.Services
     {
         private readonly SettingsService _settingsService;
         private readonly ISecretStore _secretStore;
+        private readonly object _runtimeLock = new();
+        private ILocalLlmRuntime? _embeddedRuntimeManager;
+        private static int _localStartGuard;
 
         public AssistantProviderFactory(SettingsService settingsService, ISecretStore secretStore)
         {
@@ -23,12 +27,7 @@ namespace Virgil.App.Services
         {
             var settings = _settingsService.Settings;
             var defaultRuntimePath = LlamaRuntimeManager.DefaultRuntimePath;
-            ILocalLlmRuntime embeddedRuntimeManager = File.Exists(defaultRuntimePath)
-                ? new LlamaRuntimeManager(
-                    settings.EmbeddedLlamaBaseUrl,
-                    defaultRuntimePath,
-                    apiKey: settings.EmbeddedLlamaApiKey)
-                : new NoRuntimeLocalLlmRuntime(defaultRuntimePath);
+            var embeddedRuntimeManager = GetEmbeddedRuntimeManager(settings, defaultRuntimePath);
             var embeddedProvider = new EmbeddedLlamaProvider(
                 embeddedRuntimeManager,
                 settings.EmbeddedLlamaBaseUrl,
@@ -56,6 +55,40 @@ namespace Virgil.App.Services
             }
 
             return provider;
+        }
+
+        public async Task StartLocalLlamaAsync(CancellationToken ct = default)
+        {
+            if (Interlocked.Exchange(ref _localStartGuard, 1) == 1)
+            {
+                return;
+            }
+
+            if (!_settingsService.IsLocalEnabled)
+            {
+                return;
+            }
+
+            var settings = _settingsService.Settings;
+            var runtimeManager = GetEmbeddedRuntimeManager(settings, LlamaRuntimeManager.DefaultRuntimePath);
+            var modelLocator = new ModelLocator();
+            if (modelLocator.TryResolve(out var modelPath, out _))
+            {
+                runtimeManager.SetModelPath(modelPath);
+            }
+
+            try
+            {
+                await runtimeManager.StartAsync(ct).ConfigureAwait(false);
+            }
+            catch (AssistantProviderUnavailableException ex)
+            {
+                Log.Warn($"Démarrage IA locale impossible: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Démarrage IA locale: échec inattendu. {ex}");
+            }
         }
 
         private IAssistantProvider CreateOpenAiProvider(AppSettings settings)
@@ -99,6 +132,31 @@ namespace Virgil.App.Services
                 Log.Error($"IA locale indisponible: échec inattendu. {ex}");
                 return false;
             }
+        }
+
+        private ILocalLlmRuntime GetEmbeddedRuntimeManager(AppSettings settings, string defaultRuntimePath)
+        {
+            if (_embeddedRuntimeManager is not null)
+            {
+                return _embeddedRuntimeManager;
+            }
+
+            lock (_runtimeLock)
+            {
+                if (_embeddedRuntimeManager is not null)
+                {
+                    return _embeddedRuntimeManager;
+                }
+
+                _embeddedRuntimeManager = File.Exists(defaultRuntimePath)
+                    ? new LlamaRuntimeManager(
+                        settings.EmbeddedLlamaBaseUrl,
+                        defaultRuntimePath,
+                        apiKey: settings.EmbeddedLlamaApiKey)
+                    : new NoRuntimeLocalLlmRuntime(defaultRuntimePath);
+            }
+
+            return _embeddedRuntimeManager;
         }
     }
 }

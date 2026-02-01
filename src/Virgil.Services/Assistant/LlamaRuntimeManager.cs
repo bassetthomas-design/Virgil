@@ -125,6 +125,7 @@ public sealed class LlamaRuntimeManager : IAsyncDisposable, ILocalLlmRuntime
                 return;
             }
 
+            LocalLlamaStateService.Instance.MarkStartRequested();
             _readyConfirmed = false;
 
             var runtimeFullPath = Path.GetFullPath(_executablePath);

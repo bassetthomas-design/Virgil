@@ -8,7 +8,10 @@ public sealed record LocalLlamaStateSnapshot(
     string BaseUrl,
     string ModelId,
     int? LastReadinessStatusCode,
-    string? LastFailure);
+    string? LastFailure,
+    DateTimeOffset LastStateChangeUtc,
+    DateTimeOffset? StartRequestedUtc,
+    int StartAttemptCount);
 
 public sealed class LocalLlamaStateService
 {
@@ -19,7 +22,10 @@ public sealed class LocalLlamaStateService
         string.Empty,
         string.Empty,
         null,
-        null);
+        null,
+        DateTimeOffset.UtcNow,
+        null,
+        0);
 
     public static LocalLlamaStateService Instance { get; } = new();
 
@@ -31,6 +37,9 @@ public sealed class LocalLlamaStateService
     public string ModelId => Snapshot.ModelId;
     public int? LastReadinessStatusCode => Snapshot.LastReadinessStatusCode;
     public string? LastFailure => Snapshot.LastFailure;
+    public DateTimeOffset LastStateChangeUtc => Snapshot.LastStateChangeUtc;
+    public DateTimeOffset? StartRequestedUtc => Snapshot.StartRequestedUtc;
+    public int StartAttemptCount => Snapshot.StartAttemptCount;
 
     public LocalLlamaStateSnapshot Snapshot
     {
@@ -81,6 +90,26 @@ public sealed class LocalLlamaStateService
         }));
     }
 
+    internal void MarkStartRequested()
+    {
+        var now = DateTimeOffset.UtcNow;
+        Update(current =>
+        {
+            var proposed = current with
+            {
+                StartRequestedUtc = now,
+                StartAttemptCount = current.StartAttemptCount + 1
+            };
+
+            if (current.Status is LocalStatus.Stopped or LocalStatus.Failed)
+            {
+                proposed = proposed with { Status = LocalStatus.Starting, LastFailure = null };
+            }
+
+            return Normalize(current, proposed);
+        });
+    }
+
     private void Update(Func<LocalLlamaStateSnapshot, LocalLlamaStateSnapshot> update)
     {
         if (update is null)
@@ -91,7 +120,14 @@ public sealed class LocalLlamaStateService
         LocalLlamaStateSnapshot latest;
         lock (SyncRoot)
         {
-            _snapshot = update(_snapshot);
+            var previous = _snapshot;
+            var proposed = update(previous);
+            if (proposed.Status != previous.Status)
+            {
+                proposed = proposed with { LastStateChangeUtc = DateTimeOffset.UtcNow };
+            }
+
+            _snapshot = proposed;
             latest = _snapshot;
         }
 
@@ -111,7 +147,10 @@ public sealed class LocalLlamaStateService
             baseUrl,
             modelId,
             lastReadinessStatus,
-            failure);
+            failure,
+            current.LastStateChangeUtc,
+            current.StartRequestedUtc,
+            current.StartAttemptCount);
     }
 
     private static string? ResolveFailure(
