@@ -15,6 +15,7 @@ using Virgil.App.Chat;
 using Virgil.App.Commands;
 using Virgil.App.Models;
 using Virgil.App.Services;
+using Virgil.Core.Logging;
 using Virgil.Services.Assistant;
 
 namespace Virgil.App.ViewModels
@@ -36,6 +37,7 @@ namespace Virgil.App.ViewModels
         private Brush _aiStatusBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFA43A"));
         private bool _isAiLoading = true;
         private string? _aiStatusTooltip;
+        private bool _isChatReady;
         private static readonly Brush ReadyBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3CCB7F"));
         private static readonly Brush StartingBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFA43A"));
         private static readonly Brush FailedBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF5A5A"));
@@ -170,6 +172,22 @@ namespace Virgil.App.ViewModels
             }
         }
 
+        public bool IsChatReady
+        {
+            get => _isChatReady;
+            private set
+            {
+                if (_isChatReady == value)
+                {
+                    return;
+                }
+
+                _isChatReady = value;
+                OnPropertyChanged();
+                RaiseCanExecuteChanged();
+            }
+        }
+
         public Brush AiPillBackground { get; }
 
         public string? AiStatusTooltip
@@ -194,6 +212,8 @@ namespace Virgil.App.ViewModels
 
         private void UpdateAiStatus(LocalLlamaStateSnapshot snapshot)
         {
+            IsChatReady = snapshot.Status == LocalStatus.Ready;
+
             switch (snapshot.Status)
             {
                 case LocalStatus.Ready:
@@ -248,6 +268,12 @@ namespace Virgil.App.ViewModels
 
         private async Task SendAsync()
         {
+            if (!IsChatReady)
+            {
+                Log.Warn("Chat: tentative d'envoi alors que l'IA locale n'est pas prête.");
+                return;
+            }
+
             var message = InputText?.Trim();
             if (string.IsNullOrEmpty(message))
             {
@@ -281,6 +307,12 @@ namespace Virgil.App.ViewModels
                 {
                     var assistantContext = _assistantContextProvider();
                     var reply = await _assistantService.AskAsync(message, assistantContext).ConfigureAwait(false);
+                    if (ShouldSuppressGenerationError(reply.Text))
+                    {
+                        Log.Warn($"Chat: suppression d'une erreur de génération pendant le warm-up: {reply.Text}");
+                        return;
+                    }
+
                     AppendAssistantReply(reply);
                     return;
                 }
@@ -349,6 +381,12 @@ namespace Virgil.App.ViewModels
             var errorMessage = string.IsNullOrWhiteSpace(probe.ErrorMessage)
                 ? "Erreur génération: réponse vide."
                 : probe.ErrorMessage;
+            if (ShouldSuppressGenerationError(errorMessage))
+            {
+                Log.Warn($"Chat: suppression d'une erreur de génération pendant le warm-up: {errorMessage}");
+                return true;
+            }
+
             _chat.PostSystemMessage(errorMessage, MessageType.Warning, ChatKind.Warning);
             return true;
         }
@@ -472,7 +510,22 @@ namespace Virgil.App.ViewModels
             }
         }
 
-        private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(InputText);
+        private bool CanSend() => IsChatReady && !IsBusy && !string.IsNullOrWhiteSpace(InputText);
+
+        private static bool ShouldSuppressGenerationError(string? message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            if (LocalLlamaStateService.Instance.Status != LocalStatus.Starting)
+            {
+                return false;
+            }
+
+            return message.Contains("Erreur génération", StringComparison.OrdinalIgnoreCase);
+        }
 
         private void RaiseCanExecuteChanged()
         {
