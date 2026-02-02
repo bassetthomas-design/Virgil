@@ -11,5 +11,6 @@ public interface ILocalLlmRuntime
     string? ApiKey { get; }
     void SetModelPath(string modelPath);
     Task StartAsync(CancellationToken ct = default);
+    Task StopAsync(CancellationToken ct = default);
     Task<bool> HealthCheckAsync(CancellationToken ct = default);
 }

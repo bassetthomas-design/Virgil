@@ -88,7 +88,8 @@ namespace Virgil.App.ViewModels
             IConfirmationService confirmationService,
             ChatActionBridge? chatActionBridge = null,
             IChatEngine? chatEngine = null,
-            IAssistantService? assistantService = null)
+            IAssistantService? assistantService = null,
+            LocalLlamaController? localLlamaController = null)
         {
             _chat = chat ?? throw new ArgumentNullException(nameof(chat));
             Monitoring = monitoring ?? throw new ArgumentNullException(nameof(monitoring));
@@ -110,7 +111,8 @@ namespace Virgil.App.ViewModels
                 assistantService,
                 BuildAssistantContext,
                 RunActionAsync,
-                settingsService);
+                settingsService,
+                localLlamaController);
 
             RunActionCommand = new AsyncRelayCommand(async param =>
             {

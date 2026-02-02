@@ -59,6 +59,11 @@ namespace Virgil.App.Services
 
         public async Task StartLocalLlamaAsync(CancellationToken ct = default)
         {
+            if (!_settingsService.Settings.LocalAiAutoEnable)
+            {
+                return;
+            }
+
             if (Interlocked.Exchange(ref _localStartGuard, 1) == 1)
             {
                 return;
@@ -91,6 +96,12 @@ namespace Virgil.App.Services
             }
         }
 
+        public ILocalLlmRuntime GetLocalRuntimeManager()
+        {
+            var settings = _settingsService.Settings;
+            return GetEmbeddedRuntimeManager(settings, LlamaRuntimeManager.DefaultRuntimePath);
+        }
+
         private IAssistantProvider CreateOpenAiProvider(AppSettings settings)
         {
             var apiKey = _secretStore.LoadOpenAiApiKey();
@@ -103,6 +114,11 @@ namespace Virgil.App.Services
 
         private static bool TryEnsureLocalReady(ILocalLlmRuntime runtimeManager)
         {
+            if (LocalLlamaStateService.Instance.Status == LocalStatus.Disabled)
+            {
+                return false;
+            }
+
             var modelLocator = new ModelLocator();
             if (!modelLocator.TryResolve(out var modelPath, out _))
             {

@@ -14,7 +14,7 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
             BaseUrl = string.Empty,
             ProcessRunning = false,
             PortOpen = false,
-            LocalStatus = LocalStatus.Stopped
+            LocalStatus = LocalStatus.Disabled
         };
         LlamaRuntimeDiagnosticsStore.Set(Diagnostics);
     }
@@ -32,6 +32,24 @@ public sealed class NoRuntimeLocalLlmRuntime : ILocalLlmRuntime
     }
 
     public Task StartAsync(CancellationToken ct = default)
+    {
+        LocalLlamaStateService.Instance.MarkStartRequested();
+        var message = $"Llama runtime introuvable: '{RuntimePathUsed}'.";
+        LlamaRuntimeDiagnosticsStore.Update(existing => existing with
+        {
+            ProcessRunning = false,
+            PortOpen = false,
+            ExitCode = null,
+            LastErrorMessage = message,
+            LocalStatus = LocalStatus.Failed,
+            FailureCategory = "RuntimeMissing"
+        });
+
+        LocalLlamaStateService.Instance.MarkFailed(message);
+        throw new AssistantProviderUnavailableException(message);
+    }
+
+    public Task StopAsync(CancellationToken ct = default)
         => Task.CompletedTask;
 
     public Task<bool> HealthCheckAsync(CancellationToken ct = default)
