@@ -110,7 +110,7 @@ public sealed class LocalLlamaStateService
         });
     }
 
-    internal void MarkDisabled()
+    public void MarkDisabled()
     {
         Update(current => current with
         {
@@ -124,7 +124,7 @@ public sealed class LocalLlamaStateService
         });
     }
 
-    internal void MarkFailed(string? failure)
+    public void MarkFailed(string? failure)
     {
         var message = string.IsNullOrWhiteSpace(failure) ? "Erreur runtime local." : failure;
         Update(current => current with
