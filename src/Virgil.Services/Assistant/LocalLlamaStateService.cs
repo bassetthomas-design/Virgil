@@ -17,7 +17,7 @@ public sealed class LocalLlamaStateService
 {
     private static readonly object SyncRoot = new();
     private LocalLlamaStateSnapshot _snapshot = new(
-        LocalStatus.Stopped,
+        LocalStatus.Disabled,
         false,
         string.Empty,
         string.Empty,
@@ -101,12 +101,37 @@ public sealed class LocalLlamaStateService
                 StartAttemptCount = current.StartAttemptCount + 1
             };
 
-            if (current.Status is LocalStatus.Stopped or LocalStatus.Failed)
+            if (current.Status is LocalStatus.Disabled or LocalStatus.Stopped or LocalStatus.Failed)
             {
                 proposed = proposed with { Status = LocalStatus.Starting, LastFailure = null };
             }
 
             return Normalize(current, proposed);
+        });
+    }
+
+    public void MarkDisabled()
+    {
+        Update(current => current with
+        {
+            Status = LocalStatus.Disabled,
+            ProcessRunning = false,
+            ModelId = string.Empty,
+            LastReadinessStatusCode = null,
+            LastFailure = null,
+            StartRequestedUtc = null,
+            StartAttemptCount = 0
+        });
+    }
+
+    public void MarkFailed(string? failure)
+    {
+        var message = string.IsNullOrWhiteSpace(failure) ? "Erreur runtime local." : failure;
+        Update(current => current with
+        {
+            Status = LocalStatus.Failed,
+            ProcessRunning = false,
+            LastFailure = message
         });
     }
 
@@ -164,6 +189,11 @@ public sealed class LocalLlamaStateService
             return null;
         }
 
+        if (status == LocalStatus.Disabled)
+        {
+            return null;
+        }
+
         if (status == LocalStatus.Failed && !processRunning)
         {
             return string.IsNullOrWhiteSpace(lastErrorMessage)
@@ -176,9 +206,14 @@ public sealed class LocalLlamaStateService
 
     private static LocalLlamaStateSnapshot Normalize(LocalLlamaStateSnapshot current, LocalLlamaStateSnapshot proposed)
     {
+        if (current.Status == LocalStatus.Disabled && proposed.Status == LocalStatus.Stopped)
+        {
+            proposed = proposed with { Status = LocalStatus.Disabled, ProcessRunning = false };
+        }
+
         var hasModelsReady = proposed.LastReadinessStatusCode == 200
             && (proposed.ProcessRunning || current.ProcessRunning)
-            && proposed.Status != LocalStatus.Stopped;
+            && proposed.Status is not (LocalStatus.Stopped or LocalStatus.Disabled);
         if (hasModelsReady)
         {
             proposed = proposed with
@@ -191,7 +226,9 @@ public sealed class LocalLlamaStateService
 
         if ((current.ProcessRunning || proposed.ProcessRunning) && proposed.Status == LocalStatus.Failed)
         {
-            var fallbackStatus = current.Status == LocalStatus.Stopped ? LocalStatus.Starting : current.Status;
+            var fallbackStatus = current.Status is LocalStatus.Stopped or LocalStatus.Disabled
+                ? LocalStatus.Starting
+                : current.Status;
             proposed = proposed with
             {
                 Status = fallbackStatus,
@@ -202,6 +239,11 @@ public sealed class LocalLlamaStateService
         if (proposed.Status == LocalStatus.Ready)
         {
             return proposed with { ProcessRunning = true, LastFailure = null };
+        }
+
+        if (proposed.Status == LocalStatus.Disabled)
+        {
+            return proposed with { ProcessRunning = false, LastFailure = null };
         }
 
         return proposed;

@@ -43,6 +43,7 @@ namespace Virgil.App.Views
             var confirmationPrompt = new UiConfirmationPrompt(_confirmationService);
             var keyStore = new OpenAiKeyStore();
             var assistantProviderFactory = new AssistantProviderFactory(_settingsService, keyStore);
+            var localLlamaController = new LocalLlamaController(_settingsService, assistantProviderFactory);
             var reloader = new ConfigurationReloader(_settingsService, _monitoringService);
 
             var monitoringVm = new MonitoringViewModel(
@@ -63,7 +64,10 @@ namespace Virgil.App.Views
             var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));
             var assistantProvider = assistantProviderFactory.CreateProvider();
             _assistantService = assistantProvider is null ? null : new AssistantService(assistantProvider);
-            _ = assistantProviderFactory.StartLocalLlamaAsync();
+            if (_settingsService.Settings.LocalAiAutoEnable)
+            {
+                _ = localLlamaController.EnableAsync();
+            }
 
             var mainVm = new MainViewModel(
                 _chatService,
@@ -75,7 +79,8 @@ namespace Virgil.App.Views
                 _confirmationService,
                 chatBridge,
                 chatEngine,
-                _assistantService);
+                _assistantService,
+                localLlamaController);
 
             reloader.Attach(mainVm);
 

@@ -40,7 +40,7 @@ public sealed record LlamaRuntimeDiagnostics(
         null,
         null,
         null,
-        LocalStatus.Stopped,
+        LocalStatus.Disabled,
         null,
         null);
 }

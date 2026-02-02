@@ -40,6 +40,7 @@ namespace Virgil.App.Models
         public int EmbeddedLlamaTimeoutSeconds { get; set; } = 30;
         public string? EmbeddedLlamaApiKey { get; set; }
         public int LocalMaxTokens { get; set; } = 768;
+        public bool LocalAiAutoEnable { get; set; } = false;
         public bool AiPackFullEnabled { get; set; } = true;
         public string AiPackFullDownloadUrl { get; set; } = string.Empty;
         public string AiPackFullSha256 { get; set; } = string.Empty;

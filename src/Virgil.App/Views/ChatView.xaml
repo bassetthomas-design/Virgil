@@ -48,6 +48,17 @@
                                          Margin="0,4,0,0"
                                          IsIndeterminate="True"
                                          Visibility="{Binding IsAiLoading, Converter={StaticResource BoolToVisibility}}" />
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Button Content="Activer l’IA"
+                                        Command="{Binding EnableAiCommand}"
+                                        Visibility="{Binding ShowEnableAiButton, Converter={StaticResource BoolToVisibility}}"
+                                        Padding="10,4" />
+                                <Button Content="Désactiver l’IA"
+                                        Command="{Binding DisableAiCommand}"
+                                        Visibility="{Binding ShowDisableAiButton, Converter={StaticResource BoolToVisibility}}"
+                                        Margin="6,0,0,0"
+                                        Padding="10,4" />
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
