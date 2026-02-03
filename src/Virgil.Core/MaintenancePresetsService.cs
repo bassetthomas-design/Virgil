@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Core.Services;
 
@@ -20,9 +21,8 @@ namespace Virgil.Core.Services
             log.AppendLine(await apps.UpgradeAllAsync(includeUnknown: true, silent: true).ConfigureAwait(false));
 
             var wu = new WindowsUpdateService();
-            log.AppendLine((await wu.StartScanAsync().ConfigureAwait(false)).GetDisplayMessage());
-            log.AppendLine((await wu.StartDownloadAsync().ConfigureAwait(false)).GetDisplayMessage());
-            log.AppendLine((await wu.StartInstallAsync().ConfigureAwait(false)).GetDisplayMessage());
+            var updateResult = await wu.RunAsync(new Virgil.Core.Models.WindowsUpdateOptions(), null, CancellationToken.None).ConfigureAwait(false);
+            log.AppendLine(updateResult.Summary);
 
             var drivers = new DriverUpdateService();
             log.AppendLine(await drivers.UpgradeDriversAsync().ConfigureAwait(false));
