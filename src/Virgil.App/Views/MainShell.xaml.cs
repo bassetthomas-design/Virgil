@@ -52,8 +52,9 @@ namespace Virgil.App.Views
                 networkInsightService);
 
             var uiChat = new UiChatServiceAdapter(_chatService);
+            var cleanupProgress = new ActionProgressReporter(ActionProgressService.Instance);
             _orchestrator = new ActionOrchestrator(
-                new CleanupService(),
+                new CleanupService(progressProvider: () => cleanupProgress),
                 new UpdateService(),
                 new NetworkService(),
                 new PerformanceService(sessionConfirmation: new UiSessionConfirmation(_confirmationService)),

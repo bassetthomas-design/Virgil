@@ -10,29 +10,39 @@ namespace Virgil.Tests;
 public class CleanupServiceAction9Tests
 {
     [Fact]
-    public async Task BrowserDeepClean_ShouldRefuseWhenBrowserRunning()
+    public async Task BrowserDeepClean_ShouldContinueWhenBrowserRunning()
     {
         using var workspace = new TempWorkspace();
         var profile = workspace.CreateFolder("Chrome/User Data/Default");
+        var cache = workspace.CreateFolder(Path.Combine(profile, "Cache"));
+        workspace.CreateFile(cache, "c.bin", 128);
 
-        var plan = new CleanupService.BrowserDeepCleanPlan(new[]
-        {
-            new CleanupService.BrowserDeepTarget("Chrome", "chrome", new[]
+        var browserService = CreateBrowserCleanupService(
+            isProcessRunning: name => name.Equals("chrome", StringComparison.OrdinalIgnoreCase),
+            new BrowserCleanupTarget("Chrome", "chrome", new[]
             {
-                new CleanupService.BrowserProfileTarget("Default", profile)
-            })
-        });
+                new BrowserCleanupProfile(
+                    "Default",
+                    profile,
+                    cachePaths: new[] { cache },
+                    cookieFiles: Array.Empty<string>(),
+                    historyFiles: Array.Empty<string>(),
+                    downloadFiles: Array.Empty<string>(),
+                    sessionFiles: Array.Empty<string>(),
+                    siteDataPaths: Array.Empty<string>(),
+                    autofillFiles: Array.Empty<string>())
+            }));
 
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
             () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
-            () => plan,
-            isProcessRunning: name => name.Equals("chrome", StringComparison.OrdinalIgnoreCase));
+            browserCleanupService: browserService,
+            isWindows: () => true);
 
         var result = await service.RunBrowserDeepAsync();
 
-        result.Success.Should().BeFalse();
-        result.Message.Should().Contain("ouvert");
+        result.Success.Should().BeTrue();
+        result.Message.Should().Contain("Certaines données");
     }
 
     [Fact]
@@ -47,27 +57,33 @@ public class CleanupServiceAction9Tests
         var indexed = workspace.CreateFolder(Path.Combine(profile, "IndexedDB"));
         workspace.CreateFile(indexed, "db", 1024);
 
-        var plan = new CleanupService.BrowserDeepCleanPlan(new[]
-        {
-            new CleanupService.BrowserDeepTarget("Chrome", "chrome", new[]
+        var browserService = CreateBrowserCleanupService(
+            isProcessRunning: _ => false,
+            new BrowserCleanupTarget("Chrome", "chrome", new[]
             {
-                new CleanupService.BrowserProfileTarget("Default", profile)
-            })
-        });
+                new BrowserCleanupProfile(
+                    "Default",
+                    profile,
+                    cachePaths: new[] { cache },
+                    cookieFiles: new[] { cookies },
+                    historyFiles: new[] { history },
+                    downloadFiles: new[] { history },
+                    sessionFiles: Array.Empty<string>(),
+                    siteDataPaths: new[] { indexed },
+                    autofillFiles: Array.Empty<string>())
+            }));
 
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
             () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
-            () => plan,
-            isProcessRunning: _ => false);
+            browserCleanupService: browserService,
+            isWindows: () => true);
 
         var result = await service.RunBrowserDeepAsync();
 
         result.Success.Should().BeTrue();
-        result.Message.Should().Contain("Navigateurs nettoyés");
-        result.Message.Should().Contain("Données supprimées");
-        result.Message.Should().Contain("Quantité libérée");
-        result.Message.Should().Contain("Reconnexion");
+        result.Message.Should().Contain("Nettoyage navigateurs terminé");
+        result.Message.Should().Contain("libérés");
 
         File.Exists(cookies).Should().BeFalse();
         File.Exists(history).Should().BeFalse();
@@ -82,25 +98,43 @@ public class CleanupServiceAction9Tests
         using var workspace = new TempWorkspace();
         var profile = Path.Combine(workspace.Root, "NonExistentProfile");
 
-        var plan = new CleanupService.BrowserDeepCleanPlan(new[]
-        {
-            new CleanupService.BrowserDeepTarget("Chrome", "chrome", new[]
+        var browserService = CreateBrowserCleanupService(
+            isProcessRunning: _ => false,
+            new BrowserCleanupTarget("Chrome", "chrome", new[]
             {
-                new CleanupService.BrowserProfileTarget("Ghost", profile)
-            })
-        });
+                new BrowserCleanupProfile(
+                    "Ghost",
+                    profile,
+                    cachePaths: Array.Empty<string>(),
+                    cookieFiles: Array.Empty<string>(),
+                    historyFiles: Array.Empty<string>(),
+                    downloadFiles: Array.Empty<string>(),
+                    sessionFiles: Array.Empty<string>(),
+                    siteDataPaths: Array.Empty<string>(),
+                    autofillFiles: Array.Empty<string>())
+            }));
 
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
             () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
-            () => plan,
-            isProcessRunning: _ => false);
+            browserCleanupService: browserService,
+            isWindows: () => true);
 
         var result = await service.RunBrowserDeepAsync();
 
-        result.Success.Should().BeFalse();
-        result.Message.Should().Contain("aucune donnée");
+        result.Success.Should().BeTrue();
+        result.Message.Should().Contain("aucun");
         Directory.Exists(profile).Should().BeFalse();
+    }
+
+    private static BrowserCleanupService CreateBrowserCleanupService(
+        Func<string, bool> isProcessRunning,
+        params BrowserCleanupTarget[] targets)
+    {
+        return new BrowserCleanupService(
+            isWindows: () => true,
+            isProcessRunning: isProcessRunning,
+            targetsProvider: () => targets);
     }
 
     private sealed class TempWorkspace : IDisposable
