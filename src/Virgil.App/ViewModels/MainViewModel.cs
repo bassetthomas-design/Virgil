@@ -531,6 +531,18 @@ namespace Virgil.App.ViewModels
                 return;
             }
 
+            if (string.Equals(actionId, "drivers_scan", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("Je vérifie les mises à jour de pilotes via Windows Update.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "drivers_install", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("J’installe les mises à jour de pilotes. Ça peut prendre un moment.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
             _chat.PostSystemMessage($"Je lance « {actionTitle} »…", MessageType.Info, ChatKind.Info);
         }
 
@@ -545,6 +557,13 @@ namespace Virgil.App.ViewModels
             var messageType = result.Status == ActionResultStatus.Failed ? MessageType.Warning : MessageType.Info;
 
             if (string.Equals(actionId, "windows_update", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "drivers_scan", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(actionId, "drivers_install", StringComparison.OrdinalIgnoreCase))
             {
                 _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
                 return;

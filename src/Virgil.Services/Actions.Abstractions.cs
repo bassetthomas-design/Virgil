@@ -23,7 +23,8 @@ public interface IUpdateService
     Task<ActionExecutionResult> ManageAutomaticUpdatesAsync(AutoUpdateUserIntent? intent = null, CancellationToken ct = default);
     Task<ActionExecutionResult> UpdateAppsAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> RunWindowsUpdateAsync(CancellationToken ct = default);
-    Task<ActionExecutionResult> CheckGpuDriversAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> ScanDriversAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> InstallDriversAsync(CancellationToken ct = default);
 }
 
 public interface INetworkService

@@ -107,8 +107,11 @@ public sealed class ActionOrchestrator : IActionOrchestrator
             case VirgilActionId.RunWindowsUpdate:
                 return await ExecuteAsync("Lancement de Windows Update", () => _update.RunWindowsUpdateAsync(ct), ct, notifyChat: false);
 
-            case VirgilActionId.CheckGpuDrivers:
-                return await ExecuteAsync("Vérification des pilotes GPU", () => _update.CheckGpuDriversAsync(ct), ct);
+            case VirgilActionId.DriverScan:
+                return await ExecuteAsync("Vérification des pilotes", () => _update.ScanDriversAsync(ct), ct, notifyChat: false);
+
+            case VirgilActionId.DriverInstall:
+                return await ExecuteAsync("Installation des pilotes", () => _update.InstallDriversAsync(ct), ct, notifyChat: false);
 
             case VirgilActionId.UpdateSoftwares:
                 return await ExecuteAsync("Mise à jour des logiciels", () => _update.UpdateAppsAsync(ct), ct);

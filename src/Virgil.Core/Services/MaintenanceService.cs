@@ -67,7 +67,16 @@ namespace Virgil.Core.Services
             var updateResult = await _windows.RunAsync(new Virgil.Core.Models.WindowsUpdateOptions(), null, ct).ConfigureAwait(false);
             report.UpdateLogs.Add(updateResult.Summary);
             progress?.Report("Mise à jour des pilotes...");
-            report.UpdateLogs.Add(await _drivers.UpgradeDriversAsync().ConfigureAwait(false));
+            var driverScan = await _drivers.ScanAsync(ct).ConfigureAwait(false);
+            if (driverScan.Succeeded && driverScan.Found > 0)
+            {
+                var driverInstall = await _drivers.InstallAsync(driverScan.Items, ct).ConfigureAwait(false);
+                report.UpdateLogs.Add(driverInstall.Summary);
+            }
+            else
+            {
+                report.UpdateLogs.Add(driverScan.Summary);
+            }
             progress?.Report("Mise à jour de Microsoft Defender...");
             report.UpdateLogs.Add(await _defender.UpdateSignaturesAsync().ConfigureAwait(false));
             report.UpdateLogs.Add(await _defender.QuickScanAsync().ConfigureAwait(false));

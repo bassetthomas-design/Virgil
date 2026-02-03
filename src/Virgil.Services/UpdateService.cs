@@ -17,13 +17,16 @@ public sealed class UpdateService : IUpdateService
 {
     private readonly Core.Services.ApplicationUpdateService _apps;
     private readonly Core.Services.WindowsUpdateService _windows;
+    private readonly Core.Services.DriverUpdateService _drivers;
     private readonly IAutomaticUpdateDataSource _automaticUpdates;
     private readonly Func<IProgress<double>?>? _progressProvider;
+    private List<DriverUpdateItem> _lastDriverItems = new();
 
     public UpdateService(IAutomaticUpdateDataSource? automaticUpdates = null, Func<IProgress<double>?>? progressProvider = null)
     {
         _windows = new Core.Services.WindowsUpdateService();
         _apps = new Core.Services.ApplicationUpdateService();
+        _drivers = new Core.Services.DriverUpdateService(progressProvider?.Invoke());
         _automaticUpdates = automaticUpdates ?? new RuntimeAutomaticUpdateDataSource(_windows, new WindowsPrivilegeChecker(), new RuntimePlatformInfo());
         _progressProvider = progressProvider;
     }
@@ -85,8 +88,70 @@ public sealed class UpdateService : IUpdateService
         }
     }
 
-    public Task<ActionExecutionResult> CheckGpuDriversAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotAvailable("Vérification des pilotes GPU", "Vérification des drivers GPU non disponible (service absent)."));
+    public async Task<ActionExecutionResult> ScanDriversAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await _drivers.ScanAsync(ct).ConfigureAwait(false);
+            _lastDriverItems = result.Succeeded ? result.Items ?? new List<DriverUpdateItem>() : new List<DriverUpdateItem>();
+            var summary = BuildDriverScanSummary(result);
+            return new ActionExecutionResult(
+                result.Succeeded ? ActionResultStatus.Success : ActionResultStatus.Failed,
+                "Vérification des pilotes",
+                summary,
+                debugInfo: BuildDriverDebugInfo(result));
+        }
+        catch (Exception ex)
+        {
+            return ActionExecutionResult.Failure("Vérification des pilotes", $"Erreur pilotes: {ex.Message}");
+        }
+    }
+
+    public async Task<ActionExecutionResult> InstallDriversAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await _drivers.InstallAsync(_lastDriverItems, ct).ConfigureAwait(false);
+            var summary = BuildDriverInstallSummary(result);
+            return new ActionExecutionResult(
+                result.Succeeded ? ActionResultStatus.Success : ActionResultStatus.Failed,
+                "Installation des pilotes",
+                summary,
+                debugInfo: BuildDriverDebugInfo(result));
+        }
+        catch (Exception ex)
+        {
+            return ActionExecutionResult.Failure("Installation des pilotes", $"Erreur pilotes: {ex.Message}");
+        }
+    }
+
+    private static string BuildDriverDebugInfo(DriverUpdateResult result)
+        => $"drivers_found={result.Found};drivers_installed={result.Installed};reboot_required={result.RebootRequired.ToString().ToLowerInvariant()}";
+
+    private static string BuildDriverScanSummary(DriverUpdateResult result)
+    {
+        if (!result.Succeeded)
+        {
+            var reason = string.IsNullOrWhiteSpace(result.FailureReason) ? "Erreur Windows Update" : result.FailureReason;
+            return $"Pilotes: échec ({reason}).";
+        }
+
+        return result.Found == 0
+            ? "Pilotes: aucune mise à jour trouvée."
+            : $"Pilotes: {result.Found} mise(s) à jour trouvée(s).";
+    }
+
+    private static string BuildDriverInstallSummary(DriverUpdateResult result)
+    {
+        if (!result.Succeeded)
+        {
+            var reason = string.IsNullOrWhiteSpace(result.FailureReason) ? "Erreur Windows Update" : result.FailureReason;
+            return $"Pilotes: échec ({reason}).";
+        }
+
+        var reboot = result.RebootRequired ? "Oui" : "Non";
+        return $"Pilotes: {result.Found} trouvées, {result.Installed} installées. Redémarrage requis: {reboot}.";
+    }
 
     private static string BuildAutomaticUpdateMessage(AutomaticUpdateSnapshot snapshot)
     {
