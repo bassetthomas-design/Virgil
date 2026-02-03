@@ -50,6 +50,16 @@ public sealed class CleanupService : ICleanupService
     {
     }
 
+    public CleanupService(Func<IProgress<double>?> progressProvider)
+        : this(
+            CleanupPlan.FromEnvironment,
+            BrowserCleanPlan.FromEnvironment,
+            BrowserDeepCleanPlan.FromEnvironment,
+            systemTempPlanFactory: BuildSystemTempCleanupPlan,
+            progressProvider: progressProvider)
+    {
+    }
+
     public CleanupService(
         Func<CleanupPlan> planFactory,
         Func<BrowserCleanPlan> browserPlanFactory,
