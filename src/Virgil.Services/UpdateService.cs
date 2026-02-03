@@ -146,7 +146,7 @@ public sealed class UpdateService : IUpdateService
         return sb.ToString().Trim();
     }
 
-    private static string BuildAutoUpdateScanDetails(WindowsUpdateResult result)
+    internal static string BuildAutoUpdateScanDetails(WindowsUpdateResult result)
     {
         if (!result.Succeeded)
         {
@@ -239,7 +239,7 @@ public sealed class RuntimeAutomaticUpdateDataSource : IAutomaticUpdateDataSourc
         try
         {
             var scanResult = await _windows.RunAsync(new WindowsUpdateOptions { SearchOnly = true }, null, ct).ConfigureAwait(false);
-            scanDetails = BuildAutoUpdateScanDetails(scanResult);
+            scanDetails = UpdateService.BuildAutoUpdateScanDetails(scanResult);
             if (scanResult.UpdatesFound > 0)
             {
                 updates.Add("Windows Update signale des correctifs en attente (voir journal détaillé).");
