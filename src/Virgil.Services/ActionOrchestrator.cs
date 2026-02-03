@@ -105,7 +105,7 @@ public sealed class ActionOrchestrator : IActionOrchestrator
                 return await ExecuteAsync("Gestion des mises à jour automatiques", () => _update.ManageAutomaticUpdatesAsync(null, ct), ct);
 
             case VirgilActionId.RunWindowsUpdate:
-                return await ExecuteAsync("Lancement de Windows Update", () => _update.RunWindowsUpdateAsync(ct), ct);
+                return await ExecuteAsync("Lancement de Windows Update", () => _update.RunWindowsUpdateAsync(ct), ct, notifyChat: false);
 
             case VirgilActionId.CheckGpuDrivers:
                 return await ExecuteAsync("Vérification des pilotes GPU", () => _update.CheckGpuDriversAsync(ct), ct);
@@ -134,20 +134,29 @@ public sealed class ActionOrchestrator : IActionOrchestrator
         }
     }
 
-    private async Task<ActionExecutionResult> ExecuteAsync(string label, Func<Task<ActionExecutionResult>> action, CancellationToken ct)
+    private async Task<ActionExecutionResult> ExecuteAsync(string label, Func<Task<ActionExecutionResult>> action, CancellationToken ct, bool notifyChat = true)
     {
-        await _chat.InfoAsync($"Exécution : {label}…", ct);
+        if (notifyChat)
+        {
+            await _chat.InfoAsync($"Exécution : {label}…", ct);
+        }
         try
         {
             var result = await action().ConfigureAwait(false);
-            await SendFormattedResultAsync(result, ct);
+            if (notifyChat)
+            {
+                await SendFormattedResultAsync(result, ct);
+            }
 
             return result;
         }
         catch (Exception ex)
         {
             var failure = ActionExecutionResult.Failure($"Erreur pendant {label}: {ex.Message}");
-            await SendFormattedResultAsync(failure, ct);
+            if (notifyChat)
+            {
+                await SendFormattedResultAsync(failure, ct);
+            }
             return failure;
         }
     }

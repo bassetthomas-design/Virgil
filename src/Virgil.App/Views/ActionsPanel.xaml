@@ -76,6 +76,7 @@
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Lancer la mise à jour Windows" Tag="windows_update" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanRunWindowsUpdate}"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Vérifier les drivers GPU" Tag="gpu_driver_check" Margin="0,0,0,8"

@@ -18,12 +18,14 @@ public sealed class UpdateService : IUpdateService
     private readonly Core.Services.ApplicationUpdateService _apps;
     private readonly Core.Services.WindowsUpdateService _windows;
     private readonly IAutomaticUpdateDataSource _automaticUpdates;
+    private readonly Func<IProgress<double>?>? _progressProvider;
 
-    public UpdateService(IAutomaticUpdateDataSource? automaticUpdates = null)
+    public UpdateService(IAutomaticUpdateDataSource? automaticUpdates = null, Func<IProgress<double>?>? progressProvider = null)
     {
         _windows = new Core.Services.WindowsUpdateService();
         _apps = new Core.Services.ApplicationUpdateService();
         _automaticUpdates = automaticUpdates ?? new RuntimeAutomaticUpdateDataSource(_windows, new WindowsPrivilegeChecker(), new RuntimePlatformInfo());
+        _progressProvider = progressProvider;
     }
 
     public async Task<ActionExecutionResult> ManageAutomaticUpdatesAsync(AutoUpdateUserIntent? intent = null, CancellationToken ct = default)
@@ -69,27 +71,13 @@ public sealed class UpdateService : IUpdateService
     {
         try
         {
-            var scanResult = await _windows.StartScanAsync().ConfigureAwait(false);
-            var downloadResult = await _windows.StartDownloadAsync().ConfigureAwait(false);
-            var installResult = await _windows.StartInstallAsync().ConfigureAwait(false);
+            var progress = _progressProvider?.Invoke();
+            var result = await _windows.RunAsync(new WindowsUpdateOptions(), progress, ct).ConfigureAwait(false);
+            var summary = BuildWindowsUpdateSummary(result);
+            var status = BuildWindowsUpdateStatus(result);
+            var debugInfo = BuildWindowsUpdateDiagnostics(result);
 
-            var steps = new List<ActionStepResult>();
-            var outcomes = new List<WindowsUpdateStepOutcome>();
-
-            outcomes.Add(BuildWindowsUpdateOutcome("Scan Windows Update", scanResult, steps));
-            outcomes.Add(BuildWindowsUpdateOutcome("Téléchargement Windows Update", downloadResult, steps));
-            outcomes.Add(BuildWindowsUpdateOutcome("Installation Windows Update", installResult, steps));
-
-            var globalStatus = DeriveGlobalStatus(outcomes);
-            var summary = BuildWindowsUpdateSummary(globalStatus, outcomes);
-
-            return globalStatus switch
-            {
-                ActionResultStatus.Success => ActionExecutionResult.Ok("Windows Update", summary, steps),
-                ActionResultStatus.PartialSuccess => ActionExecutionResult.Partial("Windows Update", summary, steps),
-                ActionResultStatus.Failed => ActionExecutionResult.Failure("Windows Update", summary, steps),
-                _ => ActionExecutionResult.Failure("Windows Update", summary, steps)
-            };
+            return new ActionExecutionResult(status, "Windows Update", summary, debugInfo: debugInfo);
         }
         catch (Exception ex)
         {
@@ -158,84 +146,29 @@ public sealed class UpdateService : IUpdateService
         return sb.ToString().Trim();
     }
 
-    private sealed record WindowsUpdateStepOutcome(ActionResultStatus Status, string Summary, bool RebootRequired);
-
-    private sealed record WindowsUpdateExitCodeInfo(ActionResultStatus Status, string Message, bool RebootRequired);
-
-    private static readonly Dictionary<int, WindowsUpdateExitCodeInfo> WindowsUpdateExitCodes = new()
+    internal static string BuildAutoUpdateScanDetails(WindowsUpdateResult result)
     {
-        [0] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Système à jour.", false),
-        [3010] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Mise à jour appliquée, redémarrage requis.", true),
-        [1641] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Redémarrage en cours après mise à jour.", true),
-        [2359302] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Success, "Mise à jour déjà installée.", false),
-        [1602] = new WindowsUpdateExitCodeInfo(ActionResultStatus.PartialSuccess, "Opération annulée par l’utilisateur.", false),
-        [1618] = new WindowsUpdateExitCodeInfo(ActionResultStatus.PartialSuccess, "Une autre installation est déjà en cours.", false),
-        [5] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Failed, "Accès refusé (droits administrateur requis).", false),
-        [87] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Failed, "Paramètre invalide.", false),
-        [1603] = new WindowsUpdateExitCodeInfo(ActionResultStatus.Failed, "Erreur fatale pendant l’installation.", false)
-    };
-
-    private static WindowsUpdateStepOutcome BuildWindowsUpdateOutcome(
-        string stepLabel,
-        Core.Services.WindowsUpdateCommandResult commandResult,
-        ICollection<ActionStepResult> steps)
-    {
-        var outcome = EvaluateWindowsUpdateResult(commandResult);
-        var summary = outcome.Summary;
-        var details = commandResult.Output?.Trim();
-        if (!string.IsNullOrWhiteSpace(details))
+        if (!result.Succeeded)
         {
-            summary = $"{summary} {details}";
+            return string.IsNullOrWhiteSpace(result.Summary) ? "Recherche indisponible" : result.Summary.Trim();
         }
 
-        steps.Add(new ActionStepResult(outcome.Status, stepLabel, summary));
-        return outcome;
+        if (result.UpdatesFound == 0)
+        {
+            return "Aucune mise à jour disponible.";
+        }
+
+        return $"{result.UpdatesFound} mise(s) à jour détectée(s).";
     }
 
-    private static WindowsUpdateStepOutcome EvaluateWindowsUpdateResult(Core.Services.WindowsUpdateCommandResult commandResult)
+    private static ActionResultStatus BuildWindowsUpdateStatus(WindowsUpdateResult result)
     {
-        if (commandResult.ExitCode is null)
-        {
-            return new WindowsUpdateStepOutcome(
-                ActionResultStatus.Failed,
-                "Impossible de lancer Windows Update (droits administrateur requis ou service indisponible).",
-                false);
-        }
-
-        if (WindowsUpdateExitCodes.TryGetValue(commandResult.ExitCode.Value, out var info))
-        {
-            return new WindowsUpdateStepOutcome(info.Status, info.Message, info.RebootRequired);
-        }
-
-        return new WindowsUpdateStepOutcome(
-            ActionResultStatus.Failed,
-            "Résultat inattendu de Windows Update.",
-            false);
-    }
-
-    private static ActionResultStatus DeriveGlobalStatus(IEnumerable<WindowsUpdateStepOutcome> outcomes)
-    {
-        var hasFailed = false;
-        var hasPartial = false;
-
-        foreach (var outcome in outcomes)
-        {
-            if (outcome.Status == ActionResultStatus.Failed)
-            {
-                hasFailed = true;
-            }
-            else if (outcome.Status == ActionResultStatus.PartialSuccess)
-            {
-                hasPartial = true;
-            }
-        }
-
-        if (hasFailed)
+        if (!result.Succeeded)
         {
             return ActionResultStatus.Failed;
         }
 
-        if (hasPartial)
+        if (result.UpdatesFound > 0 && result.UpdatesInstalled < result.UpdatesFound)
         {
             return ActionResultStatus.PartialSuccess;
         }
@@ -243,25 +176,35 @@ public sealed class UpdateService : IUpdateService
         return ActionResultStatus.Success;
     }
 
-    private static string BuildWindowsUpdateSummary(ActionResultStatus globalStatus, IEnumerable<WindowsUpdateStepOutcome> outcomes)
+    private static string BuildWindowsUpdateSummary(WindowsUpdateResult result)
     {
-        if (globalStatus == ActionResultStatus.Success)
+        if (!result.Succeeded)
         {
-            var rebootRequired = false;
-            foreach (var outcome in outcomes)
-            {
-                rebootRequired |= outcome.RebootRequired;
-            }
-
-            return rebootRequired
-                ? "Mise à jour appliquée, redémarrage requis."
-                : "Système à jour.";
+            var reason = BuildWindowsUpdateFailureReason(result);
+            return $"Windows Update: échec ({reason}).";
         }
 
-        return globalStatus == ActionResultStatus.PartialSuccess
-            ? "Windows Update terminé partiellement."
-            : "Windows Update a échoué.";
+        if (result.UpdatesFound == 0)
+        {
+            return "Windows Update: rien à installer.";
+        }
+
+        var reboot = result.RebootRequired ? "Oui" : "Non";
+        return $"Windows Update: {result.UpdatesFound} trouvées, {result.UpdatesInstalled} installées. Redémarrage requis: {reboot}.";
     }
+
+    private static string BuildWindowsUpdateFailureReason(WindowsUpdateResult result)
+    {
+        if (!string.IsNullOrWhiteSpace(result.Summary))
+        {
+            return result.Summary.Trim().TrimEnd('.');
+        }
+
+        return "erreur Windows Update";
+    }
+
+    private static string? BuildWindowsUpdateDiagnostics(WindowsUpdateResult result)
+        => string.IsNullOrWhiteSpace(result.FailureReason) ? null : result.FailureReason;
 
 }
 
@@ -295,9 +238,9 @@ public sealed class RuntimeAutomaticUpdateDataSource : IAutomaticUpdateDataSourc
 
         try
         {
-            scanDetails = (await _windows.StartScanAsync().ConfigureAwait(false)).GetDisplayMessage();
-            if (scanDetails.IndexOf("update", StringComparison.OrdinalIgnoreCase) >= 0
-                || scanDetails.IndexOf("kb", StringComparison.OrdinalIgnoreCase) >= 0)
+            var scanResult = await _windows.RunAsync(new WindowsUpdateOptions { SearchOnly = true }, null, ct).ConfigureAwait(false);
+            scanDetails = UpdateService.BuildAutoUpdateScanDetails(scanResult);
+            if (scanResult.UpdatesFound > 0)
             {
                 updates.Add("Windows Update signale des correctifs en attente (voir journal détaillé).");
             }

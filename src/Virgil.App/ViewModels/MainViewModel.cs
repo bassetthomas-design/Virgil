@@ -226,7 +226,7 @@ namespace Virgil.App.ViewModels
                 IsBusy = true;
                 if (isServiceAction)
                 {
-                    PostActionNarrationStart(definition.DisplayName);
+                    PostActionNarrationStart(definition.DisplayName, definition.Key);
                 }
 
                 var result = await definition.ExecuteAsync(args ?? new Dictionary<string, string>(), ct).ConfigureAwait(false);
@@ -239,7 +239,7 @@ namespace Virgil.App.ViewModels
                 }
                 else
                 {
-                    PostActionNarrationEnd(definition.DisplayName, result);
+                    PostActionNarrationEnd(definition.DisplayName, definition.Key, result);
                 }
                 return result;
             }
@@ -252,7 +252,7 @@ namespace Virgil.App.ViewModels
                 PostLocalActionResult(failure);
                 if (isServiceAction)
                 {
-                    PostActionNarrationEnd(definition.DisplayName, failure);
+                    PostActionNarrationEnd(definition.DisplayName, definition.Key, failure);
                 }
                 Utils.StartupLog.Write($"Action {key} a échoué", ex);
                 return failure;
@@ -518,17 +518,23 @@ namespace Virgil.App.ViewModels
             _chat.PostSystemMessage(message, type, kind);
         }
 
-        private void PostActionNarrationStart(string actionTitle)
+        private void PostActionNarrationStart(string actionTitle, string actionId)
         {
             if (string.IsNullOrWhiteSpace(actionTitle))
             {
                 return;
             }
 
+            if (string.Equals(actionId, "windows_update", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("Je lance Windows Update. Ça peut prendre quelques minutes.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
             _chat.PostSystemMessage($"Je lance « {actionTitle} »…", MessageType.Info, ChatKind.Info);
         }
 
-        private void PostActionNarrationEnd(string actionTitle, ActionResult result)
+        private void PostActionNarrationEnd(string actionTitle, string actionId, ActionResult result)
         {
             if (string.IsNullOrWhiteSpace(actionTitle))
             {
@@ -536,8 +542,16 @@ namespace Virgil.App.ViewModels
             }
 
             var summary = string.IsNullOrWhiteSpace(result.Message) ? result.Title : result.Message;
+            var messageType = result.Status == ActionResultStatus.Failed ? MessageType.Warning : MessageType.Info;
+
+            if (string.Equals(actionId, "windows_update", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
+                return;
+            }
+
             var statusLabel = result.Status == ActionResultStatus.Failed ? "Échec" : "Terminé";
-            _chat.PostSystemMessage($"{statusLabel} : {summary}", result.Status == ActionResultStatus.Failed ? MessageType.Warning : MessageType.Info, ChatKind.Info);
+            _chat.PostSystemMessage($"{statusLabel} : {summary}", messageType, ChatKind.Info);
         }
     }
 }

@@ -14,11 +14,14 @@ namespace Virgil.App.ViewModels
     public class ActionsViewModel : BaseViewModel
     {
         private readonly Func<string, CancellationToken, Task<ActionResult>> _runner;
+        private bool _isWindowsUpdateRunning;
 
         /// <summary>
         /// Commande appelée par les boutons d'ActionsPanel.xaml, avec l'identifiant d'action en paramètre.
         /// </summary>
         public ICommand InvokeActionCommand { get; }
+
+        public bool CanRunWindowsUpdate => !_isWindowsUpdateRunning;
 
         public ActionsViewModel(Func<string, CancellationToken, Task<ActionResult>> runner)
         {
@@ -28,6 +31,28 @@ namespace Virgil.App.ViewModels
                 var actionId = param as string;
                 if (!string.IsNullOrWhiteSpace(actionId))
                 {
+                    if (string.Equals(actionId, "windows_update", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (_isWindowsUpdateRunning)
+                        {
+                            return;
+                        }
+
+                        _isWindowsUpdateRunning = true;
+                        OnPropertyChanged(nameof(CanRunWindowsUpdate));
+                        try
+                        {
+                            await _runner(actionId!, CancellationToken.None).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            _isWindowsUpdateRunning = false;
+                            OnPropertyChanged(nameof(CanRunWindowsUpdate));
+                        }
+
+                        return;
+                    }
+
                     await _runner(actionId!, CancellationToken.None).ConfigureAwait(false);
                 }
             });
