@@ -29,6 +29,8 @@ public sealed class CleanupService : ICleanupService
     private readonly Func<bool> _isAdministrator;
     private readonly Func<string, string, CancellationToken, Task<CommandResult>> _commandRunner;
     private readonly Func<string, bool> _isProcessRunning;
+    private readonly Func<IProgress<double>?> _progressProvider;
+    private readonly BrowserCleanupService _browserCleanupService;
 
     public CleanupService()
         : this(
@@ -48,6 +50,16 @@ public sealed class CleanupService : ICleanupService
     {
     }
 
+    public CleanupService(Func<IProgress<double>?> progressProvider)
+        : this(
+            CleanupPlan.FromEnvironment,
+            BrowserCleanPlan.FromEnvironment,
+            BrowserDeepCleanPlan.FromEnvironment,
+            systemTempPlanFactory: BuildSystemTempCleanupPlan,
+            progressProvider: progressProvider)
+    {
+    }
+
     public CleanupService(
         Func<CleanupPlan> planFactory,
         Func<BrowserCleanPlan> browserPlanFactory,
@@ -57,7 +69,9 @@ public sealed class CleanupService : ICleanupService
         Func<bool>? isAdministrator = null,
         Func<string, string, CancellationToken, Task<CommandResult>>? commandRunner = null,
         Func<string, bool>? isProcessRunning = null,
-        Func<SystemTempCleanupPlan>? systemTempPlanFactory = null)
+        Func<SystemTempCleanupPlan>? systemTempPlanFactory = null,
+        Func<IProgress<double>?>? progressProvider = null,
+        BrowserCleanupService? browserCleanupService = null)
     {
         _planFactory = planFactory ?? throw new ArgumentNullException(nameof(planFactory));
         _browserPlanFactory = browserPlanFactory ?? throw new ArgumentNullException(nameof(browserPlanFactory));
@@ -68,6 +82,8 @@ public sealed class CleanupService : ICleanupService
         _isAdministrator = isAdministrator ?? ProcessElevation.IsProcessElevated;
         _commandRunner = commandRunner ?? RunCommandAsync;
         _isProcessRunning = isProcessRunning ?? IsProcessRunning;
+        _progressProvider = progressProvider ?? (() => null);
+        _browserCleanupService = browserCleanupService ?? new BrowserCleanupService(_isWindows, _isProcessRunning);
     }
 
     public async Task<ActionExecutionResult> RunSimpleAsync(CancellationToken ct = default)
@@ -330,115 +346,58 @@ public sealed class CleanupService : ICleanupService
 
     public async Task<ActionExecutionResult> RunBrowserLightAsync(CancellationToken ct = default)
     {
-        var plan = _browserPlanFactory();
-        if (plan.Targets.Count == 0)
+        var options = new BrowserCleanupOptions { Cache = true };
+        var progress = _progressProvider();
+        var result = await _browserCleanupService.CleanAsync(options, progress, ct).ConfigureAwait(false);
+        if (result.BrowsersDetected.Count == 0)
         {
-            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (léger)", "Aucun navigateur détecté (rien à nettoyer)");
+            return ActionExecutionResult.NotAvailable("Nettoyage navigateur", "Aucun navigateur supporté détecté.");
         }
 
-        var cleaned = new List<string>();
-        var ignored = new List<string>();
-        var totalStats = new CleanupStats();
-
-        foreach (var target in plan.Targets)
+        var freedText = FormatSize(result.FreedBytes);
+        var browsers = result.BrowsersProcessed.Count == 0 ? "aucun" : string.Join(", ", result.BrowsersProcessed);
+        var note = string.Empty;
+        if (result.BrowsersRunning.Count > 0 || result.LockedItems > 0)
         {
-            ct.ThrowIfCancellationRequested();
-
-            var hadLock = false;
-            var existingPaths = target.Paths.Where(Directory.Exists).ToList();
-            if (existingPaths.Count == 0)
-            {
-                continue;
-            }
-
-            foreach (var path in existingPaths)
-            {
-                var result = await CleanBrowserCacheAsync(path, ct).ConfigureAwait(false);
-                hadLock |= result.HadLockedFiles;
-                totalStats = totalStats.Add(result.Stats);
-            }
-
-            if (hadLock)
-            {
-                ignored.Add(target.BrowserName);
-            }
-            else
-            {
-                cleaned.Add(target.BrowserName);
-            }
+            note = " Certaines données en cours d’utilisation ont été ignorées. Ferme ton navigateur pour un nettoyage complet.";
         }
 
-        if (cleaned.Count == 0 && ignored.Count == 0)
-        {
-            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (léger)", "Aucune donnée de navigation à nettoyer");
-        }
-
-        var freedText = FormatSize(totalStats.FreedBytes);
-        var treated = cleaned.Count == 0 ? "aucun" : string.Join(", ", cleaned);
-        var skipped = ignored.Count == 0 ? "aucun" : string.Join(", ", ignored);
-
-        var summary = $"Navigateurs traités: {treated}. Navigateurs ignorés (ouverts/verrouillés): {skipped}. Quantité libérée: {freedText}. Fichiers supprimés: {totalStats.FilesDeleted}. Les miettes ont disparu. Les onglets n’ont rien remarqué.";
-        return ActionExecutionResult.Ok("Nettoyage navigateur (léger) terminé", summary);
+        var summary = $"Nettoyage navigateurs terminé: {browsers}. {freedText} libérés.{note}";
+        return ActionExecutionResult.Ok("Nettoyage navigateur terminé", summary.Trim());
     }
 
     public async Task<ActionExecutionResult> RunBrowserDeepAsync(CancellationToken ct = default)
     {
-        var plan = _browserDeepPlanFactory();
-        if (plan.Targets.Count == 0)
+        var options = new BrowserCleanupOptions
         {
-            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (profond)", "Aucun navigateur détecté (nettoyage profond)");
+            Cache = true,
+            Cookies = true,
+            History = true,
+            Downloads = true,
+            SiteData = true,
+            Autofill = true,
+        };
+
+        var progress = _progressProvider();
+        var result = await _browserCleanupService.CleanAsync(options, progress, ct).ConfigureAwait(false);
+        if (result.BrowsersDetected.Count == 0)
+        {
+            return ActionExecutionResult.NotAvailable("Nettoyage navigateur", "Aucun navigateur supporté détecté.");
         }
 
-        var running = plan.Targets
-            .Where(t => _isProcessRunning(t.ProcessName))
-            .Select(t => t.BrowserName)
-            .Distinct()
-            .ToList();
-
-        if (running.Count > 0)
+        var freedText = FormatSize(result.FreedBytes);
+        var browsers = result.BrowsersProcessed.Count == 0 ? "aucun" : string.Join(", ", result.BrowsersProcessed);
+        var note = string.Empty;
+        if (result.BrowsersRunning.Count > 0 || result.LockedItems > 0)
         {
-            var opened = string.Join(", ", running);
-            var message = $"Impossible de lancer le nettoyage profond : navigateur(s) ouvert(s) : {opened}. Ferme-les et on re-tente.";
-            return ActionExecutionResult.Failure("Nettoyage navigateur (profond)", message);
+            note = " Certaines données en cours d’utilisation ont été ignorées. Ferme ton navigateur pour un nettoyage complet.";
         }
 
-        var cleanedBrowsers = new List<string>();
-        var dataTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var totalStats = new CleanupStats();
-
-        foreach (var target in plan.Targets)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            var targetHadActivity = false;
-            foreach (var profile in target.Profiles)
-            {
-                ct.ThrowIfCancellationRequested();
-                var result = await CleanBrowserProfileDeepAsync(target.BrowserName, profile, dataTypes, ct).ConfigureAwait(false);
-                totalStats = totalStats.Add(result);
-                targetHadActivity |= result.HasActivity;
-            }
-
-            if (targetHadActivity)
-            {
-                cleanedBrowsers.Add(target.BrowserName);
-            }
-        }
-
-        if (cleanedBrowsers.Count == 0)
-        {
-            return ActionExecutionResult.NotAvailable("Nettoyage navigateur (profond)", "Aucune donnée supprimée");
-        }
-
-        var freedText = FormatSize(totalStats.FreedBytes);
-        var typesText = dataTypes.Count == 0 ? "(inconnu)" : string.Join(", ", dataTypes.OrderBy(x => x));
-        var browsersText = string.Join(", ", cleanedBrowsers.Distinct());
-
-        var summary = $"Navigateurs nettoyés : {browsersText}. Données supprimées : {typesText}. Quantité libérée : {freedText}. Reconnexion requise (cookies vaporisés).";
-        return ActionExecutionResult.Ok("Nettoyage navigateur (profond) terminé", summary);
+        var summary = $"Nettoyage navigateurs terminé: {browsers}. {freedText} libérés.{note}";
+        return ActionExecutionResult.Ok("Nettoyage navigateur terminé", summary.Trim());
     }
 
-    private static async Task<CleanupStats> CleanDirectoryAsync(
+    internal static async Task<CleanupStats> CleanDirectoryAsync(
         string root,
         CancellationToken ct,
         Func<string, bool>? shouldExclude = null,
@@ -561,7 +520,7 @@ public sealed class CleanupService : ICleanupService
         return $"{megaBytes:F1} Mo";
     }
 
-    private static CleanupStats DeleteFileSafely(string path)
+    internal static CleanupStats DeleteFileSafely(string path)
     {
         try
         {
@@ -1190,7 +1149,7 @@ public sealed class CleanupService : ICleanupService
         };
     }
 
-    private static bool IsProcessRunning(string processName)
+    internal static bool IsProcessRunning(string processName)
     {
         try
         {

@@ -22,22 +22,46 @@ public class CleanupServiceAction6Tests
         workspace.CreateFile(chromeGpu, "shader.bin", 2048);
         workspace.CreateFile(firefoxCache, "f1.tmp", 512);
 
-        var browserPlan = new CleanupService.BrowserCleanPlan(new[]
-        {
-            new CleanupService.BrowserTarget("Chrome", new[] { chromeCache, chromeGpu }),
-            new CleanupService.BrowserTarget("Firefox", new[] { firefoxCache })
-        });
+        var browserService = CreateBrowserCleanupService(
+            isProcessRunning: _ => false,
+            new BrowserCleanupTarget("Chrome", "chrome", new[]
+            {
+                new BrowserCleanupProfile(
+                    "Default",
+                    chromeCache,
+                    CachePaths: new[] { chromeCache, chromeGpu },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
+            }),
+            new BrowserCleanupTarget("Firefox", "firefox", new[]
+            {
+                new BrowserCleanupProfile(
+                    "Default",
+                    firefoxCache,
+                    CachePaths: new[] { firefoxCache },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
+            }));
 
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
-            () => browserPlan);
+            () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
+            browserCleanupService: browserService,
+            isWindows: () => true);
 
         var result = await service.RunBrowserLightAsync();
 
         result.Success.Should().BeTrue();
-        result.Message.Should().Contain("Navigateurs traités");
-        result.Message.Should().Contain("Quantité libérée");
-        result.Message.Should().Contain("Fichiers supprimés");
+        result.Message.Should().Contain("Nettoyage navigateurs terminé");
+        result.Message.Should().Contain("libérés");
         Directory.Exists(chromeCache).Should().BeTrue();
         Directory.EnumerateFiles(chromeCache, "*", SearchOption.AllDirectories).Should().BeEmpty();
         Directory.EnumerateFiles(firefoxCache, "*", SearchOption.AllDirectories).Should().BeEmpty();
@@ -52,14 +76,27 @@ public class CleanupServiceAction6Tests
         var historyFile = workspace.CreateFile(profileRoot, "History", 512);
         workspace.CreateFile(cache, "c.bin", 128);
 
-        var plan = new CleanupService.BrowserCleanPlan(new[]
-        {
-            new CleanupService.BrowserTarget("Chrome", new[] { cache })
-        });
+        var browserService = CreateBrowserCleanupService(
+            isProcessRunning: _ => false,
+            new BrowserCleanupTarget("Chrome", "chrome", new[]
+            {
+                new BrowserCleanupProfile(
+                    "Default",
+                    profileRoot,
+                    CachePaths: new[] { cache },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
+            }));
 
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
-            () => plan);
+            () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
+            browserCleanupService: browserService,
+            isWindows: () => true);
 
         var result = await service.RunBrowserLightAsync();
 
@@ -76,20 +113,43 @@ public class CleanupServiceAction6Tests
 
         using var lockHandle = new FileStream(lockedFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var plan = new CleanupService.BrowserCleanPlan(new[]
-        {
-            new CleanupService.BrowserTarget("Edge", new[] { cache })
-        });
+        var browserService = CreateBrowserCleanupService(
+            isProcessRunning: _ => false,
+            new BrowserCleanupTarget("Edge", "msedge", new[]
+            {
+                new BrowserCleanupProfile(
+                    "Default",
+                    cache,
+                    CachePaths: new[] { cache },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
+            }));
 
         var service = new CleanupService(
             () => new CleanupService.CleanupPlan(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), TimeSpan.FromDays(1), false),
-            () => plan);
+            () => new CleanupService.BrowserCleanPlan(Array.Empty<CleanupService.BrowserTarget>()),
+            browserCleanupService: browserService,
+            isWindows: () => true);
 
         var result = await service.RunBrowserLightAsync();
 
         result.Success.Should().BeTrue();
-        result.Message.Should().Contain("ignorés");
+        result.Message.Should().Contain("Certaines données");
         File.Exists(lockedFile).Should().BeTrue();
+    }
+
+    private static BrowserCleanupService CreateBrowserCleanupService(
+        Func<string, bool> isProcessRunning,
+        params BrowserCleanupTarget[] targets)
+    {
+        return new BrowserCleanupService(
+            isWindows: () => true,
+            isProcessRunning: isProcessRunning,
+            targetsProvider: () => targets);
     }
 
     private sealed class TempWorkspace : IDisposable
