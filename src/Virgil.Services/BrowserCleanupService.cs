@@ -301,7 +301,7 @@ public sealed class BrowserCleanupService
             var profile = new BrowserCleanupProfile(
                 name,
                 profileRoot,
-                cachePaths: new[]
+                CachePaths: new[]
                 {
                     Path.Combine(cacheRoot, "Cache"),
                     Path.Combine(cacheRoot, "Code Cache"),
@@ -309,33 +309,33 @@ public sealed class BrowserCleanupService
                     Path.Combine(cacheRoot, "ShaderCache"),
                     Path.Combine(cacheRoot, "System Cache"),
                 },
-                cookieFiles: new[]
+                CookieFiles: new[]
                 {
                     Path.Combine(profileRoot, "Cookies"),
                     Path.Combine(profileRoot, "Network", "Cookies"),
                 },
-                historyFiles: new[]
+                HistoryFiles: new[]
                 {
                     Path.Combine(profileRoot, "History"),
                     Path.Combine(profileRoot, "History-journal"),
                 },
-                downloadFiles: new[]
+                DownloadFiles: new[]
                 {
                     Path.Combine(profileRoot, "History"),
                 },
-                sessionFiles: new[]
+                SessionFiles: new[]
                 {
                     Path.Combine(profileRoot, "Sessions"),
                     Path.Combine(profileRoot, "sessionstore.jsonlz4"),
                 },
-                siteDataPaths: new[]
+                SiteDataPaths: new[]
                 {
                     Path.Combine(profileRoot, "IndexedDB"),
                     Path.Combine(profileRoot, "Local Storage"),
                     Path.Combine(profileRoot, "Session Storage"),
                     Path.Combine(profileRoot, "Service Worker", "CacheStorage"),
                 },
-                autofillFiles: new[]
+                AutofillFiles: new[]
                 {
                     Path.Combine(profileRoot, "Web Data"),
                 });
@@ -366,39 +366,39 @@ public sealed class BrowserCleanupService
         return new BrowserCleanupProfile(
             name,
             root,
-            cachePaths: new[]
+            CachePaths: new[]
             {
                 Path.Combine(root, "Cache"),
                 Path.Combine(root, "Code Cache"),
                 Path.Combine(root, "GPUCache"),
                 Path.Combine(root, "ShaderCache"),
             },
-            cookieFiles: new[]
+            CookieFiles: new[]
             {
                 Path.Combine(root, "Cookies"),
                 Path.Combine(root, "Network", "Cookies"),
             },
-            historyFiles: new[]
+            HistoryFiles: new[]
             {
                 Path.Combine(root, "History"),
                 Path.Combine(root, "History-journal"),
             },
-            downloadFiles: new[]
+            DownloadFiles: new[]
             {
                 Path.Combine(root, "History"),
             },
-            sessionFiles: new[]
+            SessionFiles: new[]
             {
                 Path.Combine(root, "Sessions"),
             },
-            siteDataPaths: new[]
+            SiteDataPaths: new[]
             {
                 Path.Combine(root, "IndexedDB"),
                 Path.Combine(root, "Local Storage"),
                 Path.Combine(root, "Session Storage"),
                 Path.Combine(root, "Service Worker", "CacheStorage"),
             },
-            autofillFiles: new[]
+            AutofillFiles: new[]
             {
                 Path.Combine(root, "Web Data"),
             });
@@ -419,41 +419,41 @@ public sealed class BrowserCleanupService
             profiles.Add(new BrowserCleanupProfile(
                 profileName,
                 dir,
-                cachePaths: new[]
+                CachePaths: new[]
                 {
                     localCache,
                     Path.Combine(dir, "cache2"),
                     Path.Combine(dir, "shader-cache"),
                 },
-                cookieFiles: new[]
+                CookieFiles: new[]
                 {
                     Path.Combine(dir, "cookies.sqlite"),
                     Path.Combine(dir, "cookies.sqlite-wal"),
                     Path.Combine(dir, "cookies.sqlite-shm"),
                 },
-                historyFiles: new[]
+                HistoryFiles: new[]
                 {
                     Path.Combine(dir, "places.sqlite"),
                     Path.Combine(dir, "places.sqlite-wal"),
                     Path.Combine(dir, "places.sqlite-shm"),
                 },
-                downloadFiles: new[]
+                DownloadFiles: new[]
                 {
                     Path.Combine(dir, "places.sqlite"),
                 },
-                sessionFiles: new[]
+                SessionFiles: new[]
                 {
                     Path.Combine(dir, "sessionstore.jsonlz4"),
                     Path.Combine(dir, "sessionstore-backups"),
                 },
-                siteDataPaths: new[]
+                SiteDataPaths: new[]
                 {
                     Path.Combine(dir, "storage"),
                     Path.Combine(dir, "storage", "default"),
                     Path.Combine(dir, "storage", "permanent"),
                     Path.Combine(dir, "storage", "temporary"),
                 },
-                autofillFiles: new[]
+                AutofillFiles: new[]
                 {
                     Path.Combine(dir, "formhistory.sqlite"),
                 }));

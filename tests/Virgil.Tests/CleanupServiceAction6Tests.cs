@@ -29,26 +29,26 @@ public class CleanupServiceAction6Tests
                 new BrowserCleanupProfile(
                     "Default",
                     chromeCache,
-                    cachePaths: new[] { chromeCache, chromeGpu },
-                    cookieFiles: Array.Empty<string>(),
-                    historyFiles: Array.Empty<string>(),
-                    downloadFiles: Array.Empty<string>(),
-                    sessionFiles: Array.Empty<string>(),
-                    siteDataPaths: Array.Empty<string>(),
-                    autofillFiles: Array.Empty<string>())
+                    CachePaths: new[] { chromeCache, chromeGpu },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
             }),
             new BrowserCleanupTarget("Firefox", "firefox", new[]
             {
                 new BrowserCleanupProfile(
                     "Default",
                     firefoxCache,
-                    cachePaths: new[] { firefoxCache },
-                    cookieFiles: Array.Empty<string>(),
-                    historyFiles: Array.Empty<string>(),
-                    downloadFiles: Array.Empty<string>(),
-                    sessionFiles: Array.Empty<string>(),
-                    siteDataPaths: Array.Empty<string>(),
-                    autofillFiles: Array.Empty<string>())
+                    CachePaths: new[] { firefoxCache },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
             }));
 
         var service = new CleanupService(
@@ -83,13 +83,13 @@ public class CleanupServiceAction6Tests
                 new BrowserCleanupProfile(
                     "Default",
                     profileRoot,
-                    cachePaths: new[] { cache },
-                    cookieFiles: Array.Empty<string>(),
-                    historyFiles: Array.Empty<string>(),
-                    downloadFiles: Array.Empty<string>(),
-                    sessionFiles: Array.Empty<string>(),
-                    siteDataPaths: Array.Empty<string>(),
-                    autofillFiles: Array.Empty<string>())
+                    CachePaths: new[] { cache },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
             }));
 
         var service = new CleanupService(
@@ -120,13 +120,13 @@ public class CleanupServiceAction6Tests
                 new BrowserCleanupProfile(
                     "Default",
                     cache,
-                    cachePaths: new[] { cache },
-                    cookieFiles: Array.Empty<string>(),
-                    historyFiles: Array.Empty<string>(),
-                    downloadFiles: Array.Empty<string>(),
-                    sessionFiles: Array.Empty<string>(),
-                    siteDataPaths: Array.Empty<string>(),
-                    autofillFiles: Array.Empty<string>())
+                    CachePaths: new[] { cache },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
             }));
 
         var service = new CleanupService(

@@ -24,13 +24,13 @@ public class CleanupServiceAction9Tests
                 new BrowserCleanupProfile(
                     "Default",
                     profile,
-                    cachePaths: new[] { cache },
-                    cookieFiles: Array.Empty<string>(),
-                    historyFiles: Array.Empty<string>(),
-                    downloadFiles: Array.Empty<string>(),
-                    sessionFiles: Array.Empty<string>(),
-                    siteDataPaths: Array.Empty<string>(),
-                    autofillFiles: Array.Empty<string>())
+                    CachePaths: new[] { cache },
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
             }));
 
         var service = new CleanupService(
@@ -64,13 +64,13 @@ public class CleanupServiceAction9Tests
                 new BrowserCleanupProfile(
                     "Default",
                     profile,
-                    cachePaths: new[] { cache },
-                    cookieFiles: new[] { cookies },
-                    historyFiles: new[] { history },
-                    downloadFiles: new[] { history },
-                    sessionFiles: Array.Empty<string>(),
-                    siteDataPaths: new[] { indexed },
-                    autofillFiles: Array.Empty<string>())
+                    CachePaths: new[] { cache },
+                    CookieFiles: new[] { cookies },
+                    HistoryFiles: new[] { history },
+                    DownloadFiles: new[] { history },
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: new[] { indexed },
+                    AutofillFiles: Array.Empty<string>())
             }));
 
         var service = new CleanupService(
@@ -105,13 +105,13 @@ public class CleanupServiceAction9Tests
                 new BrowserCleanupProfile(
                     "Ghost",
                     profile,
-                    cachePaths: Array.Empty<string>(),
-                    cookieFiles: Array.Empty<string>(),
-                    historyFiles: Array.Empty<string>(),
-                    downloadFiles: Array.Empty<string>(),
-                    sessionFiles: Array.Empty<string>(),
-                    siteDataPaths: Array.Empty<string>(),
-                    autofillFiles: Array.Empty<string>())
+                    CachePaths: Array.Empty<string>(),
+                    CookieFiles: Array.Empty<string>(),
+                    HistoryFiles: Array.Empty<string>(),
+                    DownloadFiles: Array.Empty<string>(),
+                    SessionFiles: Array.Empty<string>(),
+                    SiteDataPaths: Array.Empty<string>(),
+                    AutofillFiles: Array.Empty<string>())
             }));
 
         var service = new CleanupService(
