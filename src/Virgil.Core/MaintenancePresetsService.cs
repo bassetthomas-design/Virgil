@@ -25,7 +25,16 @@ namespace Virgil.Core.Services
             log.AppendLine(updateResult.Summary);
 
             var drivers = new DriverUpdateService();
-            log.AppendLine(await drivers.UpgradeDriversAsync().ConfigureAwait(false));
+            var driverScan = await drivers.ScanAsync(CancellationToken.None).ConfigureAwait(false);
+            if (driverScan.Succeeded && driverScan.Found > 0)
+            {
+                var driverInstall = await drivers.InstallAsync(driverScan.Items, CancellationToken.None).ConfigureAwait(false);
+                log.AppendLine(driverInstall.Summary);
+            }
+            else
+            {
+                log.AppendLine(driverScan.Summary);
+            }
 
             var defender = new DefenderUpdateService();
             log.AppendLine(await defender.UpdateSignaturesAsync().ConfigureAwait(false));

@@ -42,7 +42,7 @@ namespace Virgil.Core.Services
                     return Failure("Service Windows Update indisponible.");
                 }
 
-                var updates = SearchDriverUpdates(session, out var usedFallback);
+                var updates = SearchDriverUpdates(session, out bool usedFallback);
                 if (updates is null)
                 {
                     return Failure("Recherche Windows Update indisponible.");
@@ -93,7 +93,7 @@ namespace Virgil.Core.Services
                     return Failure("Service Windows Update indisponible.");
                 }
 
-                var updates = SearchDriverUpdates(session, out var usedFallback);
+                var updates = SearchDriverUpdates(session, out bool usedFallback);
                 if (updates is null)
                 {
                     return Failure("Recherche Windows Update indisponible.");
@@ -215,7 +215,15 @@ namespace Virgil.Core.Services
             }
 
             var collectionType = Type.GetTypeFromProgID("Microsoft.Update.UpdateColl");
-            dynamic collection = collectionType is null ? updates : Activator.CreateInstance(collectionType);
+            dynamic collection = updates;
+            if (collectionType is not null)
+            {
+                var created = Activator.CreateInstance(collectionType);
+                if (created is not null)
+                {
+                    collection = created;
+                }
+            }
 
             var count = (int)updates.Count;
             for (var i = 0; i < count; i++)
