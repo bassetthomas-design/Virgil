@@ -1,10 +1,13 @@
 using System;
 using System.Threading;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Virgil.App.Commands;
 using Virgil.App.Models;
 using Virgil.Core.Models;
+using Virgil.Core.Services;
 
 namespace Virgil.App.ViewModels
 {
@@ -15,6 +18,9 @@ namespace Virgil.App.ViewModels
     public class ActionsViewModel : BaseViewModel
     {
         private readonly Func<string, CancellationToken, Task<ActionResult>> _runner;
+        private readonly DriverUpdateService _driverUpdateService;
+        private readonly AsyncRelayCommand _scanDriversCommand;
+        private readonly AsyncRelayCommand _installDriversCommand;
         private bool _isWindowsUpdateRunning;
         private bool _isDriverScanRunning;
         private bool _isDriverInstallRunning;
@@ -26,17 +32,39 @@ namespace Virgil.App.ViewModels
         /// Commande appelée par les boutons d'ActionsPanel.xaml, avec l'identifiant d'action en paramètre.
         /// </summary>
         public ICommand InvokeActionCommand { get; }
+        public ICommand ScanDriversCommand => _scanDriversCommand;
+        public ICommand InstallDriversCommand => _installDriversCommand;
 
         public bool CanRunWindowsUpdate => !_isWindowsUpdateRunning;
-        public bool CanScanDrivers => !_isDriverScanRunning && !_isDriverInstallRunning;
-        public bool CanInstallDrivers => HasDriverUpdates && !_isDriverScanRunning && !_isDriverInstallRunning;
-        public bool HasDriverUpdates => _driverUpdatesFound > 0;
+        public bool IsBusy => _isDriverScanRunning || _isDriverInstallRunning;
+        public bool CanScanDrivers => !IsBusy;
+        public bool CanInstallDrivers => DriverUpdatesFound > 0 && !IsBusy;
+        public bool HasDriverUpdates => DriverUpdatesFound > 0;
         public bool HasDriverScanResult => _hasDriverScanResult;
         public string DriverUpdatesSummary => _driverUpdatesSummary;
+        public int DriverUpdatesFound
+        {
+            get => _driverUpdatesFound;
+            private set
+            {
+                if (_driverUpdatesFound == value)
+                {
+                    return;
+                }
+
+                _driverUpdatesFound = value;
+                OnPropertyChanged(nameof(DriverUpdatesFound));
+            }
+        }
+
+        public ObservableCollection<DriverUpdateItem> DriverUpdateItems { get; } = new();
 
         public ActionsViewModel(Func<string, CancellationToken, Task<ActionResult>> runner)
         {
             _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+            _driverUpdateService = new DriverUpdateService();
+            _scanDriversCommand = new AsyncRelayCommand(_ => ScanDriversAsync(), _ => CanScanDrivers);
+            _installDriversCommand = new AsyncRelayCommand(_ => InstallDriversAsync(), _ => CanInstallDrivers);
             InvokeActionCommand = new AsyncRelayCommand(async param =>
             {
                 var actionId = param as string;
@@ -44,47 +72,13 @@ namespace Virgil.App.ViewModels
                 {
                     if (string.Equals(actionId, "drivers_scan", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (_isDriverScanRunning || _isDriverInstallRunning)
-                        {
-                            return;
-                        }
-
-                        _isDriverScanRunning = true;
-                        NotifyDriverStateChanged();
-                        try
-                        {
-                            var result = await _runner(actionId!, CancellationToken.None).ConfigureAwait(false);
-                            UpdateDriverStateFromResult(result, isInstall: false);
-                        }
-                        finally
-                        {
-                            _isDriverScanRunning = false;
-                            NotifyDriverStateChanged();
-                        }
-
+                        await ScanDriversAsync().ConfigureAwait(false);
                         return;
                     }
 
                     if (string.Equals(actionId, "drivers_install", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (_isDriverScanRunning || _isDriverInstallRunning || !HasDriverUpdates)
-                        {
-                            return;
-                        }
-
-                        _isDriverInstallRunning = true;
-                        NotifyDriverStateChanged();
-                        try
-                        {
-                            var result = await _runner(actionId!, CancellationToken.None).ConfigureAwait(false);
-                            UpdateDriverStateFromResult(result, isInstall: true);
-                        }
-                        finally
-                        {
-                            _isDriverInstallRunning = false;
-                            NotifyDriverStateChanged();
-                        }
-
+                        await InstallDriversAsync().ConfigureAwait(false);
                         return;
                     }
 
@@ -115,74 +109,94 @@ namespace Virgil.App.ViewModels
             });
         }
 
-        private void UpdateDriverStateFromResult(ActionResult result, bool isInstall)
+        private async Task ScanDriversAsync()
         {
-            if (result.Status == ActionResultStatus.Failed || result.Status == ActionResultStatus.NotAvailable)
+            if (IsBusy)
             {
-                _driverUpdatesFound = 0;
-                _driverUpdatesSummary = "0 mise(s) à jour de pilotes trouvée(s)";
-                _hasDriverScanResult = true;
-                NotifyDriverStateChanged();
                 return;
             }
 
-            var parsed = TryParseDriverDebugInfo(result.DebugInfo);
-            if (parsed.HasValue)
+            _isDriverScanRunning = true;
+            NotifyDriverStateChanged();
+            try
             {
-                var found = parsed.Value.Found;
-                var installed = parsed.Value.Installed;
-                _driverUpdatesFound = isInstall ? Math.Max(found - installed, 0) : found;
-                _driverUpdatesSummary = $"{_driverUpdatesFound} mise(s) à jour de pilotes trouvée(s)";
-                _hasDriverScanResult = true;
+                var result = await _driverUpdateService.ScanAsync(CancellationToken.None).ConfigureAwait(false);
+                UpdateDriverStateFromResult(result, isInstall: false);
+            }
+            finally
+            {
+                _isDriverScanRunning = false;
                 NotifyDriverStateChanged();
             }
         }
 
+        private async Task InstallDriversAsync()
+        {
+            if (IsBusy || DriverUpdatesFound <= 0)
+            {
+                return;
+            }
+
+            _isDriverInstallRunning = true;
+            NotifyDriverStateChanged();
+            try
+            {
+                var items = new List<DriverUpdateItem>(DriverUpdateItems);
+                var result = await _driverUpdateService.InstallAsync(items, CancellationToken.None).ConfigureAwait(false);
+                UpdateDriverStateFromResult(result, isInstall: true);
+            }
+            finally
+            {
+                _isDriverInstallRunning = false;
+                NotifyDriverStateChanged();
+            }
+        }
+
+        private void UpdateDriverStateFromResult(DriverUpdateResult result, bool isInstall)
+        {
+            if (!result.Succeeded)
+            {
+                DriverUpdatesFound = 0;
+                _driverUpdatesSummary = "Pilotes trouvés: 0";
+                _hasDriverScanResult = true;
+                DriverUpdateItems.Clear();
+                OnPropertyChanged(nameof(DriverUpdateItems));
+                NotifyDriverStateChanged();
+                return;
+            }
+
+            if (!isInstall)
+            {
+                DriverUpdateItems.Clear();
+                foreach (var item in result.Items)
+                {
+                    DriverUpdateItems.Add(item);
+                }
+
+                OnPropertyChanged(nameof(DriverUpdateItems));
+            }
+            else
+            {
+                DriverUpdateItems.Clear();
+                OnPropertyChanged(nameof(DriverUpdateItems));
+            }
+
+            DriverUpdatesFound = isInstall ? Math.Max(result.Found - result.Installed, 0) : result.Found;
+            _driverUpdatesSummary = $"Pilotes trouvés: {DriverUpdatesFound}";
+            _hasDriverScanResult = true;
+            NotifyDriverStateChanged();
+        }
+
         private void NotifyDriverStateChanged()
         {
+            OnPropertyChanged(nameof(IsBusy));
             OnPropertyChanged(nameof(CanScanDrivers));
             OnPropertyChanged(nameof(CanInstallDrivers));
             OnPropertyChanged(nameof(HasDriverUpdates));
             OnPropertyChanged(nameof(DriverUpdatesSummary));
             OnPropertyChanged(nameof(HasDriverScanResult));
-        }
-
-        private static (int Found, int Installed)? TryParseDriverDebugInfo(string? debugInfo)
-        {
-            if (string.IsNullOrWhiteSpace(debugInfo))
-            {
-                return null;
-            }
-
-            int? found = null;
-            int? installed = null;
-            var parts = debugInfo.Split(';', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var part in parts)
-            {
-                var kvp = part.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
-                if (kvp.Length != 2)
-                {
-                    continue;
-                }
-
-                if (kvp[0].Equals("drivers_found", StringComparison.OrdinalIgnoreCase)
-                    && int.TryParse(kvp[1], out var parsedFound))
-                {
-                    found = parsedFound;
-                }
-                else if (kvp[0].Equals("drivers_installed", StringComparison.OrdinalIgnoreCase)
-                         && int.TryParse(kvp[1], out var parsedInstalled))
-                {
-                    installed = parsedInstalled;
-                }
-            }
-
-            if (!found.HasValue || !installed.HasValue)
-            {
-                return null;
-            }
-
-            return (found.Value, installed.Value);
+            _scanDriversCommand.RaiseCanExecuteChanged();
+            _installDriversCommand.RaiseCanExecuteChanged();
         }
     }
 }
