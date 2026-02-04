@@ -50,7 +50,7 @@ internal static class IntentRouter
 
         if (ContainsAny(lower, "driver", "drivers", "pilote", "pilotes", "gpu"))
         {
-            AddIfAvailable(suggestions, catalog, "gpu_driver_check");
+            AddIfAvailable(suggestions, catalog, "drivers_scan");
         }
 
         if (ContainsAny(lower, "ram", "mémoire", "memoire"))

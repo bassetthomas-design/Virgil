@@ -88,8 +88,11 @@ public sealed class DryRunServiceProbes
         public Task<ActionExecutionResult> RunWindowsUpdateAsync(CancellationToken ct = default)
             => CompleteAsync("Windows Update (dry-run)");
 
-        public Task<ActionExecutionResult> CheckGpuDriversAsync(CancellationToken ct = default)
-            => CompleteAsync("Vérification drivers GPU (dry-run)");
+        public Task<ActionExecutionResult> ScanDriversAsync(CancellationToken ct = default)
+            => CompleteAsync("Vérification drivers (dry-run)");
+
+        public Task<ActionExecutionResult> InstallDriversAsync(CancellationToken ct = default)
+            => CompleteAsync("Installation drivers (dry-run)");
 
         private Task<ActionExecutionResult> CompleteAsync(string label)
         {

@@ -2,6 +2,9 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Width="220">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="8">
             <!-- Maintenance rapide -->
@@ -79,7 +82,18 @@
                     IsEnabled="{Binding CanRunWindowsUpdate}"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
-            <Button Content="Vérifier les drivers GPU" Tag="gpu_driver_check" Margin="0,0,0,8"
+            <Button Content="Vérifier les drivers" Tag="drivers_scan" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanScanDrivers}"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <TextBlock Text="{Binding DriverUpdatesSummary}"
+                       Visibility="{Binding HasDriverScanResult, Converter={StaticResource BoolToVisibility}}"
+                       FontSize="11"
+                       Margin="0,0,0,4"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <Button Content="Installer les drivers" Tag="drivers_install" Margin="0,0,0,8"
+                    IsEnabled="{Binding CanInstallDrivers}"
+                    Visibility="{Binding HasDriverUpdates, Converter={StaticResource BoolToVisibility}}"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
 

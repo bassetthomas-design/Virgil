@@ -37,11 +37,12 @@ public enum VirgilActionId
 
     // Mises à jour (suite)
     RunWindowsUpdate,           // 22
-    CheckGpuDrivers,            // 23
+    DriverScan,                 // 23
+    DriverInstall,              // 24
 
     // Spéciaux
-    RamboMode,                  // 24
-    ThanosChatWipe,             // 25
-    ReloadConfiguration,        // 26
-    RescanSystem                // 27
+    RamboMode,                  // 25
+    ThanosChatWipe,             // 26
+    ReloadConfiguration,        // 27
+    RescanSystem                // 28
 }
