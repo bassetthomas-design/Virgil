@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Virgil.App.Commands;
 using Virgil.App.Models;
+using Virgil.Core.Models;
 
 namespace Virgil.App.ViewModels
 {
