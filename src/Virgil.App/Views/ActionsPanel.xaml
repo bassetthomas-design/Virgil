@@ -1,9 +1,11 @@
 <UserControl x:Class="Virgil.App.Views.ActionsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:Virgil.App.Converters"
              Width="220">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <converters:GreaterThanZeroToVisibilityConverter x:Key="GreaterThanZeroToVisibility" />
     </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="8">
@@ -82,20 +84,18 @@
                     IsEnabled="{Binding CanRunWindowsUpdate}"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
-            <Button Content="Vérifier les drivers" Tag="drivers_scan" Margin="0,0,0,4"
+            <Button Content="Vérifier les drivers" Margin="0,0,0,4"
                     IsEnabled="{Binding CanScanDrivers}"
-                    Command="{Binding InvokeActionCommand}"
-                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+                    Command="{Binding ScanDriversCommand}"/>
             <TextBlock Text="{Binding DriverUpdatesSummary}"
                        Visibility="{Binding HasDriverScanResult, Converter={StaticResource BoolToVisibility}}"
                        FontSize="11"
                        Margin="0,0,0,4"
                        Foreground="{DynamicResource TextSecondaryBrush}" />
-            <Button Content="Installer les drivers" Tag="drivers_install" Margin="0,0,0,8"
+            <Button Content="Installer les drivers" Margin="0,0,0,8"
+                    Command="{Binding InstallDriversCommand}"
                     IsEnabled="{Binding CanInstallDrivers}"
-                    Visibility="{Binding HasDriverUpdates, Converter={StaticResource BoolToVisibility}}"
-                    Command="{Binding InvokeActionCommand}"
-                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+                    Visibility="{Binding DriverUpdatesFound, Converter={StaticResource GreaterThanZeroToVisibility}}"/>
 
             <!-- Spéciaux -->
             <TextBlock Text="Spéciaux" Margin="0,4,0,4" FontWeight="Bold"/>
