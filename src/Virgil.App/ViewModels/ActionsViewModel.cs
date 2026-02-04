@@ -121,7 +121,7 @@ namespace Virgil.App.ViewModels
             try
             {
                 var result = await _driverUpdateService.ScanAsync(CancellationToken.None).ConfigureAwait(false);
-                UpdateDriverStateFromResult(result, isInstall: false);
+                UpdateDriverScanState(result);
             }
             finally
             {
@@ -143,7 +143,13 @@ namespace Virgil.App.ViewModels
             {
                 var items = new List<DriverUpdateItem>(DriverUpdateItems);
                 var result = await _driverUpdateService.InstallAsync(items, CancellationToken.None).ConfigureAwait(false);
-                UpdateDriverStateFromResult(result, isInstall: true);
+                UpdateDriverInstallState(result);
+            }
+            catch (Exception)
+            {
+                _driverUpdatesSummary = "Installation des pilotes échouée.";
+                _hasDriverScanResult = true;
+                NotifyDriverStateChanged();
             }
             finally
             {
@@ -152,38 +158,55 @@ namespace Virgil.App.ViewModels
             }
         }
 
-        private void UpdateDriverStateFromResult(DriverUpdateResult result, bool isInstall)
+        private void UpdateDriverScanState(DriverUpdateResult result)
         {
             if (!result.Succeeded)
             {
-                DriverUpdatesFound = 0;
-                _driverUpdatesSummary = "Pilotes trouvés: 0";
+                ResetDriverUpdates("Pilotes trouvés: 0");
+                return;
+            }
+
+            DriverUpdateItems.Clear();
+            foreach (var item in result.Items)
+            {
+                DriverUpdateItems.Add(item);
+            }
+
+            DriverUpdatesFound = DriverUpdateItems.Count;
+            _driverUpdatesSummary = $"Pilotes trouvés: {DriverUpdatesFound}";
+            _hasDriverScanResult = true;
+            OnPropertyChanged(nameof(DriverUpdateItems));
+            OnPropertyChanged(nameof(CanInstallDrivers));
+            NotifyDriverStateChanged();
+        }
+
+        private void UpdateDriverInstallState(DriverUpdateResult result)
+        {
+            if (!result.Succeeded)
+            {
+                _driverUpdatesSummary = "Installation des pilotes échouée.";
                 _hasDriverScanResult = true;
-                DriverUpdateItems.Clear();
-                OnPropertyChanged(nameof(DriverUpdateItems));
                 NotifyDriverStateChanged();
                 return;
             }
 
-            if (!isInstall)
-            {
-                DriverUpdateItems.Clear();
-                foreach (var item in result.Items)
-                {
-                    DriverUpdateItems.Add(item);
-                }
-
-                OnPropertyChanged(nameof(DriverUpdateItems));
-            }
-            else
-            {
-                DriverUpdateItems.Clear();
-                OnPropertyChanged(nameof(DriverUpdateItems));
-            }
-
-            DriverUpdatesFound = isInstall ? Math.Max(result.Found - result.Installed, 0) : result.Found;
+            DriverUpdateItems.Clear();
+            DriverUpdatesFound = Math.Max(DriverUpdatesFound - result.Installed, 0);
             _driverUpdatesSummary = $"Pilotes trouvés: {DriverUpdatesFound}";
             _hasDriverScanResult = true;
+            OnPropertyChanged(nameof(DriverUpdateItems));
+            OnPropertyChanged(nameof(CanInstallDrivers));
+            NotifyDriverStateChanged();
+        }
+
+        private void ResetDriverUpdates(string summary)
+        {
+            DriverUpdateItems.Clear();
+            DriverUpdatesFound = 0;
+            _driverUpdatesSummary = summary;
+            _hasDriverScanResult = true;
+            OnPropertyChanged(nameof(DriverUpdateItems));
+            OnPropertyChanged(nameof(CanInstallDrivers));
             NotifyDriverStateChanged();
         }
 

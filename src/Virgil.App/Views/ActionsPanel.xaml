@@ -84,21 +84,18 @@
                     IsEnabled="{Binding CanRunWindowsUpdate}"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <Button Content="Vérifier les drivers"
-                        Margin="0,0,6,0"
-                        IsEnabled="{Binding CanScanDrivers}"
-                        Command="{Binding ScanDriversCommand}"/>
-                <Button Content="Installer les drivers"
-                        IsEnabled="{Binding CanInstallDrivers}"
-                        Visibility="{Binding DriverUpdatesFound, Converter={StaticResource GreaterThanZeroToVisibility}}"
-                        Command="{Binding InstallDriversCommand}"/>
-            </StackPanel>
+            <Button Content="Vérifier les drivers" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanScanDrivers}"
+                    Command="{Binding ScanDriversCommand}"/>
             <TextBlock Text="{Binding DriverUpdatesSummary}"
                        Visibility="{Binding HasDriverScanResult, Converter={StaticResource BoolToVisibility}}"
                        FontSize="11"
-                       Margin="0,0,0,8"
+                       Margin="0,0,0,4"
                        Foreground="{DynamicResource TextSecondaryBrush}" />
+            <Button Content="Installer les drivers" Margin="0,0,0,8"
+                    Command="{Binding InstallDriversCommand}"
+                    IsEnabled="{Binding CanInstallDrivers}"
+                    Visibility="{Binding DriverUpdatesFound, Converter={StaticResource GreaterThanZeroToVisibility}}"/>
 
             <!-- Spéciaux -->
             <TextBlock Text="Spéciaux" Margin="0,4,0,4" FontWeight="Bold"/>
