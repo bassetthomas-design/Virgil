@@ -41,6 +41,8 @@ public interface IPerformanceService
     Task<ActionExecutionResult> EnableGamingModeAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> RestoreNormalModeAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> OptimizeStartupAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RestoreStartupAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> SoftRamFlushAsync(CancellationToken ct = default);
 }
