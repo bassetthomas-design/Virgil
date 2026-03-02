@@ -45,7 +45,28 @@
                 <DataGridTextColumn Header="Nom" Binding="{Binding Name}" Width="2*" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Emplacement" Binding="{Binding Location}" Width="*" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Commande" Binding="{Binding Command}" Width="3*" IsReadOnly="True"/>
-                <DataGridCheckBoxColumn Header="Recommandé" Binding="{Binding IsRecommended}" Width="110" IsReadOnly="True"/>
+                <DataGridTemplateColumn Header="Recommandé" Width="130" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border Padding="6,2"
+                                    CornerRadius="8"
+                                    Background="#3A2E58"
+                                    HorizontalAlignment="Left">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRecommended}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="Recommandé" FontSize="11" FontWeight="SemiBold" />
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
 
