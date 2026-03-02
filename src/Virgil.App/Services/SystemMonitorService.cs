@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using LibreHardwareMonitor.Hardware;
+using Microsoft.VisualBasic.Devices;
 
 namespace Virgil.App.Services
 {
@@ -51,8 +52,9 @@ namespace Virgil.App.Services
 
         // Perf counters (Windows). Si indisponibles, restent null et on publie 0.
         private PerformanceCounter? _cpuCounter;
-        private PerformanceCounter? _ramCounter;
-        private readonly Computer? _computer;
+        private PerformanceCounter? _availableMemoryCounter;
+        private readonly ulong _totalPhysicalMemoryBytes;
+        private readonly LibreHardwareMonitor.Hardware.Computer? _computer;
 
         public event EventHandler<SystemMonitorSnapshot>? SnapshotUpdated;
 
@@ -67,8 +69,9 @@ namespace Virgil.App.Services
             try
             {
                 _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-                _ramCounter = new PerformanceCounter("Memory", "% Committed Bytes In Use");
-                _computer = new Computer
+                _availableMemoryCounter = new PerformanceCounter("Memory", "Available Bytes");
+                _totalPhysicalMemoryBytes = new ComputerInfo().TotalPhysicalMemory;
+                _computer = new LibreHardwareMonitor.Hardware.Computer
                 {
                     IsCpuEnabled = true,
                     IsGpuEnabled = true,
@@ -81,7 +84,8 @@ namespace Virgil.App.Services
             catch
             {
                 _cpuCounter = null;
-                _ramCounter = null;
+                _availableMemoryCounter = null;
+                _totalPhysicalMemoryBytes = 0;
                 _computer = null;
             }
         }
@@ -98,7 +102,7 @@ namespace Virgil.App.Services
 
                 // Prime les counters: le premier NextValue() est souvent 0.
                 try { _cpuCounter?.NextValue(); } catch { }
-                try { _ramCounter?.NextValue(); } catch { }
+                try { _availableMemoryCounter?.NextValue(); } catch { }
 
                 _loopCts?.Cancel();
                 _loopCts?.Dispose();
@@ -186,7 +190,7 @@ namespace Virgil.App.Services
             float diskTemp = 0f;
 
             try { cpu = _cpuCounter?.NextValue() ?? 0f; } catch { cpu = 0f; }
-            try { ram = _ramCounter?.NextValue() ?? 0f; } catch { ram = 0f; }
+            ram = GetPhysicalMemoryUsagePercent();
 
             if (_computer != null)
             {
@@ -229,17 +233,6 @@ namespace Virgil.App.Services
 
                                 break;
 
-                            case HardwareType.Memory:
-                                foreach (var s in hw.Sensors)
-                                {
-                                    if (s.SensorType == SensorType.Load)
-                                    {
-                                        ram = s.Value ?? ram;
-                                    }
-                                }
-
-                                break;
-
                             case HardwareType.Storage:
                                 foreach (var s in hw.Sensors)
                                 {
@@ -266,8 +259,7 @@ namespace Virgil.App.Services
             // Clamp basique
             if (cpu < 0) cpu = 0;
             if (cpu > 100) cpu = 100;
-            if (ram < 0) ram = 0;
-            if (ram > 100) ram = 100;
+            ram = ClampPercent(ram);
             if (gpu < 0) gpu = 0;
             if (gpu > 100) gpu = 100;
             if (disk < 0) disk = 0;
@@ -303,6 +295,57 @@ namespace Virgil.App.Services
             }
         }
 
+        private float GetPhysicalMemoryUsagePercent()
+        {
+            try
+            {
+                if (_totalPhysicalMemoryBytes == 0)
+                {
+                    return 0f;
+                }
+
+                var availableBytes = _availableMemoryCounter?.NextValue() ?? 0f;
+                if (float.IsNaN(availableBytes) || float.IsInfinity(availableBytes))
+                {
+                    return 0f;
+                }
+
+                var clampedAvailable = Math.Max(0d, availableBytes);
+                var usedBytes = Math.Max(0d, _totalPhysicalMemoryBytes - clampedAvailable);
+                var percent = usedBytes / _totalPhysicalMemoryBytes * 100d;
+
+                if (IsDiagnosticMode())
+                {
+                    Trace.WriteLine($"RAM diagnostics total={_totalPhysicalMemoryBytes} available={clampedAvailable:0} used={usedBytes:0}");
+                }
+
+                return ClampPercent((float)percent);
+            }
+            catch
+            {
+                return 0f;
+            }
+        }
+
+        private static bool IsDiagnosticMode()
+        {
+#if DEBUG
+            return true;
+#else
+            return string.Equals(Environment.GetEnvironmentVariable("VIRGIL_DIAGNOSTIC"), "1", StringComparison.OrdinalIgnoreCase);
+#endif
+        }
+
+        private static float ClampPercent(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                return 0f;
+            }
+
+            return (float)Math.Clamp(Math.Round(value, 1, MidpointRounding.AwayFromZero), 0d, 100d);
+        }
+
         public void Dispose()
         {
             try { _loopCts?.Cancel(); } catch { }
@@ -311,11 +354,11 @@ namespace Virgil.App.Services
             _loopTask = null;
 
             try { _cpuCounter?.Dispose(); } catch { }
-            try { _ramCounter?.Dispose(); } catch { }
+            try { _availableMemoryCounter?.Dispose(); } catch { }
             try { _computer?.Close(); } catch { }
 
             _cpuCounter = null;
-            _ramCounter = null;
+            _availableMemoryCounter = null;
             _isRunning = false;
         }
     }
