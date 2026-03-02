@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,81 +15,104 @@ namespace Virgil.App.Services
     public class MonitoringService
     {
         public event EventHandler<MetricsEventArgs>? Updated;
-        public event Action<double,double,double,double>? Metrics;
+        public event Action<double, double, double, double>? Metrics;
+        public event EventHandler<SystemMetricsSnapshot>? SnapshotUpdated;
 
-        private readonly Computer _pc;
-        private readonly bool _isHardwareAvailable;
         private readonly object _loopGate = new();
         private CancellationTokenSource? _loopCts;
         private Task? _loopTask;
         private readonly SemaphoreSlim _sampleGate = new(1, 1);
-        private DateTime _lastErrorLogUtc = DateTime.MinValue;
         private readonly TimeSpan _errorLogInterval = TimeSpan.FromSeconds(30);
-        private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(30);
-        private static readonly TimeSpan DefaultMinInterval = TimeSpan.FromMinutes(5);
-        private static readonly TimeSpan DefaultMaxInterval = TimeSpan.FromMinutes(10);
-        private readonly Random _rng = new();
-        private TimeSpan _minInterval = DefaultMinInterval;
-        private TimeSpan _maxInterval = DefaultMaxInterval;
-        private MetricState _cpuUsage = new();
-        private MetricState _gpuUsage = new();
-        private MetricState _ramUsage = new();
-        private MetricState _diskUsage = new();
-        private MetricState _cpuTemp = new();
-        private MetricState _gpuTemp = new();
-        private MetricState _diskTemp = new();
+        private DateTime _lastErrorLogUtc = DateTime.MinValue;
+
+        private TimeSpan _pollInterval = TimeSpan.FromSeconds(2);
+
+        private readonly PerformanceCounter? _cpuCounter;
+        private readonly PerformanceCounter? _diskActiveCounter;
+        private readonly PerformanceCounter? _diskReadCounter;
+        private readonly PerformanceCounter? _diskWriteCounter;
+        private readonly PerformanceCounter[] _gpuCounters;
+
+        private readonly Computer? _computer;
+        private readonly bool _isHardwareAvailable;
+
+        private readonly FixedWindowAverage _cpuSmoothing = new(3);
+        private readonly FixedWindowAverage _diskSmoothing = new(3);
+        private readonly FixedWindowAverage _gpuSmoothing = new(3);
+        private readonly FixedWindowAverage _cpuTempSmoothing = new(3);
+        private readonly FixedWindowAverage _gpuTempSmoothing = new(3);
+
+        private bool _cpuWarmupDone;
+        private string _lastError = "none";
+
         public DateTime? LastTelemetryUpdateUtc { get; private set; }
         public DateTime? NextTelemetryUpdateUtc { get; private set; }
         public double? DataAgeSeconds { get; private set; }
+        public string LastDiagnostics { get; private set; } = string.Empty;
 
         public MonitoringService()
         {
             try
             {
-                _pc = new Computer
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total", true);
+                _cpuCounter.NextValue();
+            }
+            catch { }
+
+            try
+            {
+                _diskActiveCounter = new PerformanceCounter("PhysicalDisk", "% Disk Time", "_Total", true);
+                _diskReadCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total", true);
+                _diskWriteCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total", true);
+                _diskActiveCounter.NextValue();
+                _diskReadCounter.NextValue();
+                _diskWriteCounter.NextValue();
+            }
+            catch { }
+
+            try
+            {
+                var gpuCategory = new PerformanceCounterCategory("GPU Engine");
+                var names = gpuCategory.GetInstanceNames();
+                _gpuCounters = names
+                    .Where(n => n.IndexOf("engtype_3D", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .SelectMany(n => gpuCategory.GetCounters(n))
+                    .Where(c => c.CounterName.Equals("Utilization Percentage", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                foreach (var counter in _gpuCounters)
+                {
+                    try { counter.NextValue(); } catch { }
+                }
+            }
+            catch
+            {
+                _gpuCounters = Array.Empty<PerformanceCounter>();
+            }
+
+            try
+            {
+                _computer = new Computer
                 {
                     IsCpuEnabled = true,
                     IsGpuEnabled = true,
-                    IsMemoryEnabled = true,
-                    IsStorageEnabled = true,
-                    IsMotherboardEnabled = true
+                    IsMemoryEnabled = false,
+                    IsStorageEnabled = false,
+                    IsMotherboardEnabled = false
                 };
-                _pc.Open();
+                _computer.Open();
                 _isHardwareAvailable = true;
             }
             catch
             {
-                // Sur certaines configurations (VM, droits insuffisants…),
-                // l'initialisation de LibreHardwareMonitor peut échouer et
-                // planter l'application au démarrage. On garde un stub pour
-                // éviter le crash et on désactive simplement la collecte.
-                _pc = new Computer();
+                _computer = null;
                 _isHardwareAvailable = false;
             }
         }
 
         public void SetIntervalRange(int minMinutes, int maxMinutes)
         {
-            var min = TimeSpan.FromMinutes(minMinutes);
-            var max = TimeSpan.FromMinutes(maxMinutes);
-
-            if (min < DefaultMinInterval)
-            {
-                min = DefaultMinInterval;
-            }
-
-            if (max > DefaultMaxInterval)
-            {
-                max = DefaultMaxInterval;
-            }
-
-            if (max < min)
-            {
-                (min, max) = (max, min);
-            }
-
-            _minInterval = min;
-            _maxInterval = max;
+            var requestedSeconds = Math.Max(1, Math.Min(minMinutes, maxMinutes));
+            _pollInterval = TimeSpan.FromSeconds(requestedSeconds);
         }
 
         public void Start()
@@ -114,22 +139,22 @@ namespace Virgil.App.Services
                 _loopCts?.Dispose();
                 _loopCts = null;
                 _loopTask = null;
+                NextTelemetryUpdateUtc = null;
             }
         }
 
-        /// <summary>
-        /// Effectue immédiatement un nouveau prélèvement des métriques.
-        /// </summary>
-        public Task RescanAsync()
-            => RefreshNowAsync();
+        public Task StartAsync() { Start(); return Task.CompletedTask; }
+        public Task StopAsync() { Stop(); return Task.CompletedTask; }
+
+        public Task RescanAsync() => RefreshNowAsync();
 
         public Task RefreshNowAsync()
         {
             Trace.WriteLine("Monitoring manual refresh requested.");
-            return Task.Run(() =>
+            return Task.Run(async () =>
             {
                 var started = Stopwatch.StartNew();
-                var sampled = Sample();
+                var sampled = await SampleAsync(CancellationToken.None).ConfigureAwait(false);
                 started.Stop();
                 LogTickDuration(started.Elapsed, sampled);
             });
@@ -140,17 +165,19 @@ namespace Virgil.App.Services
             while (!token.IsCancellationRequested)
             {
                 var started = Stopwatch.StartNew();
-                var sampled = Sample();
+                var sampled = await SampleAsync(token).ConfigureAwait(false);
                 started.Stop();
+
                 LogTickDuration(started.Elapsed, sampled);
-                var nextInterval = GetNextInterval();
-                var delay = nextInterval - started.Elapsed;
+                var delay = _pollInterval - started.Elapsed;
                 if (delay < TimeSpan.Zero)
                 {
                     delay = TimeSpan.Zero;
                 }
 
-                LogNextSchedule(nextInterval, delay);
+                NextTelemetryUpdateUtc = DateTime.UtcNow + delay;
+                Trace.WriteLine($"Monitoring next tick scheduled at {NextTelemetryUpdateUtc:O} (interval {_pollInterval.TotalSeconds:F1}s).");
+
                 try
                 {
                     await Task.Delay(delay, token).ConfigureAwait(false);
@@ -162,20 +189,21 @@ namespace Virgil.App.Services
             }
         }
 
-        private bool Sample()
+        private async Task<bool> SampleAsync(CancellationToken token)
         {
-            if (!_sampleGate.Wait(0))
+            if (!await _sampleGate.WaitAsync(0, token).ConfigureAwait(false))
             {
                 return false;
             }
 
             try
             {
-                SampleCore();
+                await SampleCoreAsync(token).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)
             {
+                _lastError = ex.Message;
                 LogMonitoringException(ex, "Monitoring sample failed.");
                 return false;
             }
@@ -185,182 +213,298 @@ namespace Virgil.App.Services
             }
         }
 
-        private void SampleCore()
+        private async Task SampleCoreAsync(CancellationToken token)
         {
-            double? cpuUsage = null;
-            double? gpuUsage = null;
-            double? ramUsage = null;
-            double? cpuTemp = null;
-            double? gpuTemp = null;
-            double? diskUsage = null;
-            double? diskTemp = null;
-
-            if (_isHardwareAvailable)
+            var now = DateTimeOffset.UtcNow;
+            if (!_cpuWarmupDone && _cpuCounter != null)
             {
-                foreach (var hw in _pc.Hardware)
-                {
-                    try
-                    {
-                        hw.Update();
-                    }
-                    catch (Exception ex)
-                    {
-                        LogMonitoringException(ex, $"Monitoring update failed for {hw.HardwareType}.");
-                        continue;
-                    }
-
-                    try
-                    {
-                        switch (hw.HardwareType)
-                        {
-                            case HardwareType.Cpu:
-                                foreach (var s in hw.Sensors)
-                                {
-                                    if (s.SensorType == SensorType.Temperature && s.Name.Contains("CPU Package", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        cpuTemp = s.Value ?? cpuTemp;
-                                    }
-                                    else if (s.SensorType == SensorType.Load && s.Name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        cpuUsage = s.Value ?? cpuUsage;
-                                    }
-                                }
-
-                                break;
-                            case HardwareType.GpuAmd:
-                            case HardwareType.GpuNvidia:
-                            case HardwareType.GpuIntel:
-                                foreach (var s in hw.Sensors)
-                                {
-                                    if (s.SensorType == SensorType.Temperature)
-                                    {
-                                        gpuTemp = s.Value ?? gpuTemp;
-                                    }
-                                    else if (s.SensorType == SensorType.Load && (s.Name.Contains("Core") || s.Name.Equals("GPU Core", StringComparison.OrdinalIgnoreCase)))
-                                    {
-                                        gpuUsage = s.Value ?? gpuUsage;
-                                    }
-                                }
-
-                                break;
-                            case HardwareType.Memory:
-                                foreach (var s in hw.Sensors)
-                                {
-                                    if (s.SensorType == SensorType.Load)
-                                    {
-                                        ramUsage = s.Value ?? ramUsage;
-                                    }
-                                }
-
-                                break;
-                            case HardwareType.Storage:
-                                foreach (var s in hw.Sensors)
-                                {
-                                    if (s.SensorType == SensorType.Load && s.Name.Contains("Usage", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        diskUsage = s.Value ?? diskUsage;
-                                    }
-                                    else if (s.SensorType == SensorType.Temperature)
-                                    {
-                                        diskTemp = Math.Max(diskTemp ?? 0, s.Value ?? 0);
-                                    }
-                                }
-
-                                break;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogMonitoringException(ex, $"Monitoring sensor read failed for {hw.HardwareType}.");
-                    }
-                }
+                _cpuCounter.NextValue();
+                await Task.Delay(TimeSpan.FromSeconds(1), token).ConfigureAwait(false);
+                _cpuWarmupDone = true;
             }
 
-            var now = DateTime.UtcNow;
-            UpdateMetric(_cpuUsage, cpuUsage, now);
-            UpdateMetric(_gpuUsage, gpuUsage, now);
-            UpdateMetric(_ramUsage, ramUsage, now);
-            UpdateMetric(_diskUsage, diskUsage, now);
-            UpdateMetric(_cpuTemp, cpuTemp, now);
-            UpdateMetric(_gpuTemp, gpuTemp, now);
-            UpdateMetric(_diskTemp, diskTemp, now);
+            var ram = ReadRamMetrics();
+            var cpuRaw = ReadCounter(_cpuCounter, 0, 100);
+            var diskActiveRaw = ReadCounter(_diskActiveCounter, 0, 100);
+            var diskReadBps = ReadCounter(_diskReadCounter, 0, null);
+            var diskWriteBps = ReadCounter(_diskWriteCounter, 0, null);
+            var gpuRaw = ReadGpuPercent();
+            var temps = ReadTemperatures();
 
-            var cpuUsageSample = GetSample(_cpuUsage, now);
-            var gpuUsageSample = GetSample(_gpuUsage, now);
-            var ramUsageSample = GetSample(_ramUsage, now);
-            var diskUsageSample = GetSample(_diskUsage, now);
-            var cpuTempSample = GetSample(_cpuTemp, now);
-            var gpuTempSample = GetSample(_gpuTemp, now);
-            var diskTempSample = GetSample(_diskTemp, now);
-            var snapshot = new MetricsSnapshot(
-                cpuUsageSample,
-                gpuUsageSample,
-                ramUsageSample,
-                cpuTempSample,
-                diskUsageSample,
-                gpuTempSample,
-                diskTempSample);
-            LastTelemetryUpdateUtc = now;
-            DataAgeSeconds = snapshot.DataAge?.TotalSeconds;
+            var cpu = _cpuSmoothing.AddAndAverage(cpuRaw);
+            var disk = _diskSmoothing.AddAndAverage(diskActiveRaw);
+            var gpu = _gpuSmoothing.AddAndAverage(gpuRaw);
+            var cpuTemp = _cpuTempSmoothing.AddAndAverage(temps.CpuTemp);
+            var gpuTemp = _gpuTempSmoothing.AddAndAverage(temps.GpuTemp);
 
-            Metrics?.Invoke(snapshot.CpuUsage.Value, snapshot.GpuUsage.Value, snapshot.RamUsage.Value, snapshot.CpuTemp.Value);
-            Updated?.Invoke(this, new MetricsEventArgs(
-                snapshot.CpuUsage.Value,
-                snapshot.GpuUsage.Value,
-                snapshot.RamUsage.Value,
-                snapshot.CpuTemp.Value,
-                snapshot.DiskUsage.Value,
-                snapshot.GpuTemp.Value,
-                snapshot.DiskTemp.Value,
-                snapshot.CpuUsage.IsStale,
-                snapshot.GpuUsage.IsStale,
-                snapshot.RamUsage.IsStale,
-                snapshot.CpuTemp.IsStale,
-                snapshot.DiskUsage.IsStale,
-                snapshot.GpuTemp.IsStale,
-                snapshot.DiskTemp.IsStale)
+            var snapshot = new SystemMetricsSnapshot
             {
-                SampledAtUtc = now,
-                DataAge = snapshot.DataAge,
-                CpuUsageLastUpdatedUtc = snapshot.CpuUsage.LastUpdatedUtc,
-                CpuUsageDataAge = snapshot.CpuUsage.DataAge,
-                GpuUsageLastUpdatedUtc = snapshot.GpuUsage.LastUpdatedUtc,
-                GpuUsageDataAge = snapshot.GpuUsage.DataAge,
-                RamUsageLastUpdatedUtc = snapshot.RamUsage.LastUpdatedUtc,
-                RamUsageDataAge = snapshot.RamUsage.DataAge,
-                DiskUsageLastUpdatedUtc = snapshot.DiskUsage.LastUpdatedUtc,
-                DiskUsageDataAge = snapshot.DiskUsage.DataAge,
-                CpuTempLastUpdatedUtc = snapshot.CpuTemp.LastUpdatedUtc,
-                CpuTempDataAge = snapshot.CpuTemp.DataAge,
-                GpuTempLastUpdatedUtc = snapshot.GpuTemp.LastUpdatedUtc,
-                GpuTempDataAge = snapshot.GpuTemp.DataAge,
-                DiskTempLastUpdatedUtc = snapshot.DiskTemp.LastUpdatedUtc,
-                DiskTempDataAge = snapshot.DiskTemp.DataAge
+                Timestamp = now,
+                CpuPercent = cpu,
+                RamPercent = ram.Percent,
+                RamUsedBytes = ram.UsedBytes,
+                RamTotalBytes = ram.TotalBytes,
+                DiskActivePercent = disk,
+                DiskReadBps = diskReadBps,
+                DiskWriteBps = diskWriteBps,
+                GpuPercent = gpu,
+                CpuTempC = ClampPlausibleTemp(cpuTemp),
+                GpuTempC = ClampPlausibleTemp(gpuTemp),
+                SourceFlags = BuildSourceFlags(ram.IsAvailable, _cpuCounter != null, _diskActiveCounter != null, _gpuCounters.Length > 0, _isHardwareAvailable),
+                ProviderName = _gpuCounters.Length > 0 ? "GPUEngineCounter" : "Unavailable",
+                SampleAgeMs = (DateTimeOffset.UtcNow - now).TotalMilliseconds
+            };
+
+            LastTelemetryUpdateUtc = now.UtcDateTime;
+            DataAgeSeconds = snapshot.SampleAgeMs / 1000d;
+
+            BuildDiagnostics(snapshot, cpuRaw, cpu, diskActiveRaw, disk, gpuRaw, gpu);
+            PublishLegacyEvents(snapshot);
+            SnapshotUpdated?.Invoke(this, snapshot);
+        }
+
+        private void PublishLegacyEvents(SystemMetricsSnapshot snapshot)
+        {
+            var cpu = snapshot.CpuPercent ?? double.NaN;
+            var ram = snapshot.RamPercent ?? double.NaN;
+            var disk = snapshot.DiskActivePercent ?? double.NaN;
+            var gpu = snapshot.GpuPercent ?? double.NaN;
+            var cpuTemp = snapshot.CpuTempC ?? double.NaN;
+            var gpuTemp = snapshot.GpuTempC ?? double.NaN;
+
+            Metrics?.Invoke(OrZero(cpu), OrZero(gpu), OrZero(ram), OrZero(cpuTemp));
+            Updated?.Invoke(this, new MetricsEventArgs(
+                cpu,
+                gpu,
+                ram,
+                cpuTemp,
+                disk,
+                gpuTemp,
+                0,
+                cpuUsageIsStale: !snapshot.CpuPercent.HasValue,
+                gpuUsageIsStale: !snapshot.GpuPercent.HasValue,
+                ramUsageIsStale: !snapshot.RamPercent.HasValue,
+                cpuTempIsStale: !snapshot.CpuTempC.HasValue,
+                diskUsageIsStale: !snapshot.DiskActivePercent.HasValue,
+                gpuTempIsStale: !snapshot.GpuTempC.HasValue,
+                diskTempIsStale: true)
+            {
+                SampledAtUtc = snapshot.Timestamp.UtcDateTime,
+                DataAge = TimeSpan.FromMilliseconds(snapshot.SampleAgeMs),
+                CpuUsageLastUpdatedUtc = snapshot.CpuPercent.HasValue ? snapshot.Timestamp.UtcDateTime : null,
+                GpuUsageLastUpdatedUtc = snapshot.GpuPercent.HasValue ? snapshot.Timestamp.UtcDateTime : null,
+                RamUsageLastUpdatedUtc = snapshot.RamPercent.HasValue ? snapshot.Timestamp.UtcDateTime : null,
+                DiskUsageLastUpdatedUtc = snapshot.DiskActivePercent.HasValue ? snapshot.Timestamp.UtcDateTime : null,
+                CpuTempLastUpdatedUtc = snapshot.CpuTempC.HasValue ? snapshot.Timestamp.UtcDateTime : null,
+                GpuTempLastUpdatedUtc = snapshot.GpuTempC.HasValue ? snapshot.Timestamp.UtcDateTime : null
             });
         }
 
-        private void UpdateMetric(MetricState state, double? value, DateTime now)
+        private static double OrZero(double value)
+            => double.IsNaN(value) || double.IsInfinity(value) ? 0d : value;
+
+        private (bool IsAvailable, ulong? TotalBytes, ulong? UsedBytes, double? Percent) ReadRamMetrics()
         {
-            if (value.HasValue && !double.IsNaN(value.Value))
+            var status = new MemoryStatusEx();
+            try
             {
-                state.Update(value.Value, now);
+                if (!GlobalMemoryStatusEx(ref status) || status.ullTotalPhys == 0)
+                {
+                    return (false, null, null, null);
+                }
+
+                var total = status.ullTotalPhys;
+                var available = Math.Min(status.ullAvailPhys, total);
+                var used = total - available;
+                var percent = ClampPercent((double)used / total * 100d);
+                return (true, total, used, percent);
             }
-            else
+            catch
             {
-                state.MarkSampled(now);
+                return (false, null, null, null);
             }
         }
 
-        private MetricSample GetSample(MetricState state, DateTime now)
+        private static double? ReadCounter(PerformanceCounter? counter, double min, double? max)
         {
-            if (state.HasRecentValue(now, _cacheDuration))
+            if (counter == null)
             {
-                var age = now - state.LastUpdatedUtc!.Value;
-                var stale = state.LastUpdatedUtc < state.LastSampleUtc;
-                return new MetricSample(state.LastGoodValue ?? double.NaN, stale, state.LastUpdatedUtc, age);
+                return null;
             }
 
-            return new MetricSample(double.NaN, true, null, null);
+            try
+            {
+                var value = counter.NextValue();
+                if (float.IsNaN(value) || float.IsInfinity(value))
+                {
+                    return null;
+                }
+
+                var asDouble = (double)value;
+                if (asDouble < min)
+                {
+                    asDouble = min;
+                }
+
+                if (max.HasValue && asDouble > max.Value)
+                {
+                    asDouble = max.Value;
+                }
+
+                return asDouble;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private double? ReadGpuPercent()
+        {
+            if (_gpuCounters.Length == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                var sum = 0d;
+                var found = false;
+                foreach (var counter in _gpuCounters)
+                {
+                    try
+                    {
+                        var value = counter.NextValue();
+                        if (float.IsNaN(value) || float.IsInfinity(value))
+                        {
+                            continue;
+                        }
+
+                        sum += value;
+                        found = true;
+                    }
+                    catch
+                    {
+                        // Ignore single counter errors.
+                    }
+                }
+
+                return found ? ClampPercent(sum) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private (double? CpuTemp, double? GpuTemp) ReadTemperatures()
+        {
+            if (!_isHardwareAvailable || _computer == null)
+            {
+                return (null, null);
+            }
+
+            double? cpu = null;
+            double? gpu = null;
+
+            foreach (var hw in _computer.Hardware)
+            {
+                try
+                {
+                    hw.Update();
+                    switch (hw.HardwareType)
+                    {
+                        case HardwareType.Cpu:
+                            foreach (var s in hw.Sensors)
+                            {
+                                if (s.SensorType == SensorType.Temperature && s.Name.Contains("Package", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    cpu = ClampPlausibleTemp(s.Value);
+                                }
+                            }
+                            break;
+
+                        case HardwareType.GpuAmd:
+                        case HardwareType.GpuNvidia:
+                        case HardwareType.GpuIntel:
+                            foreach (var s in hw.Sensors)
+                            {
+                                if (s.SensorType == SensorType.Temperature)
+                                {
+                                    gpu = ClampPlausibleTemp(s.Value);
+                                }
+                            }
+                            break;
+                    }
+                }
+                catch
+                {
+                    // Best effort only.
+                }
+            }
+
+            return (cpu, gpu);
+        }
+
+        private void BuildDiagnostics(SystemMetricsSnapshot snapshot, double? cpuRaw, double? cpuAvg, double? diskRaw, double? diskAvg, double? gpuRaw, double? gpuAvg)
+        {
+            var total = snapshot.RamTotalBytes?.ToString() ?? "unavailable";
+            var used = snapshot.RamUsedBytes?.ToString() ?? "unavailable";
+            var avail = snapshot.RamTotalBytes.HasValue && snapshot.RamUsedBytes.HasValue
+                ? (snapshot.RamTotalBytes.Value - snapshot.RamUsedBytes.Value).ToString()
+                : "unavailable";
+
+            LastDiagnostics =
+                $"ts={snapshot.Timestamp:O} ageMs={snapshot.SampleAgeMs:F0} " +
+                $"ram(total={total},avail={avail},used={used},pct={FormatDiag(snapshot.RamPercent)}) " +
+                $"cpu(raw={FormatDiag(cpuRaw)},avg={FormatDiag(cpuAvg)}) " +
+                $"disk(raw={FormatDiag(diskRaw)},avg={FormatDiag(diskAvg)},readBps={FormatDiag(snapshot.DiskReadBps)},writeBps={FormatDiag(snapshot.DiskWriteBps)}) " +
+                $"gpu(provider={snapshot.ProviderName},raw={FormatDiag(gpuRaw)},avg={FormatDiag(gpuAvg)}) " +
+                $"temp(cpu={FormatDiag(snapshot.CpuTempC)},gpu={FormatDiag(snapshot.GpuTempC)}) " +
+                $"lastError={_lastError}";
+
+            if (IsDiagnosticMode())
+            {
+                Trace.WriteLine($"Monitoring diagnostics: {LastDiagnostics}");
+            }
+        }
+
+        private static string FormatDiag(double? value)
+            => value.HasValue ? value.Value.ToString("0.0") : "unavailable";
+
+        private static string BuildSourceFlags(bool ram, bool cpu, bool disk, bool gpu, bool temp)
+            => $"RAM={(ram ? "Win32GlobalMemoryStatusEx" : "Unavailable")};CPU={(cpu ? "PerfCounter" : "Unavailable")};DISK={(disk ? "PerfCounter" : "Unavailable")};GPU={(gpu ? "GPUEngine" : "Unavailable")};TEMP={(temp ? "LibreHardwareMonitor" : "Unavailable")}";
+
+        private static double? ClampPlausibleTemp(float? value)
+            => value.HasValue ? ClampPlausibleTemp((double?)value.Value) : null;
+
+        private static double? ClampPlausibleTemp(double? value)
+        {
+            if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value))
+            {
+                return null;
+            }
+
+            return Math.Clamp(Math.Round(value.Value, 1, MidpointRounding.AwayFromZero), 0d, 120d);
+        }
+
+        private static double ClampPercent(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                return 0d;
+            }
+
+            return Math.Clamp(Math.Round(value, 1, MidpointRounding.AwayFromZero), 0d, 100d);
+        }
+
+        private static bool IsDiagnosticMode()
+        {
+#if DEBUG
+            return true;
+#else
+            return string.Equals(Environment.GetEnvironmentVariable("VIRGIL_DIAGNOSTIC"), "1", StringComparison.OrdinalIgnoreCase);
+#endif
         }
 
         private void LogTickDuration(TimeSpan duration, bool sampled)
@@ -373,24 +517,6 @@ namespace Virgil.App.Services
             }
         }
 
-        private void LogNextSchedule(TimeSpan interval, TimeSpan delay)
-        {
-            var nextUtc = DateTime.UtcNow + delay;
-            NextTelemetryUpdateUtc = nextUtc;
-            Trace.WriteLine($"Monitoring next tick scheduled at {nextUtc:O} (interval {interval.TotalMinutes:F1} min).");
-        }
-
-        private TimeSpan GetNextInterval()
-        {
-            if (_maxInterval <= _minInterval)
-            {
-                return _minInterval;
-            }
-
-            var rangeMs = (_maxInterval - _minInterval).TotalMilliseconds;
-            var offsetMs = _rng.NextDouble() * rangeMs;
-            return _minInterval + TimeSpan.FromMilliseconds(offsetMs);
-        }
         private void LogMonitoringException(Exception ex, string message)
         {
             var now = DateTime.UtcNow;
@@ -403,64 +529,60 @@ namespace Virgil.App.Services
             StartupLog.Write(message, ex);
         }
 
-        private sealed class MetricState
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MemoryStatusEx
         {
-            public double? LastGoodValue { get; private set; }
-            public DateTime? LastUpdatedUtc { get; private set; }
-            public DateTime? LastSampleUtc { get; private set; }
-            public bool HasValue => LastGoodValue.HasValue;
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
 
-            public void Update(double value, DateTime now)
+            public MemoryStatusEx()
             {
-                LastGoodValue = value;
-                LastUpdatedUtc = now;
-                LastSampleUtc = now;
+                dwLength = (uint)Marshal.SizeOf(typeof(MemoryStatusEx));
+                dwMemoryLoad = 0;
+                ullTotalPhys = 0;
+                ullAvailPhys = 0;
+                ullTotalPageFile = 0;
+                ullAvailPageFile = 0;
+                ullTotalVirtual = 0;
+                ullAvailVirtual = 0;
+                ullAvailExtendedVirtual = 0;
             }
-
-            public void MarkSampled(DateTime now)
-            {
-                LastSampleUtc = now;
-            }
-
-            public bool HasRecentValue(DateTime now, TimeSpan maxAge)
-                => LastUpdatedUtc.HasValue && (now - LastUpdatedUtc.Value) <= maxAge;
         }
 
-        private readonly record struct MetricSample(
-            double Value,
-            bool IsStale,
-            DateTime? LastUpdatedUtc,
-            TimeSpan? DataAge);
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx lpBuffer);
 
-        private readonly record struct MetricsSnapshot(
-            MetricSample CpuUsage,
-            MetricSample GpuUsage,
-            MetricSample RamUsage,
-            MetricSample CpuTemp,
-            MetricSample DiskUsage,
-            MetricSample GpuTemp,
-            MetricSample DiskTemp)
+        private sealed class FixedWindowAverage
         {
-            public TimeSpan? DataAge
-            {
-                get
-                {
-                    var ages = new[]
-                        {
-                            CpuUsage.DataAge,
-                            GpuUsage.DataAge,
-                            RamUsage.DataAge,
-                            DiskUsage.DataAge,
-                            CpuTemp.DataAge,
-                            GpuTemp.DataAge,
-                            DiskTemp.DataAge
-                        }
-                        .Where(age => age.HasValue)
-                        .Select(age => age!.Value)
-                        .ToArray();
+            private readonly int _size;
+            private readonly Queue<double> _values = new();
 
-                    return ages.Length == 0 ? null : ages.Max();
+            public FixedWindowAverage(int size)
+            {
+                _size = Math.Max(1, size);
+            }
+
+            public double? AddAndAverage(double? value)
+            {
+                if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value))
+                {
+                    return _values.Count == 0 ? null : _values.Average();
                 }
+
+                _values.Enqueue(value.Value);
+                while (_values.Count > _size)
+                {
+                    _values.Dequeue();
+                }
+
+                return _values.Average();
             }
         }
     }
