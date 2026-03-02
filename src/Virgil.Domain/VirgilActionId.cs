@@ -26,23 +26,25 @@ public enum VirgilActionId
     EnableGamingMode,           // 15
     RestoreNormalMode,          // 16
     StartupAnalysis,            // 17
-    CloseGamingSession,         // 18
+    StartupOptimize,            // 18
+    StartupRestore,             // 19
+    CloseGamingSession,         // 20
 
     // Mises à jour
-    UpdateSoftwares,            // 19
-    ManageAutomaticUpdates,     // 20
+    UpdateSoftwares,            // 21
+    ManageAutomaticUpdates,     // 22
 
     // Diagnostic matériel
-    HardwareQuickDiagnostic,    // 21
+    HardwareQuickDiagnostic,    // 23
 
     // Mises à jour (suite)
-    RunWindowsUpdate,           // 22
-    DriverScan,                 // 23
-    DriverInstall,              // 24
+    RunWindowsUpdate,           // 24
+    DriverScan,                 // 25
+    DriverInstall,              // 26
 
     // Spéciaux
-    RamboMode,                  // 25
-    ThanosChatWipe,             // 26
-    ReloadConfiguration,        // 27
-    RescanSystem                // 28
+    RamboMode,                  // 27
+    ThanosChatWipe,             // 28
+    ReloadConfiguration,        // 29
+    RescanSystem                // 30
 }

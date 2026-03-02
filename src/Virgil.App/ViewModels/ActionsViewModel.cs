@@ -24,9 +24,14 @@ namespace Virgil.App.ViewModels
         private bool _isWindowsUpdateRunning;
         private bool _isDriverScanRunning;
         private bool _isDriverInstallRunning;
+        private bool _isActionRunning;
         private int _driverUpdatesFound;
         private string _driverUpdatesSummary = string.Empty;
         private bool _hasDriverScanResult;
+        private bool _hasStartupAnalysis;
+        private bool _hasStartupRecommendations;
+        private bool _hasStartupRestoreEntries;
+        private string _startupOptimizeTooltip = string.Empty;
 
         /// <summary>
         /// Commande appelée par les boutons d'ActionsPanel.xaml, avec l'identifiant d'action en paramètre.
@@ -36,11 +41,17 @@ namespace Virgil.App.ViewModels
         public ICommand InstallDriversCommand => _installDriversCommand;
 
         public bool CanRunWindowsUpdate => !_isWindowsUpdateRunning;
-        public bool IsBusy => _isDriverScanRunning || _isDriverInstallRunning;
+        public bool IsBusy => _isDriverScanRunning || _isDriverInstallRunning || _isActionRunning;
         public bool CanScanDrivers => !IsBusy;
         public bool CanInstallDrivers => DriverUpdatesFound > 0 && !IsBusy;
         public bool HasDriverUpdates => DriverUpdatesFound > 0;
         public bool HasDriverScanResult => _hasDriverScanResult;
+        public bool HasStartupAnalysis => _hasStartupAnalysis;
+        public bool HasStartupRecommendations => _hasStartupRecommendations;
+        public bool HasStartupRestoreEntries => _hasStartupRestoreEntries;
+        public bool CanOptimizeStartup => HasStartupAnalysis && HasStartupRecommendations && !IsBusy;
+        public bool CanRestoreStartup => HasStartupRestoreEntries && !IsBusy;
+        public string StartupOptimizeTooltip => _startupOptimizeTooltip;
         public string DriverUpdatesSummary => _driverUpdatesSummary;
         public int DriverUpdatesFound
         {
@@ -65,6 +76,7 @@ namespace Virgil.App.ViewModels
             _driverUpdateService = new DriverUpdateService();
             _scanDriversCommand = new AsyncRelayCommand(_ => ScanDriversAsync(), _ => CanScanDrivers);
             _installDriversCommand = new AsyncRelayCommand(_ => InstallDriversAsync(), _ => CanInstallDrivers);
+            RefreshStartupRestoreState();
             InvokeActionCommand = new AsyncRelayCommand(async param =>
             {
                 var actionId = param as string;
@@ -93,7 +105,7 @@ namespace Virgil.App.ViewModels
                         OnPropertyChanged(nameof(CanRunWindowsUpdate));
                         try
                         {
-                            await _runner(actionId!, CancellationToken.None).ConfigureAwait(false);
+                            await RunActionAsync(actionId!).ConfigureAwait(false);
                         }
                         finally
                         {
@@ -104,9 +116,39 @@ namespace Virgil.App.ViewModels
                         return;
                     }
 
-                    await _runner(actionId!, CancellationToken.None).ConfigureAwait(false);
+                    await RunActionAsync(actionId!).ConfigureAwait(false);
                 }
             });
+        }
+
+        private async Task RunActionAsync(string actionId)
+        {
+            if (_isActionRunning)
+            {
+                return;
+            }
+
+            _isActionRunning = true;
+            NotifyDriverStateChanged();
+            try
+            {
+                var result = await _runner(actionId, CancellationToken.None).ConfigureAwait(false);
+                if (string.Equals(actionId, "startup_analyze", StringComparison.OrdinalIgnoreCase))
+                {
+                    UpdateStartupAnalysisState(result);
+                }
+
+                if (string.Equals(actionId, "startup_optimize", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(actionId, "startup_restore", StringComparison.OrdinalIgnoreCase))
+                {
+                    RefreshStartupRestoreState();
+                }
+            }
+            finally
+            {
+                _isActionRunning = false;
+                NotifyDriverStateChanged();
+            }
         }
 
         private async Task ScanDriversAsync()
@@ -210,6 +252,48 @@ namespace Virgil.App.ViewModels
             NotifyDriverStateChanged();
         }
 
+        private void UpdateStartupAnalysisState(ActionResult result)
+        {
+            if (!result.Success)
+            {
+                _hasStartupAnalysis = false;
+                _hasStartupRecommendations = false;
+                _startupOptimizeTooltip = string.Empty;
+                NotifyStartupStateChanged();
+                return;
+            }
+
+            _hasStartupAnalysis = true;
+            _hasStartupRecommendations = result.Recommendations?.Count > 0;
+            _startupOptimizeTooltip = _hasStartupRecommendations ? string.Empty : "Rien à optimiser";
+            NotifyStartupStateChanged();
+        }
+
+        private void RefreshStartupRestoreState()
+        {
+            _hasStartupRestoreEntries = false;
+            try
+            {
+                _hasStartupRestoreEntries = Virgil.Services.Startup.StartupOptimizationService.HasDisabledRunEntries();
+            }
+            catch
+            {
+                _hasStartupRestoreEntries = false;
+            }
+
+            NotifyStartupStateChanged();
+        }
+
+        private void NotifyStartupStateChanged()
+        {
+            OnPropertyChanged(nameof(HasStartupAnalysis));
+            OnPropertyChanged(nameof(HasStartupRecommendations));
+            OnPropertyChanged(nameof(HasStartupRestoreEntries));
+            OnPropertyChanged(nameof(CanOptimizeStartup));
+            OnPropertyChanged(nameof(CanRestoreStartup));
+            OnPropertyChanged(nameof(StartupOptimizeTooltip));
+        }
+
         private void NotifyDriverStateChanged()
         {
             OnPropertyChanged(nameof(IsBusy));
@@ -218,6 +302,8 @@ namespace Virgil.App.ViewModels
             OnPropertyChanged(nameof(HasDriverUpdates));
             OnPropertyChanged(nameof(DriverUpdatesSummary));
             OnPropertyChanged(nameof(HasDriverScanResult));
+            OnPropertyChanged(nameof(CanOptimizeStartup));
+            OnPropertyChanged(nameof(CanRestoreStartup));
             _scanDriversCommand.RaiseCanExecuteChanged();
             _installDriversCommand.RaiseCanExecuteChanged();
         }

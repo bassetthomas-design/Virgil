@@ -97,6 +97,12 @@ public sealed class ActionOrchestrator : IActionOrchestrator
             case VirgilActionId.StartupAnalysis:
                 return await ExecuteAsync("Analyse du démarrage", () => _performance.AnalyzeStartupAsync(ct), ct);
 
+            case VirgilActionId.StartupOptimize:
+                return await ExecuteAsync("Optimisation du démarrage", () => _performance.OptimizeStartupAsync(ct), ct);
+
+            case VirgilActionId.StartupRestore:
+                return await ExecuteAsync("Restauration du démarrage", () => _performance.RestoreStartupAsync(ct), ct);
+
             case VirgilActionId.CloseGamingSession:
                 return await ExecuteAsync("Fermeture de la session gaming", () => _performance.CloseGamingSessionAsync(ct), ct);
 

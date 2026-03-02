@@ -34,8 +34,10 @@ public sealed class PerformanceService : IPerformanceService
     private readonly ISystemCommandRunner _commandRunner;
     private readonly IPerformanceStateStore _stateStore;
     private readonly IStartupAnalyzer _startupAnalyzer;
+    private readonly StartupOptimizationService _startupOptimizationService;
     private readonly ICloseSessionConfirmation _sessionConfirmation;
     private readonly IProcessController _processController;
+    private StartupAnalysis? _lastStartupAnalysis;
 
     private const string HighPerformancePlan = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
     private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
@@ -52,6 +54,7 @@ public sealed class PerformanceService : IPerformanceService
         ISystemCommandRunner? commandRunner = null,
         IPerformanceStateStore? stateStore = null,
         IStartupAnalyzer? startupAnalyzer = null,
+        StartupOptimizationService? startupOptimizationService = null,
         ICloseSessionConfirmation? sessionConfirmation = null,
         IProcessController? processController = null)
     {
@@ -66,6 +69,7 @@ public sealed class PerformanceService : IPerformanceService
         _commandRunner = commandRunner ?? new SystemCommandRunner();
         _stateStore = stateStore ?? new FilePerformanceStateStore();
         _startupAnalyzer = startupAnalyzer ?? new StartupAnalyzer();
+        _startupOptimizationService = startupOptimizationService ?? new StartupOptimizationService();
         _sessionConfirmation = sessionConfirmation ?? new AlwaysConfirmSession();
         _processController = processController ?? new WindowsProcessController();
     }
@@ -186,16 +190,69 @@ public sealed class PerformanceService : IPerformanceService
             var report = _startupAnalyzer.Analyze(ct);
             if (!report.Items.Any())
             {
+                _lastStartupAnalysis = null;
                 return Task.FromResult(ActionExecutionResult.NotAvailable("Analyse du démarrage", "Aucun élément de démarrage détecté ou accessible."));
             }
 
+            _lastStartupAnalysis = new StartupAnalysis(report);
             var message = StartupAnalysisFormatter.BuildMessage(report);
-            return Task.FromResult(ActionExecutionResult.Ok("Analyse du démarrage terminée", message));
+            var recommendations = report.Items
+                .Where(item => item.RecommendedForDisable)
+                .Select(item => $"{item.Name} ({item.Type})")
+                .Take(10)
+                .ToList();
+            return Task.FromResult(ActionExecutionResult.Ok("Analyse du démarrage terminée", message, recommendations: recommendations));
         }
         catch (Exception ex)
         {
             return Task.FromResult(ActionExecutionResult.Failure("Analyse du démarrage", $"Impossible : {ex.Message}"));
         }
+    }
+
+    public async Task<ActionExecutionResult> OptimizeStartupAsync(CancellationToken ct = default)
+    {
+        if (!_platformInfo.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Optimisation du démarrage", "Uniquement disponible sur Windows.");
+        }
+
+        if (_lastStartupAnalysis is null)
+        {
+            return ActionExecutionResult.NotAvailable("Optimisation du démarrage", "Analyse du démarrage requise avant l'optimisation.");
+        }
+
+        if (!_lastStartupAnalysis.HasRecommendations)
+        {
+            return ActionExecutionResult.NotAvailable("Optimisation du démarrage", "Rien à optimiser.");
+        }
+
+        var result = await _startupOptimizationService.OptimizeAsync(_lastStartupAnalysis, ct).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            var summary = string.IsNullOrWhiteSpace(result.FailureReason) ? result.Summary : result.FailureReason;
+            return ActionExecutionResult.Failure("Optimisation du démarrage", summary);
+        }
+
+        var totalDisabled = result.ItemsDisabled + result.ServicesSetToManual + result.TasksDisabled;
+        var summaryMessage = $"Démarrage: {totalDisabled} élément(s) désactivé(s). Tu peux revenir en arrière si besoin.";
+        return ActionExecutionResult.Ok("Optimisation du démarrage terminée", summaryMessage);
+    }
+
+    public async Task<ActionExecutionResult> RestoreStartupAsync(CancellationToken ct = default)
+    {
+        if (!_platformInfo.IsWindows())
+        {
+            return ActionExecutionResult.NotAvailable("Restauration du démarrage", "Uniquement disponible sur Windows.");
+        }
+
+        var result = await _startupOptimizationService.RestoreRunEntriesAsync(ct).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            var summary = string.IsNullOrWhiteSpace(result.FailureReason) ? result.Summary : result.FailureReason;
+            return ActionExecutionResult.Failure("Restauration du démarrage", summary);
+        }
+
+        return ActionExecutionResult.Ok("Restauration du démarrage terminée", result.Summary);
     }
 
     public async Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default)

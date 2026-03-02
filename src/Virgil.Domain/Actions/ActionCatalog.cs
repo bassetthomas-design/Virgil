@@ -38,6 +38,8 @@ public static class ActionCatalog
         ["perf_mode_on"] = new(ActionKey: "perf_mode_on", VirgilActionId.EnableGamingMode, "Activer le mode performance", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
         ["perf_mode_off"] = new(ActionKey: "perf_mode_off", VirgilActionId.RestoreNormalMode, "Désactiver le mode performance", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
         ["startup_analyze"] = new(ActionKey: "startup_analyze", VirgilActionId.StartupAnalysis, "Analyser le démarrage", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
+        ["startup_optimize"] = new(ActionKey: "startup_optimize", VirgilActionId.StartupOptimize, "Optimiser le démarrage", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
+        ["startup_restore"] = new(ActionKey: "startup_restore", VirgilActionId.StartupRestore, "Restaurer le démarrage", IsDestructive: false, IsImplemented: true, Service: "PerformanceService"),
         ["gaming_kill_session"] = new(ActionKey: "gaming_kill_session", VirgilActionId.CloseGamingSession, "Couper les apps de fond", IsDestructive: true, IsImplemented: true, Service: "PerformanceService"),
 
         // Mises à jour

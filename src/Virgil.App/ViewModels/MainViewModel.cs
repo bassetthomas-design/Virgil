@@ -543,6 +543,12 @@ namespace Virgil.App.ViewModels
                 return;
             }
 
+            if (string.Equals(actionId, "startup_optimize", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("J’optimise le démarrage. Je désactive uniquement ce qui est non essentiel et réversible.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
             _chat.PostSystemMessage($"Je lance « {actionTitle} »…", MessageType.Info, ChatKind.Info);
         }
 
@@ -564,6 +570,18 @@ namespace Virgil.App.ViewModels
 
             if (string.Equals(actionId, "drivers_scan", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(actionId, "drivers_install", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "startup_optimize", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "startup_restore", StringComparison.OrdinalIgnoreCase))
             {
                 _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
                 return;
