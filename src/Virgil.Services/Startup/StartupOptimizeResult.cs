@@ -8,6 +8,7 @@ public sealed record StartupItem(
     string Name,
     string Location,
     string Command,
+    string Type,
     bool IsEssential,
     bool IsRecommended,
     bool IsSelected);

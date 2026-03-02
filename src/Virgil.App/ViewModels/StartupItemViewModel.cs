@@ -17,6 +17,7 @@ public sealed class StartupItemViewModel : BaseViewModel
     public string Name => Item.Name;
     public string Location => Item.Location;
     public string Command => Item.Command;
+    public string Type => Item.Type;
     public bool IsEssential => Item.IsEssential;
     public bool IsRecommended => Item.IsRecommended;
 

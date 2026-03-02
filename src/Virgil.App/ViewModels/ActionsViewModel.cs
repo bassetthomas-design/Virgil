@@ -279,7 +279,7 @@ namespace Virgil.App.ViewModels
             _hasStartupRestoreEntries = false;
             try
             {
-                _hasStartupRestoreEntries = Virgil.Services.Startup.StartupOptimizationService.HasDisabledRunEntries();
+                _hasStartupRestoreEntries = Virgil.Services.Startup.StartupOptimizationService.HasStartupDisabledEntries();
             }
             catch
             {
