@@ -56,7 +56,7 @@ namespace Virgil.Core.Services
                     Installed: 0,
                     RebootRequired: false,
                     Items: items,
-                    Summary: "Recherche des pilotes terminée.",
+                    Summary: $"{items.Count} pilote(s) trouvé(s).",
                     FailureReason: null);
             }
             catch (OperationCanceledException)
@@ -149,7 +149,10 @@ namespace Virgil.Core.Services
                 }
 
                 _progress?.Report(100);
-                return new DriverUpdateResult(true, found, installed, rebootRequired, new List<DriverUpdateItem>(), "Installation des pilotes terminée.", null);
+                var summary = rebootRequired
+                    ? $"Pilotes: {installed} installé(s). Redémarrage requis."
+                    : $"Pilotes: {installed} installé(s).";
+                return new DriverUpdateResult(true, found, installed, rebootRequired, new List<DriverUpdateItem>(), summary, null);
             }
             catch (OperationCanceledException)
             {
@@ -186,7 +189,7 @@ namespace Virgil.Core.Services
 
             try
             {
-                dynamic result = searcher.Search("IsInstalled=0 and IsHidden=0 and Type='Driver'");
+                dynamic result = searcher.Search("IsInstalled=0 and Type='Driver' and IsHidden=0");
                 return result.Updates;
             }
             catch (COMException ex)
@@ -204,9 +207,9 @@ namespace Virgil.Core.Services
             var titles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in items)
             {
-                if (!string.IsNullOrWhiteSpace(item.UpdateId))
+                if (!string.IsNullOrWhiteSpace(item.Identity))
                 {
-                    ids.Add(item.UpdateId);
+                    ids.Add(item.Identity);
                 }
                 else if (!string.IsNullOrWhiteSpace(item.Title))
                 {
@@ -234,7 +237,7 @@ namespace Virgil.Core.Services
                     continue;
                 }
 
-                var updateId = TryGetUpdateId(update);
+                var updateId = TryGetUpdateIdentity(update);
                 var title = update.Title as string;
                 if ((updateId is not null && ids.Contains(updateId)) ||
                     (!string.IsNullOrWhiteSpace(title) && titles.Contains(title)))
@@ -259,8 +262,12 @@ namespace Virgil.Core.Services
                 }
 
                 var title = update.Title as string ?? "Pilote sans nom";
-                var updateId = TryGetUpdateId(update);
-                items.Add(new DriverUpdateItem(title, updateId));
+                var updateId = TryGetUpdateIdentity(update);
+                var driverClass = SafeGetString(() => update.DriverClass as string);
+                var manufacturer = SafeGetString(() => update.DriverModel as string)
+                    ?? SafeGetString(() => update.SupportUrl as string);
+                var size = SafeGetLong(() => (long)update.MaxDownloadSize);
+                items.Add(new DriverUpdateItem(title, driverClass, manufacturer, size, updateId));
             }
 
             return items;
@@ -334,7 +341,32 @@ namespace Virgil.Core.Services
             return false;
         }
 
-        private static string? TryGetUpdateId(dynamic update)
+
+        private static string? SafeGetString(Func<string?> getter)
+        {
+            try
+            {
+                return getter();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static long SafeGetLong(Func<long> getter)
+        {
+            try
+            {
+                return getter();
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static string? TryGetUpdateIdentity(dynamic update)
         {
             try
             {
