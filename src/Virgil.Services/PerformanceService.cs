@@ -194,14 +194,32 @@ public sealed class PerformanceService : IPerformanceService
                 return Task.FromResult(ActionExecutionResult.NotAvailable("Analyse du démarrage", "Aucun élément de démarrage détecté ou accessible."));
             }
 
-            _lastStartupAnalysis = new StartupAnalysis(report);
+            var startupItems = report.Items
+                .Where(item => item.Type.Contains("Registre Run", StringComparison.OrdinalIgnoreCase)
+                               || item.Type.Contains("RunOnce", StringComparison.OrdinalIgnoreCase)
+                               || item.Type.Contains("Dossier démarrage", StringComparison.OrdinalIgnoreCase)
+                               || item.Type.Contains("Tâche planifiée", StringComparison.OrdinalIgnoreCase))
+                .Select(item =>
+                {
+                    var type = ResolveStartupItemType(item.Type);
+                    var location = ResolveLocation(item);
+                    var id = BuildStartupItemId(item, location, type);
+                    var isEssential = StartupOptimizationService.IsEssential(item.Name, item.Publisher, item.Path, item.Command)
+                                      || (type == "ScheduledTask" && id.StartsWith("\\Microsoft\\", StringComparison.OrdinalIgnoreCase));
+                    var isRecommended = item.RecommendedForDisable && !isEssential;
+                    return new StartupItem(id, item.Name, location, item.Command ?? item.Path ?? string.Empty, type, isEssential, isRecommended, isRecommended);
+                })
+                .ToList();
+
+            _lastStartupAnalysis = new StartupAnalysis(startupItems);
             var message = StartupAnalysisFormatter.BuildMessage(report);
-            var recommendations = report.Items
-                .Where(item => item.RecommendedForDisable)
-                .Select(item => $"{item.Name} ({item.Type})")
+            var recommendations = startupItems
+                .Where(item => item.IsRecommended)
+                .Select(item => $"{item.Name} ({item.Location})")
                 .Take(10)
                 .ToList();
-            return Task.FromResult(ActionExecutionResult.Ok("Analyse du démarrage terminée", message, recommendations: recommendations));
+            var debugInfo = JsonSerializer.Serialize(_lastStartupAnalysis);
+            return Task.FromResult(ActionExecutionResult.Ok("Analyse du démarrage terminée", message, recommendations: recommendations, debugInfo: debugInfo));
         }
         catch (Exception ex)
         {
@@ -253,6 +271,62 @@ public sealed class PerformanceService : IPerformanceService
         }
 
         return ActionExecutionResult.Ok("Restauration du démarrage terminée", result.Summary);
+    }
+
+
+    private static string ResolveStartupItemType(string sourceType)
+    {
+        if (sourceType.Contains("Tâche planifiée", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ScheduledTask";
+        }
+
+        if (sourceType.Contains("Dossier démarrage", StringComparison.OrdinalIgnoreCase))
+        {
+            return "StartupFolder";
+        }
+
+        return "Registry";
+    }
+
+    private static string ResolveLocation(StartupAnalysisItem item)
+    {
+        if (item.Type.Contains("RunOnce", StringComparison.OrdinalIgnoreCase))
+        {
+            return item.Type.Contains("HKLM", StringComparison.OrdinalIgnoreCase) ? "HKLM RunOnce" : "HKCU RunOnce";
+        }
+
+        if (item.Type.Contains("Registre Run", StringComparison.OrdinalIgnoreCase))
+        {
+            return item.Type.Contains("HKLM", StringComparison.OrdinalIgnoreCase) ? "HKLM Run" : "HKCU Run";
+        }
+
+        if (item.Type.Contains("commun", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Common Startup Folder";
+        }
+
+        if (item.Type.Contains("Dossier démarrage", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Startup Folder";
+        }
+
+        return "Scheduled Task";
+    }
+
+    private static string BuildStartupItemId(StartupAnalysisItem item, string location, string type)
+    {
+        if (type == "StartupFolder")
+        {
+            return item.Path ?? item.Command ?? item.Name;
+        }
+
+        if (type == "ScheduledTask")
+        {
+            return item.Command ?? item.Name;
+        }
+
+        return $"{location}|{item.Name}";
     }
 
     public async Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default)

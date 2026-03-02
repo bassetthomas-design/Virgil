@@ -3,10 +3,19 @@ using System.Linq;
 
 namespace Virgil.Services.Startup;
 
-public sealed record StartupAnalysis(StartupAnalysisReport Report)
+public sealed record StartupItem(
+    string Id,
+    string Name,
+    string Location,
+    string Command,
+    string Type,
+    bool IsEssential,
+    bool IsRecommended,
+    bool IsSelected);
+
+public sealed record StartupAnalysis(IReadOnlyList<StartupItem> Items)
 {
-    public IReadOnlyList<StartupAnalysisItem> Items => Report.Items;
-    public bool HasRecommendations => Report.Items.Any(item => item.RecommendedForDisable);
+    public bool HasRecommendations => Items.Any(item => item.IsRecommended && !item.IsEssential);
 }
 
 public sealed record StartupOptimizeResult

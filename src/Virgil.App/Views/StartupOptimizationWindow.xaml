@@ -1,0 +1,115 @@
+<Window x:Class="Virgil.App.Views.StartupOptimizationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Optimiser le démarrage"
+        Height="560"
+        Width="980"
+        WindowStartupLocation="CenterOwner"
+        Background="#141418"
+        Foreground="#E9ECF1">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <DataGrid Grid.Row="0"
+                  ItemsSource="{Binding Items}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  HeadersVisibility="Column"
+                  BorderBrush="#2B2F36"
+                  GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="#232831"
+                  VerticalGridLinesBrush="#1C212A"
+                  Background="#171B21"
+                  Foreground="#EDF1F7"
+                  RowBackground="#171B21"
+                  AlternatingRowBackground="#1E232B"
+                  SelectionMode="Extended"
+                  SelectionUnit="FullRow">
+            <DataGrid.Resources>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="#20262F" />
+                    <Setter Property="Foreground" Value="#F3F6FB" />
+                    <Setter Property="BorderBrush" Value="#2D3440" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                    <Setter Property="Padding" Value="8,5" />
+                </Style>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Foreground" Value="#EDF1F7" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="Padding" Value="6,4" />
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#3A4D68" />
+                            <Setter Property="Foreground" Value="#FFFFFF" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="#EDF1F7" />
+                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                </Style>
+            </DataGrid.Resources>
+
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="" Width="40">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
+                                <CheckBox.Style>
+                                    <Style TargetType="CheckBox">
+                                        <Setter Property="IsEnabled" Value="True"/>
+                                        <Setter Property="ToolTip" Value=""/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsEssential}" Value="True">
+                                                <Setter Property="IsEnabled" Value="False"/>
+                                                <Setter Property="ToolTip" Value="Protégé"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </CheckBox.Style>
+                            </CheckBox>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Nom" Binding="{Binding Name}" Width="2*" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="130" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Emplacement" Binding="{Binding Location}" Width="190" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Commande" Binding="{Binding Command}" Width="3*" IsReadOnly="True"/>
+                <DataGridTemplateColumn Header="Recommandé" Width="130" IsReadOnly="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border Padding="6,2"
+                                    CornerRadius="8"
+                                    Background="#35558A"
+                                    HorizontalAlignment="Left">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRecommended}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="Recommandé" FontSize="11" FontWeight="SemiBold" Foreground="#FFFFFF" />
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Tout cocher recommandé" Click="SelectRecommended_Click" Margin="0,0,8,0"/>
+            <Button Content="Tout décocher" Click="DeselectAll_Click" Margin="0,0,8,0"/>
+            <Button Content="Annuler" Click="Cancel_Click" Margin="0,0,8,0"/>
+            <Button Content="Appliquer la sélection" Click="Apply_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -49,7 +49,7 @@ namespace Virgil.App.ViewModels
         public bool HasStartupAnalysis => _hasStartupAnalysis;
         public bool HasStartupRecommendations => _hasStartupRecommendations;
         public bool HasStartupRestoreEntries => _hasStartupRestoreEntries;
-        public bool CanOptimizeStartup => HasStartupAnalysis && HasStartupRecommendations && !IsBusy;
+        public bool CanOptimizeStartup => HasStartupAnalysis && !IsBusy;
         public bool CanRestoreStartup => HasStartupRestoreEntries && !IsBusy;
         public string StartupOptimizeTooltip => _startupOptimizeTooltip;
         public string DriverUpdatesSummary => _driverUpdatesSummary;
@@ -142,6 +142,11 @@ namespace Virgil.App.ViewModels
                     || string.Equals(actionId, "startup_restore", StringComparison.OrdinalIgnoreCase))
                 {
                     RefreshStartupRestoreState();
+                    if (result.Success)
+                    {
+                        var refreshed = await _runner("startup_analyze", CancellationToken.None).ConfigureAwait(false);
+                        UpdateStartupAnalysisState(refreshed);
+                    }
                 }
             }
             finally
@@ -274,7 +279,7 @@ namespace Virgil.App.ViewModels
             _hasStartupRestoreEntries = false;
             try
             {
-                _hasStartupRestoreEntries = Virgil.Services.Startup.StartupOptimizationService.HasDisabledRunEntries();
+                _hasStartupRestoreEntries = Virgil.Services.Startup.StartupOptimizationService.HasStartupDisabledEntries();
             }
             catch
             {

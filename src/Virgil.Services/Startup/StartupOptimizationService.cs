@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
@@ -12,8 +14,27 @@ public sealed class StartupOptimizationService
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunDisabledKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run_DISABLED";
+    private const string RunOnceKeyPath = @"Software\Microsoft\Windows\CurrentVersion\RunOnce";
+    private const string RunOnceDisabledKeyPath = @"Software\Microsoft\Windows\CurrentVersion\RunOnce_DISABLED";
+
+    private static readonly string AppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    private static readonly string StartupDisabledRoot = Path.Combine(AppData, "Virgil", "Startup_DISABLED");
+    private static readonly string UserDisabledDir = Path.Combine(StartupDisabledRoot, "User");
+    private static readonly string CommonDisabledDir = Path.Combine(StartupDisabledRoot, "Common");
+    private static readonly string DisabledTasksStorePath = Path.Combine(StartupDisabledRoot, "disabled_tasks.json");
 
     public Task<StartupOptimizeResult> OptimizeAsync(StartupAnalysis analysis, CancellationToken ct)
+    {
+        if (analysis is null)
+        {
+            throw new ArgumentNullException(nameof(analysis));
+        }
+
+        var selected = analysis.Items.Where(i => i.IsRecommended && !i.IsEssential).Select(i => i with { IsSelected = true });
+        return OptimizeSelectedAsync(selected, ct);
+    }
+
+    public Task<StartupOptimizeResult> OptimizeSelectedAsync(IEnumerable<StartupItem> selectedItems, CancellationToken ct)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -25,39 +46,61 @@ public sealed class StartupOptimizationService
             });
         }
 
-        if (analysis is null)
-        {
-            throw new ArgumentNullException(nameof(analysis));
-        }
-
         var actions = new List<string>();
-        var itemsDisabled = 0;
+        var disabled = 0;
         var tasksDisabled = 0;
-        var servicesSetToManual = 0;
 
         try
         {
-            var recommendations = analysis.Items
-                .Where(item => item.RecommendedForDisable && item.Enabled)
-                .GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            Directory.CreateDirectory(UserDisabledDir);
+            Directory.CreateDirectory(CommonDisabledDir);
 
-            itemsDisabled += MoveRunEntries(RegistryHive.CurrentUser, recommendations, actions, ct);
-            itemsDisabled += MoveRunEntries(RegistryHive.LocalMachine, recommendations, actions, ct);
-            tasksDisabled += DisableScheduledTasks(analysis, actions, ct);
+            foreach (var item in selectedItems.Where(i => i.IsSelected))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (item.IsEssential)
+                {
+                    actions.Add($"{item.Name}: ignoré (protégé)");
+                    continue;
+                }
 
-            var totalDisabled = itemsDisabled + tasksDisabled + servicesSetToManual;
-            var summary = totalDisabled == 0
-                ? "Aucun élément à optimiser."
-                : $"Optimisation appliquée : {totalDisabled} élément(s) désactivé(s).";
+                switch (item.Type)
+                {
+                    case "Registry":
+                        if (MoveRegistryEntryToDisabled(item, actions))
+                        {
+                            disabled++;
+                        }
+                        break;
+
+                    case "StartupFolder":
+                        if (MoveStartupFileToDisabled(item, actions))
+                        {
+                            disabled++;
+                        }
+                        break;
+
+                    case "ScheduledTask":
+                        if (DisableScheduledTask(item, actions))
+                        {
+                            tasksDisabled++;
+                            disabled++;
+                        }
+                        break;
+
+                    default:
+                        actions.Add($"{item.Name}: type non supporté ({item.Type})");
+                        break;
+                }
+            }
 
             return Task.FromResult(new StartupOptimizeResult
             {
-                ItemsDisabled = itemsDisabled,
-                ServicesSetToManual = servicesSetToManual,
+                ItemsDisabled = disabled,
+                ServicesSetToManual = 0,
                 TasksDisabled = tasksDisabled,
                 Succeeded = true,
-                Summary = summary,
+                Summary = $"Démarrage: {disabled} élément(s) désactivé(s).",
                 ActionsPerformed = actions
             });
         }
@@ -65,8 +108,7 @@ public sealed class StartupOptimizationService
         {
             return Task.FromResult(new StartupOptimizeResult
             {
-                ItemsDisabled = itemsDisabled,
-                ServicesSetToManual = servicesSetToManual,
+                ItemsDisabled = disabled,
                 TasksDisabled = tasksDisabled,
                 Succeeded = false,
                 Summary = "Optimisation du démarrage impossible.",
@@ -74,200 +116,6 @@ public sealed class StartupOptimizationService
                 ActionsPerformed = actions
             });
         }
-
-    }
-
-    private static int MoveRunEntries(
-        RegistryHive hive,
-        IReadOnlyDictionary<string, StartupAnalysisItem> recommendations,
-        List<string> actions,
-        CancellationToken ct)
-    {
-        var disabled = 0;
-        using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
-        using var runKey = baseKey.OpenSubKey(RunKeyPath, writable: true);
-        if (runKey == null)
-        {
-            return 0;
-        }
-
-        using var disabledKey = baseKey.CreateSubKey(RunDisabledKeyPath);
-        if (disabledKey == null)
-        {
-            return 0;
-        }
-
-        foreach (var valueName in runKey.GetValueNames())
-        {
-            ct.ThrowIfCancellationRequested();
-            if (!recommendations.TryGetValue(valueName, out var item))
-            {
-                continue;
-            }
-
-            if (ShouldSkip(item, out var reason))
-            {
-                actions.Add($"{valueName}: ignoré ({reason})");
-                continue;
-            }
-
-            var existing = disabledKey.GetValue(valueName);
-            if (existing != null)
-            {
-                actions.Add($"{valueName}: déjà sauvegardé dans Run_DISABLED");
-                continue;
-            }
-
-            var value = runKey.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-            if (value is null)
-            {
-                actions.Add($"{valueName}: valeur introuvable");
-                continue;
-            }
-
-            var kind = runKey.GetValueKind(valueName);
-            disabledKey.SetValue(valueName, value, kind);
-            runKey.DeleteValue(valueName, throwOnMissingValue: false);
-            disabled++;
-            actions.Add($"{valueName}: déplacé vers Run_DISABLED");
-        }
-
-        return disabled;
-    }
-
-    private static int DisableScheduledTasks(StartupAnalysis analysis, List<string> actions, CancellationToken ct)
-    {
-        var disabled = 0;
-        var candidates = analysis.Items
-            .Where(item => item.Type.Contains("Tâche planifiée", StringComparison.OrdinalIgnoreCase))
-            .Where(item => item.Impact == StartupImpactLevel.Fort)
-            .ToList();
-
-        foreach (var task in candidates)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (IsMicrosoftTask(task))
-            {
-                actions.Add($"{task.Name}: tâche Microsoft ignorée");
-                continue;
-            }
-
-            if (!TryDisableScheduledTask(task.Name, out var note))
-            {
-                actions.Add($"{task.Name}: {note}");
-                continue;
-            }
-
-            disabled++;
-            actions.Add($"{task.Name}: tâche désactivée");
-        }
-
-        return disabled;
-    }
-
-    private static bool TryDisableScheduledTask(string taskName, out string note)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = "schtasks",
-                Arguments = $"/Change /TN \"{taskName}\" /Disable",
-                UseShellExecute = false,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(psi);
-            if (process == null)
-            {
-                note = "Impossible de lancer schtasks";
-                return false;
-            }
-
-            process.WaitForExit();
-            if (process.ExitCode != 0)
-            {
-                var error = process.StandardError.ReadToEnd();
-                note = string.IsNullOrWhiteSpace(error) ? "Erreur schtasks" : error.Trim();
-                return false;
-            }
-
-            note = "Désactivée";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            note = ex.Message;
-            return false;
-        }
-    }
-
-    private static bool IsMicrosoftTask(StartupAnalysisItem item)
-    {
-        if (!string.IsNullOrWhiteSpace(item.Publisher) &&
-            item.Publisher.Contains("Microsoft", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return item.Name.StartsWith("\\Microsoft", StringComparison.OrdinalIgnoreCase)
-               || item.Name.Contains("\\Microsoft\\", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool ShouldSkip(StartupAnalysisItem item, out string reason)
-    {
-        var context = string.Join(" ", item.Name, item.Publisher, item.Path, item.Command)
-            .ToLowerInvariant();
-
-        if (ContainsAny(context, "defender", "windows security", "securityhealth", "antivirus"))
-        {
-            reason = "sécurité/defender";
-            return true;
-        }
-
-        if (ContainsAny(context, "nvidia", "amd", "intel", "realtek", "audio"))
-        {
-            reason = "pilotes GPU/audio";
-            return true;
-        }
-
-        if (context.Contains("onedrive", StringComparison.OrdinalIgnoreCase))
-        {
-            reason = "OneDrive";
-            return true;
-        }
-
-        if (context.Contains("update", StringComparison.OrdinalIgnoreCase)
-            && IsCriticalPublisher(item.Publisher))
-        {
-            reason = "update critique";
-            return true;
-        }
-
-        reason = string.Empty;
-        return false;
-    }
-
-    private static bool IsCriticalPublisher(string? publisher)
-        => !string.IsNullOrWhiteSpace(publisher)
-           && (publisher.Contains("Microsoft", StringComparison.OrdinalIgnoreCase)
-               || publisher.Contains("Intel", StringComparison.OrdinalIgnoreCase)
-               || publisher.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
-               || publisher.Contains("AMD", StringComparison.OrdinalIgnoreCase));
-
-    private static bool ContainsAny(string context, params string[] keywords)
-        => keywords.Any(keyword => context.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-
-    public static bool HasDisabledRunEntries()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-
-        return HasDisabledRunEntries(RegistryHive.CurrentUser) || HasDisabledRunEntries(RegistryHive.LocalMachine);
     }
 
     public Task<StartupRestoreResult> RestoreRunEntriesAsync(CancellationToken ct)
@@ -287,18 +135,21 @@ public sealed class StartupOptimizationService
 
         try
         {
-            restored += RestoreRunEntries(RegistryHive.CurrentUser, actions, ct);
-            restored += RestoreRunEntries(RegistryHive.LocalMachine, actions, ct);
+            restored += RestoreRegistryEntries(RegistryHive.CurrentUser, RunDisabledKeyPath, RunKeyPath, actions, ct);
+            restored += RestoreRegistryEntries(RegistryHive.LocalMachine, RunDisabledKeyPath, RunKeyPath, actions, ct);
+            restored += RestoreRegistryEntries(RegistryHive.CurrentUser, RunOnceDisabledKeyPath, RunOnceKeyPath, actions, ct);
+            restored += RestoreRegistryEntries(RegistryHive.LocalMachine, RunOnceDisabledKeyPath, RunOnceKeyPath, actions, ct);
 
-            var summary = restored == 0
-                ? "Aucun élément à restaurer."
-                : $"Démarrage restauré : {restored} élément(s) réactivé(s).";
+            restored += RestoreStartupFiles(UserDisabledDir, Environment.GetFolderPath(Environment.SpecialFolder.Startup), actions, ct);
+            restored += RestoreStartupFiles(CommonDisabledDir, Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup), actions, ct);
+
+            restored += RestoreScheduledTasks(actions, ct);
 
             return Task.FromResult(new StartupRestoreResult
             {
                 ItemsRestored = restored,
                 Succeeded = true,
-                Summary = summary,
+                Summary = $"Démarrage: restauration terminée ({restored} élément(s)).",
                 ActionsPerformed = actions
             });
         }
@@ -315,32 +166,178 @@ public sealed class StartupOptimizationService
         }
     }
 
-    private static bool HasDisabledRunEntries(RegistryHive hive)
+    public static bool HasStartupDisabledEntries()
     {
-        try
-        {
-            using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
-            using var disabledKey = baseKey.OpenSubKey(RunDisabledKeyPath, writable: false);
-            return disabledKey?.GetValueNames().Length > 0;
-        }
-        catch
+        if (!OperatingSystem.IsWindows())
         {
             return false;
         }
+
+        if (HasRegistryDisabledEntries(RegistryHive.CurrentUser, RunDisabledKeyPath)
+            || HasRegistryDisabledEntries(RegistryHive.LocalMachine, RunDisabledKeyPath)
+            || HasRegistryDisabledEntries(RegistryHive.CurrentUser, RunOnceDisabledKeyPath)
+            || HasRegistryDisabledEntries(RegistryHive.LocalMachine, RunOnceDisabledKeyPath))
+        {
+            return true;
+        }
+
+        if (Directory.Exists(UserDisabledDir) && Directory.EnumerateFiles(UserDisabledDir, "*", SearchOption.AllDirectories).Any())
+        {
+            return true;
+        }
+
+        if (Directory.Exists(CommonDisabledDir) && Directory.EnumerateFiles(CommonDisabledDir, "*", SearchOption.AllDirectories).Any())
+        {
+            return true;
+        }
+
+        return LoadDisabledTasksStore().TaskNames.Count > 0;
     }
 
-    private static int RestoreRunEntries(RegistryHive hive, List<string> actions, CancellationToken ct)
+    public static bool IsEssential(string name, string? publisher, string? path, string? command)
     {
-        var restored = 0;
+        var context = string.Join(" ", name, publisher, path, command).ToLowerInvariant();
+
+        if (ContainsAny(context, "securityhealth", "windows security", "defender", "microsoft security")) return true;
+        if (ContainsAny(context, "nvidia", "amd", "intel", "realtek", "audio")) return true;
+        if (!string.IsNullOrWhiteSpace(publisher) && publisher.Contains("Microsoft", StringComparison.OrdinalIgnoreCase)) return true;
+        if ((path ?? command ?? string.Empty).Contains("\\Microsoft\\", StringComparison.OrdinalIgnoreCase)) return true;
+
+        return false;
+    }
+
+    private static bool MoveRegistryEntryToDisabled(StartupItem item, List<string> actions)
+    {
+        if (!TryParseHive(item.Location, out var hive))
+        {
+            actions.Add($"{item.Name}: ruche registre non reconnue");
+            return false;
+        }
+
+        var sourceKey = item.Location.Contains("RunOnce", StringComparison.OrdinalIgnoreCase) ? RunOnceKeyPath : RunKeyPath;
+        var targetKey = item.Location.Contains("RunOnce", StringComparison.OrdinalIgnoreCase) ? RunOnceDisabledKeyPath : RunDisabledKeyPath;
+
         using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
-        using var disabledKey = baseKey.OpenSubKey(RunDisabledKeyPath, writable: true);
-        if (disabledKey == null)
+        using var runKey = baseKey.OpenSubKey(sourceKey, writable: true);
+        using var disabledKey = baseKey.CreateSubKey(targetKey);
+
+        if (runKey == null || disabledKey == null)
+        {
+            actions.Add($"{item.Name}: clé registre inaccessible");
+            return false;
+        }
+
+        var value = runKey.GetValue(item.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        if (value == null)
+        {
+            actions.Add($"{item.Name}: introuvable");
+            return false;
+        }
+
+        var kind = runKey.GetValueKind(item.Name);
+        disabledKey.SetValue(item.Name, value, kind);
+        runKey.DeleteValue(item.Name, throwOnMissingValue: false);
+        actions.Add($"{item.Name}: déplacé vers {targetKey}");
+        return true;
+    }
+
+    private static bool MoveStartupFileToDisabled(StartupItem item, List<string> actions)
+    {
+        if (!File.Exists(item.Command))
+        {
+            actions.Add($"{item.Name}: fichier introuvable");
+            return false;
+        }
+
+        var sourceRoot = item.Location.Contains("Common", StringComparison.OrdinalIgnoreCase)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup)
+            : Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+        var targetRoot = item.Location.Contains("Common", StringComparison.OrdinalIgnoreCase) ? CommonDisabledDir : UserDisabledDir;
+
+        var relative = Path.GetRelativePath(sourceRoot, item.Command);
+        var destination = Path.Combine(targetRoot, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+
+        if (File.Exists(destination))
+        {
+            actions.Add($"{item.Name}: déjà déplacé");
+            return false;
+        }
+
+        File.Move(item.Command, destination);
+        actions.Add($"{item.Name}: déplacé vers sauvegarde startup");
+        return true;
+    }
+
+    private static bool DisableScheduledTask(StartupItem item, List<string> actions)
+    {
+        if (item.Id.StartsWith("\\Microsoft\\", StringComparison.OrdinalIgnoreCase))
+        {
+            actions.Add($"{item.Name}: tâche protégée Microsoft");
+            return false;
+        }
+
+        if (!RunSchtasks($"/Change /TN \"{item.Id}\" /Disable", out var error))
+        {
+            actions.Add($"{item.Name}: {error}");
+            return false;
+        }
+
+        var store = LoadDisabledTasksStore();
+        store.TaskNames.Add(item.Id);
+        SaveDisabledTasksStore(store);
+        actions.Add($"{item.Name}: tâche désactivée");
+        return true;
+    }
+
+    private static int RestoreScheduledTasks(List<string> actions, CancellationToken ct)
+    {
+        var store = LoadDisabledTasksStore();
+        if (store.TaskNames.Count == 0)
         {
             return 0;
         }
 
-        using var runKey = baseKey.CreateSubKey(RunKeyPath);
-        if (runKey == null)
+        var restored = 0;
+        var remaining = new List<string>();
+
+        foreach (var task in store.TaskNames.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (RunSchtasks($"/Change /TN \"{task}\" /Enable", out var error))
+            {
+                restored++;
+                actions.Add($"{task}: tâche réactivée");
+            }
+            else
+            {
+                remaining.Add(task);
+                actions.Add($"{task}: {error}");
+            }
+        }
+
+        if (remaining.Count == 0)
+        {
+            if (File.Exists(DisabledTasksStorePath))
+            {
+                File.Delete(DisabledTasksStorePath);
+            }
+        }
+        else
+        {
+            SaveDisabledTasksStore(new DisabledTasksStore { TaskNames = remaining });
+        }
+
+        return restored;
+    }
+
+    private static int RestoreRegistryEntries(RegistryHive hive, string sourceDisabledPath, string destinationPath, List<string> actions, CancellationToken ct)
+    {
+        var restored = 0;
+        using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
+        using var disabledKey = baseKey.OpenSubKey(sourceDisabledPath, writable: true);
+        using var runKey = baseKey.CreateSubKey(destinationPath);
+        if (disabledKey == null || runKey == null)
         {
             return 0;
         }
@@ -350,7 +347,7 @@ public sealed class StartupOptimizationService
             ct.ThrowIfCancellationRequested();
             if (runKey.GetValue(valueName) != null)
             {
-                actions.Add($"{valueName}: déjà présent dans Run");
+                actions.Add($"{valueName}: déjà présent");
                 continue;
             }
 
@@ -368,5 +365,137 @@ public sealed class StartupOptimizationService
         }
 
         return restored;
+    }
+
+    private static int RestoreStartupFiles(string backupRoot, string targetRoot, List<string> actions, CancellationToken ct)
+    {
+        if (!Directory.Exists(backupRoot))
+        {
+            return 0;
+        }
+
+        var restored = 0;
+        foreach (var file in Directory.EnumerateFiles(backupRoot, "*", SearchOption.AllDirectories))
+        {
+            ct.ThrowIfCancellationRequested();
+            var relative = Path.GetRelativePath(backupRoot, file);
+            var destination = Path.Combine(targetRoot, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            if (File.Exists(destination))
+            {
+                actions.Add($"{Path.GetFileName(file)}: déjà présent dans startup");
+                continue;
+            }
+
+            File.Move(file, destination);
+            restored++;
+            actions.Add($"{Path.GetFileName(file)}: restauré");
+        }
+
+        return restored;
+    }
+
+    private static bool HasRegistryDisabledEntries(RegistryHive hive, string keyPath)
+    {
+        try
+        {
+            using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
+            using var key = baseKey.OpenSubKey(keyPath, writable: false);
+            return key?.GetValueNames().Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryParseHive(string location, out RegistryHive hive)
+    {
+        if (location.Contains("HKLM", StringComparison.OrdinalIgnoreCase))
+        {
+            hive = RegistryHive.LocalMachine;
+            return true;
+        }
+
+        if (location.Contains("HKCU", StringComparison.OrdinalIgnoreCase))
+        {
+            hive = RegistryHive.CurrentUser;
+            return true;
+        }
+
+        hive = RegistryHive.CurrentUser;
+        return false;
+    }
+
+    private static bool RunSchtasks(string arguments, out string message)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "schtasks",
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+
+            using var process = Process.Start(psi);
+            if (process == null)
+            {
+                message = "Impossible de lancer schtasks";
+                return false;
+            }
+
+            process.WaitForExit();
+            var error = process.StandardError.ReadToEnd().Trim();
+            if (process.ExitCode != 0)
+            {
+                message = string.IsNullOrWhiteSpace(error) ? "Erreur schtasks" : error;
+                return false;
+            }
+
+            message = "OK";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+            return false;
+        }
+    }
+
+    private static DisabledTasksStore LoadDisabledTasksStore()
+    {
+        try
+        {
+            if (!File.Exists(DisabledTasksStorePath))
+            {
+                return new DisabledTasksStore();
+            }
+
+            var json = File.ReadAllText(DisabledTasksStorePath);
+            return JsonSerializer.Deserialize<DisabledTasksStore>(json) ?? new DisabledTasksStore();
+        }
+        catch
+        {
+            return new DisabledTasksStore();
+        }
+    }
+
+    private static void SaveDisabledTasksStore(DisabledTasksStore store)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(DisabledTasksStorePath)!);
+        var json = JsonSerializer.Serialize(store, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(DisabledTasksStorePath, json);
+    }
+
+    private static bool ContainsAny(string context, params string[] keywords)
+        => keywords.Any(keyword => context.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+
+    private sealed class DisabledTasksStore
+    {
+        public List<string> TaskNames { get; set; } = new();
     }
 }
