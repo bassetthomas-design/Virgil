@@ -137,8 +137,8 @@ public sealed class UpdateService : IUpdateService
         }
 
         return result.Found == 0
-            ? "Pilotes: aucune mise à jour trouvée."
-            : $"Pilotes: {result.Found} mise(s) à jour trouvée(s).";
+            ? "Aucun pilote disponible."
+            : $"{result.Found} pilote(s) trouvé(s). Installation en cours.";
     }
 
     private static string BuildDriverInstallSummary(DriverUpdateResult result)
@@ -149,8 +149,9 @@ public sealed class UpdateService : IUpdateService
             return $"Pilotes: échec ({reason}).";
         }
 
-        var reboot = result.RebootRequired ? "Oui" : "Non";
-        return $"Pilotes: {result.Found} trouvées, {result.Installed} installées. Redémarrage requis: {reboot}.";
+        return result.RebootRequired
+            ? $"Pilotes: {result.Installed} installé(s). Redémarrage requis."
+            : $"Pilotes: {result.Installed} installé(s).";
     }
 
     private static string BuildAutomaticUpdateMessage(AutomaticUpdateSnapshot snapshot)

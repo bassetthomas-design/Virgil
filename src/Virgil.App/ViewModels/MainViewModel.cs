@@ -615,7 +615,7 @@ namespace Virgil.App.ViewModels
 
             if (string.Equals(actionId, "drivers_scan", StringComparison.OrdinalIgnoreCase))
             {
-                _chat.PostSystemMessage("Je vérifie les mises à jour de pilotes via Windows Update.", MessageType.Info, ChatKind.Info);
+                _chat.PostSystemMessage("Je vérifie les pilotes disponibles.", MessageType.Info, ChatKind.Info);
                 return;
             }
 

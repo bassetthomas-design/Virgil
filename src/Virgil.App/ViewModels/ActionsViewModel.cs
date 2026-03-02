@@ -25,7 +25,7 @@ namespace Virgil.App.ViewModels
         private bool _isDriverScanRunning;
         private bool _isDriverInstallRunning;
         private bool _isActionRunning;
-        private int _driverUpdatesFound;
+        private int _driversFoundCount;
         private string _driverUpdatesSummary = string.Empty;
         private bool _hasDriverScanResult;
         private bool _hasStartupAnalysis;
@@ -43,8 +43,8 @@ namespace Virgil.App.ViewModels
         public bool CanRunWindowsUpdate => !_isWindowsUpdateRunning;
         public bool IsBusy => _isDriverScanRunning || _isDriverInstallRunning || _isActionRunning;
         public bool CanScanDrivers => !IsBusy;
-        public bool CanInstallDrivers => DriverUpdatesFound > 0 && !IsBusy;
-        public bool HasDriverUpdates => DriverUpdatesFound > 0;
+        public bool CanInstallDrivers => DriversFoundCount > 0 && !IsBusy;
+        public bool HasDriverUpdates => DriversFoundCount > 0;
         public bool HasDriverScanResult => _hasDriverScanResult;
         public bool HasStartupAnalysis => _hasStartupAnalysis;
         public bool HasStartupRecommendations => _hasStartupRecommendations;
@@ -53,21 +53,23 @@ namespace Virgil.App.ViewModels
         public bool CanRestoreStartup => HasStartupRestoreEntries && !IsBusy;
         public string StartupOptimizeTooltip => _startupOptimizeTooltip;
         public string DriverUpdatesSummary => _driverUpdatesSummary;
-        public int DriverUpdatesFound
+        public bool IsDriverOperationInProgress => _isDriverScanRunning || _isDriverInstallRunning;
+        public int DriversFoundCount
         {
-            get => _driverUpdatesFound;
+            get => _driversFoundCount;
             private set
             {
-                if (_driverUpdatesFound == value)
+                if (_driversFoundCount == value)
                 {
                     return;
                 }
 
-                _driverUpdatesFound = value;
-                OnPropertyChanged(nameof(DriverUpdatesFound));
+                _driversFoundCount = value;
+                OnPropertyChanged(nameof(DriversFoundCount));
             }
         }
 
+        public int DriverUpdatesFound => DriversFoundCount;
         public ObservableCollection<DriverUpdateItem> DriverUpdateItems { get; } = new();
 
         public ActionsViewModel(Func<string, CancellationToken, Task<ActionResult>> runner)
@@ -164,6 +166,7 @@ namespace Virgil.App.ViewModels
             }
 
             _isDriverScanRunning = true;
+            _driverUpdatesSummary = "Je vérifie les pilotes disponibles.";
             NotifyDriverStateChanged();
             try
             {
@@ -179,12 +182,13 @@ namespace Virgil.App.ViewModels
 
         private async Task InstallDriversAsync()
         {
-            if (IsBusy || DriverUpdatesFound <= 0)
+            if (IsBusy || DriversFoundCount <= 0)
             {
                 return;
             }
 
             _isDriverInstallRunning = true;
+            _driverUpdatesSummary = $"{DriversFoundCount} pilote(s) trouvé(s). Installation en cours.";
             NotifyDriverStateChanged();
             try
             {
@@ -209,7 +213,7 @@ namespace Virgil.App.ViewModels
         {
             if (!result.Succeeded)
             {
-                ResetDriverUpdates("Pilotes trouvés: 0");
+                ResetDriverUpdates("Aucun pilote disponible.");
                 return;
             }
 
@@ -219,11 +223,14 @@ namespace Virgil.App.ViewModels
                 DriverUpdateItems.Add(item);
             }
 
-            DriverUpdatesFound = DriverUpdateItems.Count;
-            _driverUpdatesSummary = $"Pilotes trouvés: {DriverUpdatesFound}";
+            DriversFoundCount = DriverUpdateItems.Count;
+            _driverUpdatesSummary = DriversFoundCount == 0
+                ? "Aucun pilote disponible."
+                : $"{DriversFoundCount} pilote(s) trouvé(s). Installation en cours.";
             _hasDriverScanResult = true;
             OnPropertyChanged(nameof(DriverUpdateItems));
             OnPropertyChanged(nameof(CanInstallDrivers));
+            OnPropertyChanged(nameof(DriversFoundCount));
             NotifyDriverStateChanged();
         }
 
@@ -238,22 +245,26 @@ namespace Virgil.App.ViewModels
             }
 
             DriverUpdateItems.Clear();
-            DriverUpdatesFound = Math.Max(DriverUpdatesFound - result.Installed, 0);
-            _driverUpdatesSummary = $"Pilotes trouvés: {DriverUpdatesFound}";
+            DriversFoundCount = Math.Max(DriversFoundCount - result.Installed, 0);
+            _driverUpdatesSummary = result.RebootRequired
+                ? $"Pilotes: {result.Installed} installé(s). Redémarrage requis."
+                : $"Pilotes: {result.Installed} installé(s).";
             _hasDriverScanResult = true;
             OnPropertyChanged(nameof(DriverUpdateItems));
             OnPropertyChanged(nameof(CanInstallDrivers));
+            OnPropertyChanged(nameof(DriversFoundCount));
             NotifyDriverStateChanged();
         }
 
         private void ResetDriverUpdates(string summary)
         {
             DriverUpdateItems.Clear();
-            DriverUpdatesFound = 0;
+            DriversFoundCount = 0;
             _driverUpdatesSummary = summary;
             _hasDriverScanResult = true;
             OnPropertyChanged(nameof(DriverUpdateItems));
             OnPropertyChanged(nameof(CanInstallDrivers));
+            OnPropertyChanged(nameof(DriversFoundCount));
             NotifyDriverStateChanged();
         }
 
@@ -305,6 +316,7 @@ namespace Virgil.App.ViewModels
             OnPropertyChanged(nameof(CanScanDrivers));
             OnPropertyChanged(nameof(CanInstallDrivers));
             OnPropertyChanged(nameof(HasDriverUpdates));
+            OnPropertyChanged(nameof(IsDriverOperationInProgress));
             OnPropertyChanged(nameof(DriverUpdatesSummary));
             OnPropertyChanged(nameof(HasDriverScanResult));
             OnPropertyChanged(nameof(CanOptimizeStartup));
