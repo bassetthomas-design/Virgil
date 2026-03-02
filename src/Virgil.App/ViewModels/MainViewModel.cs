@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -11,12 +12,14 @@ using Virgil.App.Commands;
 using Virgil.App.Interfaces;
 using Virgil.App.Models;
 using Virgil.App.Services;
+using Virgil.App.Views;
 using Virgil.Domain.Actions;
 using Virgil.Core.Models;
 using Virgil.Services.Abstractions;
 using Virgil.Services.Assistant;
 using Virgil.Services.Chat;
 using Virgil.Services.SelfTest;
+using Virgil.Services.Startup;
 using ServiceActionExecutionResult = Virgil.Services.ActionExecutionResult;
 using ServiceChatFormatter = Virgil.Services.ActionResultToChatFormatter;
 using ServiceChatSeverity = Virgil.Services.ChatSeverity;
@@ -39,6 +42,7 @@ namespace Virgil.App.ViewModels
         private ActionResult? _lastActionResult;
         private bool _isHudVisible;
         private bool _isMonitoringEnabled;
+        private StartupAnalysis? _startupAnalysis;
 
         public MonitoringViewModel Monitoring { get; }
         public ChatViewModel Chat { get; }
@@ -233,6 +237,10 @@ namespace Virgil.App.ViewModels
                 LastActionSuccess = result.Status != ActionResultStatus.Failed;
                 LastActionMessage = result.Message;
                 LastActionResult = result;
+                if (string.Equals(key, "startup_analyze", StringComparison.OrdinalIgnoreCase))
+                {
+                    CacheStartupAnalysis(result);
+                }
                 if (!isServiceAction)
                 {
                     PostLocalActionResult(result);
@@ -270,11 +278,17 @@ namespace Virgil.App.ViewModels
 
             foreach (var descriptor in ActionCatalog.All.Values)
             {
+                if (string.Equals(descriptor.ActionKey, "startup_optimize", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 definitions.Add(MapAction(descriptor.ActionKey, descriptor.DisplayName, descriptor.IsDestructive, (_, ct) => RunBackendActionAsync(descriptor, ct)));
             }
 
             definitions.AddRange(new[]
             {
+                MapAction("startup_optimize", "Optimiser le démarrage", false, (_, ct) => OptimizeStartupWithSelectionAsync(ct)),
                 MapAction("monitor_toggle", "Activer / désactiver la surveillance", false, (_, ct) => ToggleMonitoringAsync(ct)),
                 MapAction("monitor_refresh_now", "Rafraîchir maintenant", false, (_, ct) => RefreshMonitoringAsync(ct)),
                 MapAction("hud_toggle", "Afficher / masquer le HUD", false, (_, ct) => ToggleHudAsync(ct)),
@@ -368,6 +382,74 @@ namespace Virgil.App.ViewModels
 
             var result = await _orchestrator.RunAsync(descriptor.VirgilActionId, ct).ConfigureAwait(false);
             return MapResult(result);
+        }
+
+
+        private void CacheStartupAnalysis(ActionResult result)
+        {
+            _startupAnalysis = null;
+            if (!result.Success || string.IsNullOrWhiteSpace(result.DebugInfo))
+            {
+                return;
+            }
+
+            try
+            {
+                _startupAnalysis = JsonSerializer.Deserialize<StartupAnalysis>(result.DebugInfo);
+            }
+            catch
+            {
+                _startupAnalysis = null;
+            }
+        }
+
+        private Task<ActionResult> OptimizeStartupWithSelectionAsync(CancellationToken ct)
+        {
+            if (_startupAnalysis is null || _startupAnalysis.Items.Count == 0)
+            {
+                return Task.FromResult(ActionResult.NotAvailable("Optimisation du démarrage", "Analyse du démarrage requise avant l'optimisation."));
+            }
+
+            IReadOnlyList<StartupItem> selected = Array.Empty<StartupItem>();
+            var accepted = Application.Current?.Dispatcher.Invoke(() =>
+            {
+                var owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
+                var dialog = new StartupOptimizationWindow(_startupAnalysis.Items);
+                if (owner is not null)
+                {
+                    dialog.Owner = owner;
+                }
+
+                var ok = dialog.ShowDialog() == true;
+                if (ok)
+                {
+                    selected = dialog.SelectedItems;
+                }
+
+                return ok;
+            }) == true;
+
+            if (!accepted)
+            {
+                return Task.FromResult(ActionResult.Skipped("Optimisation du démarrage", "Sélection annulée."));
+            }
+
+            var service = new StartupOptimizationService();
+            _chat.PostSystemMessage("J’applique ta sélection pour le démarrage (réversible).", MessageType.Info, ChatKind.Info);
+            return ApplySelectedStartupItemsAsync(service, selected, ct);
+        }
+
+        private async Task<ActionResult> ApplySelectedStartupItemsAsync(StartupOptimizationService service, IReadOnlyList<StartupItem> selected, CancellationToken ct)
+        {
+            var result = await service.OptimizeSelectedAsync(selected, ct).ConfigureAwait(false);
+            if (!result.Succeeded)
+            {
+                var failure = string.IsNullOrWhiteSpace(result.FailureReason) ? result.Summary : result.FailureReason;
+                return ActionResult.Failure(failure ?? "Optimisation du démarrage impossible.");
+            }
+
+            var summary = $"Démarrage: {result.ItemsDisabled} élément(s) désactivé(s).";
+            return ActionResult.Completed(summary);
         }
 
         private Task<ActionResult> ToggleMonitoringAsync(CancellationToken ct)
@@ -543,6 +625,12 @@ namespace Virgil.App.ViewModels
                 return;
             }
 
+            if (string.Equals(actionId, "startup_optimize", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("J’optimise le démarrage. Je désactive uniquement ce qui est non essentiel et réversible.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
             _chat.PostSystemMessage($"Je lance « {actionTitle} »…", MessageType.Info, ChatKind.Info);
         }
 
@@ -564,6 +652,18 @@ namespace Virgil.App.ViewModels
 
             if (string.Equals(actionId, "drivers_scan", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(actionId, "drivers_install", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "startup_optimize", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "startup_restore", StringComparison.OrdinalIgnoreCase))
             {
                 _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
                 return;

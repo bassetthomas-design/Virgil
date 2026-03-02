@@ -142,6 +142,12 @@ public sealed class DryRunServiceProbes
         public Task<ActionExecutionResult> AnalyzeStartupAsync(CancellationToken ct = default)
             => CompleteAsync("Analyse démarrage (dry-run)");
 
+        public Task<ActionExecutionResult> OptimizeStartupAsync(CancellationToken ct = default)
+            => CompleteAsync("Optimisation démarrage (dry-run)");
+
+        public Task<ActionExecutionResult> RestoreStartupAsync(CancellationToken ct = default)
+            => CompleteAsync("Restauration démarrage (dry-run)");
+
         public Task<ActionExecutionResult> CloseGamingSessionAsync(CancellationToken ct = default)
             => CompleteAsync("Fermeture session gaming (dry-run)");
 

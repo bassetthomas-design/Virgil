@@ -46,14 +46,14 @@ public sealed record ActionExecutionResult
         return !string.IsNullOrWhiteSpace(details);
     }
 
-    public static ActionExecutionResult Ok(string title, string? summary = null, IEnumerable<ActionStepResult>? steps = null, IEnumerable<string>? recommendations = null)
-        => new(ActionResultStatus.Success, title, summary ?? string.Empty, steps?.ToList(), recommendations?.ToList());
+    public static ActionExecutionResult Ok(string title, string? summary = null, IEnumerable<ActionStepResult>? steps = null, IEnumerable<string>? recommendations = null, string? debugInfo = null)
+        => new(ActionResultStatus.Success, title, summary ?? string.Empty, steps?.ToList(), recommendations?.ToList(), debugInfo);
 
-    public static ActionExecutionResult Partial(string title, string? summary = null, IEnumerable<ActionStepResult>? steps = null, IEnumerable<string>? recommendations = null)
-        => new(ActionResultStatus.PartialSuccess, title, summary ?? string.Empty, steps?.ToList(), recommendations?.ToList());
+    public static ActionExecutionResult Partial(string title, string? summary = null, IEnumerable<ActionStepResult>? steps = null, IEnumerable<string>? recommendations = null, string? debugInfo = null)
+        => new(ActionResultStatus.PartialSuccess, title, summary ?? string.Empty, steps?.ToList(), recommendations?.ToList(), debugInfo);
 
-    public static ActionExecutionResult Failure(string title, string? summary = null, IEnumerable<ActionStepResult>? steps = null, IEnumerable<string>? recommendations = null)
-        => new(ActionResultStatus.Failed, title, summary ?? string.Empty, steps?.ToList(), recommendations?.ToList());
+    public static ActionExecutionResult Failure(string title, string? summary = null, IEnumerable<ActionStepResult>? steps = null, IEnumerable<string>? recommendations = null, string? debugInfo = null)
+        => new(ActionResultStatus.Failed, title, summary ?? string.Empty, steps?.ToList(), recommendations?.ToList(), debugInfo);
 
     public static ActionExecutionResult NotAvailable(string title = "Non disponible", string? summary = null, IEnumerable<ActionStepResult>? steps = null)
         => new(ActionResultStatus.NotAvailable, title, summary ?? string.Empty, steps?.ToList());

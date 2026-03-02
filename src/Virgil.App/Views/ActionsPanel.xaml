@@ -68,6 +68,17 @@
             <Button Content="Analyser le démarrage" Tag="startup_analyze" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Optimiser le démarrage" Tag="startup_optimize" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanOptimizeStartup}"
+                    Visibility="{Binding HasStartupAnalysis, Converter={StaticResource BoolToVisibility}}"
+                    ToolTip="{Binding StartupOptimizeTooltip}"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
+            <Button Content="Restaurer le démarrage" Tag="startup_restore" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanRestoreStartup}"
+                    Visibility="{Binding HasStartupRestoreEntries, Converter={StaticResource BoolToVisibility}}"
+                    Command="{Binding InvokeActionCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Couper les apps de fond (gaming)" Tag="gaming_kill_session" Margin="0,0,0,8"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
