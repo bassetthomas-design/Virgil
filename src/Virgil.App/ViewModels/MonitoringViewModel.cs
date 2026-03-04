@@ -285,6 +285,37 @@ namespace Virgil.App.ViewModels
 
         public string GpuUsageText => FormatMetric(GpuUsage, GpuUsageLastUpdatedUtc, "%");
 
+        private string _activeGpuName = "Unknown";
+        public string ActiveGpuName
+        {
+            get => _activeGpuName;
+            private set
+            {
+                var normalized = string.IsNullOrWhiteSpace(value) ? "Unknown" : value;
+                if (string.Equals(_activeGpuName, normalized, StringComparison.Ordinal)) return;
+                _activeGpuName = normalized;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(GpuHeaderText));
+                OnPropertyChanged(nameof(GpuUsageDisplayText));
+            }
+        }
+
+        private double _activeGpuPercent;
+        public double ActiveGpuPercent
+        {
+            get => _activeGpuPercent;
+            private set
+            {
+                if (Math.Abs(_activeGpuPercent - value) < 0.1) return;
+                _activeGpuPercent = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(GpuUsageDisplayText));
+            }
+        }
+
+        public string GpuHeaderText => $"GPU ({ActiveGpuName}):";
+        public string GpuUsageDisplayText => $"{Math.Round(ActiveGpuPercent, 1, MidpointRounding.AwayFromZero):0.#}%";
+
         private double _ramUsage;
         public double RamUsage
         {
@@ -567,6 +598,8 @@ namespace Virgil.App.ViewModels
                 GpuUsage = gpuUsage;
                 GpuUsageIsStale = false;
                 GpuUsageLastUpdatedUtc = now;
+                ActiveGpuPercent = gpuUsage;
+                ActiveGpuName = "GPU";
             }
 
             var ramUsage = snapshot.RamUsage;
@@ -690,12 +723,16 @@ namespace Virgil.App.ViewModels
                 GpuUsageIsStale = true;
                 gpuUsage = GpuUsage;
                 GpuUsageLastUpdatedUtc = metrics.GpuUsageLastUpdatedUtc;
+                ActiveGpuPercent = metrics.ActiveGpuPercent ?? gpuUsage;
+                ActiveGpuName = metrics.ActiveGpuName ?? ActiveGpuName;
             }
             else
             {
                 GpuUsage = gpuUsage;
                 GpuUsageIsStale = metrics.GpuUsageIsStale;
                 GpuUsageLastUpdatedUtc = metrics.GpuUsageLastUpdatedUtc;
+                ActiveGpuPercent = metrics.ActiveGpuPercent ?? gpuUsage;
+                ActiveGpuName = metrics.ActiveGpuName ?? "GPU";
             }
 
             var ramUsage = metrics.RamUsage;
