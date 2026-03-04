@@ -485,8 +485,8 @@ namespace Virgil.App.ViewModels
         {
             var s = _svc.Settings;
 
-            var minMinutes = Math.Clamp(_monitoringIntervalMinutesMin, 5, 10);
-            var maxMinutes = Math.Clamp(_monitoringIntervalMinutesMax, 5, 10);
+            var minMinutes = Math.Clamp(_monitoringIntervalMinutesMin, 1, 30);
+            var maxMinutes = Math.Clamp(_monitoringIntervalMinutesMax, 1, 30);
             if (maxMinutes < minMinutes)
             {
                 (minMinutes, maxMinutes) = (maxMinutes, minMinutes);
