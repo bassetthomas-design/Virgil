@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Virgil.App.Models;
 
@@ -13,6 +14,9 @@ public sealed class SystemMetricsSnapshot
     public double? DiskReadBps { get; init; }
     public double? DiskWriteBps { get; init; }
     public double? GpuPercent { get; init; }
+    public IReadOnlyList<GpuAdapterMetric> GpuAdapters { get; init; } = Array.Empty<GpuAdapterMetric>();
+    public string? ActiveGpuName { get; init; }
+    public double? ActiveGpuPercent { get; init; }
     public double? CpuTempC { get; init; }
     public double? GpuTempC { get; init; }
     public string SourceFlags { get; init; } = string.Empty;

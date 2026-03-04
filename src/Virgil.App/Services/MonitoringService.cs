@@ -31,7 +31,7 @@ namespace Virgil.App.Services
         private readonly PerformanceCounter? _diskActiveCounter;
         private readonly PerformanceCounter? _diskReadCounter;
         private readonly PerformanceCounter? _diskWriteCounter;
-        private readonly PerformanceCounter[] _gpuCounters;
+        private readonly Dictionary<string, GpuAdapterCounters> _gpuCountersByAdapter;
 
         private readonly Computer? _computer;
         private readonly bool _isHardwareAvailable;
@@ -72,21 +72,23 @@ namespace Virgil.App.Services
 
             try
             {
-                var gpuCategory = new PerformanceCounterCategory("GPU Engine");
-                var names = gpuCategory.GetInstanceNames();
-                _gpuCounters = names
-                    .Where(n => n.IndexOf("engtype_3D", StringComparison.OrdinalIgnoreCase) >= 0)
-                    .SelectMany(n => gpuCategory.GetCounters(n))
-                    .Where(c => c.CounterName.Equals("Utilization Percentage", StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-                foreach (var counter in _gpuCounters)
+                _gpuCountersByAdapter = BuildGpuCountersByAdapter();
+                foreach (var adapter in _gpuCountersByAdapter.Values)
                 {
-                    try { counter.NextValue(); } catch { }
+                    foreach (var counter in adapter.ThreeD)
+                    {
+                        try { counter.NextValue(); } catch { }
+                    }
+
+                    foreach (var counter in adapter.Total)
+                    {
+                        try { counter.NextValue(); } catch { }
+                    }
                 }
             }
             catch
             {
-                _gpuCounters = Array.Empty<PerformanceCounter>();
+                _gpuCountersByAdapter = new Dictionary<string, GpuAdapterCounters>(StringComparer.OrdinalIgnoreCase);
             }
 
             try
@@ -228,12 +230,12 @@ namespace Virgil.App.Services
             var diskActiveRaw = ReadCounter(_diskActiveCounter, 0, 100);
             var diskReadBps = ReadCounter(_diskReadCounter, 0, null);
             var diskWriteBps = ReadCounter(_diskWriteCounter, 0, null);
-            var gpuRaw = ReadGpuPercent();
+            var gpuSample = ReadGpuSample();
             var temps = ReadTemperatures();
 
             var cpu = _cpuSmoothing.AddAndAverage(cpuRaw);
             var disk = _diskSmoothing.AddAndAverage(diskActiveRaw);
-            var gpu = _gpuSmoothing.AddAndAverage(gpuRaw);
+            var gpu = _gpuSmoothing.AddAndAverage(gpuSample.ActiveGpuPercent3D);
             var cpuTemp = _cpuTempSmoothing.AddAndAverage(temps.CpuTemp);
             var gpuTemp = _gpuTempSmoothing.AddAndAverage(temps.GpuTemp);
 
@@ -248,17 +250,20 @@ namespace Virgil.App.Services
                 DiskReadBps = diskReadBps,
                 DiskWriteBps = diskWriteBps,
                 GpuPercent = gpu,
+                GpuAdapters = gpuSample.Adapters,
+                ActiveGpuName = gpuSample.ActiveGpuName,
+                ActiveGpuPercent = gpuSample.ActiveGpuPercent3D,
                 CpuTempC = ClampPlausibleTemp(cpuTemp),
                 GpuTempC = ClampPlausibleTemp(gpuTemp),
-                SourceFlags = BuildSourceFlags(ram.IsAvailable, _cpuCounter != null, _diskActiveCounter != null, _gpuCounters.Length > 0, _isHardwareAvailable),
-                ProviderName = _gpuCounters.Length > 0 ? "GPUEngineCounter" : "Unavailable",
+                SourceFlags = BuildSourceFlags(ram.IsAvailable, _cpuCounter != null, _diskActiveCounter != null, _gpuCountersByAdapter.Count > 0, _isHardwareAvailable),
+                ProviderName = _gpuCountersByAdapter.Count > 0 ? "GPUEngineCounter" : "Unavailable",
                 SampleAgeMs = (DateTimeOffset.UtcNow - now).TotalMilliseconds
             };
 
             LastTelemetryUpdateUtc = now.UtcDateTime;
             DataAgeSeconds = snapshot.SampleAgeMs / 1000d;
 
-            BuildDiagnostics(snapshot, cpuRaw, cpu, diskActiveRaw, disk, gpuRaw, gpu);
+            BuildDiagnostics(snapshot, cpuRaw, cpu, diskActiveRaw, disk, gpuSample.ActiveGpuPercent3D, gpu);
             PublishLegacyEvents(snapshot);
             SnapshotUpdated?.Invoke(this, snapshot);
         }
@@ -296,7 +301,10 @@ namespace Virgil.App.Services
                 RamUsageLastUpdatedUtc = snapshot.RamPercent.HasValue ? snapshot.Timestamp.UtcDateTime : null,
                 DiskUsageLastUpdatedUtc = snapshot.DiskActivePercent.HasValue ? snapshot.Timestamp.UtcDateTime : null,
                 CpuTempLastUpdatedUtc = snapshot.CpuTempC.HasValue ? snapshot.Timestamp.UtcDateTime : null,
-                GpuTempLastUpdatedUtc = snapshot.GpuTempC.HasValue ? snapshot.Timestamp.UtcDateTime : null
+                GpuTempLastUpdatedUtc = snapshot.GpuTempC.HasValue ? snapshot.Timestamp.UtcDateTime : null,
+                GpuAdapters = snapshot.GpuAdapters,
+                ActiveGpuName = snapshot.ActiveGpuName,
+                ActiveGpuPercent = snapshot.ActiveGpuPercent
             });
         }
 
@@ -359,42 +367,124 @@ namespace Virgil.App.Services
             }
         }
 
-        private double? ReadGpuPercent()
+        private GpuSample ReadGpuSample()
         {
-            if (_gpuCounters.Length == 0)
+            if (_gpuCountersByAdapter.Count == 0)
             {
-                return null;
+                return GpuSample.Empty;
             }
 
             try
             {
-                var sum = 0d;
-                var found = false;
-                foreach (var counter in _gpuCounters)
+                var adapters = new List<GpuAdapterMetric>();
+                foreach (var (adapterName, counters) in _gpuCountersByAdapter)
                 {
-                    try
+                    var percent3D = SumCounters(counters.ThreeD);
+                    var percentTotal = SumCounters(counters.Total);
+                    if (!percent3D.HasValue && !percentTotal.HasValue)
                     {
-                        var value = counter.NextValue();
-                        if (float.IsNaN(value) || float.IsInfinity(value))
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
-                        sum += value;
-                        found = true;
-                    }
-                    catch
-                    {
-                        // Ignore single counter errors.
-                    }
+                    adapters.Add(new GpuAdapterMetric(adapterName, percent3D, percentTotal));
                 }
 
-                return found ? ClampPercent(sum) : null;
+                if (adapters.Count == 0)
+                {
+                    return GpuSample.Empty;
+                }
+
+                var active = adapters
+                    .OrderByDescending(a => a.Percent3D ?? double.MinValue)
+                    .ThenByDescending(a => a.PercentTotal ?? double.MinValue)
+                    .First();
+
+                return new GpuSample(
+                    adapters,
+                    active.Name,
+                    active.Percent3D);
             }
             catch
             {
-                return null;
+                return GpuSample.Empty;
             }
+        }
+
+        private static double? SumCounters(IEnumerable<PerformanceCounter> counters)
+        {
+            var sum = 0d;
+            var found = false;
+            foreach (var counter in counters)
+            {
+                try
+                {
+                    var value = counter.NextValue();
+                    if (float.IsNaN(value) || float.IsInfinity(value))
+                    {
+                        continue;
+                    }
+
+                    sum += value;
+                    found = true;
+                }
+                catch
+                {
+                    // Ignore single counter errors.
+                }
+            }
+
+            return found ? ClampPercent(sum) : null;
+        }
+
+        private static Dictionary<string, GpuAdapterCounters> BuildGpuCountersByAdapter()
+        {
+            var gpuCategory = new PerformanceCounterCategory("GPU Engine");
+            var names = gpuCategory.GetInstanceNames();
+            var byAdapter = new Dictionary<string, GpuAdapterCounters>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var instanceName in names)
+            {
+                var counters = gpuCategory.GetCounters(instanceName);
+                var utilCounter = counters.FirstOrDefault(c => c.CounterName.Equals("Utilization Percentage", StringComparison.OrdinalIgnoreCase));
+                if (utilCounter == null)
+                {
+                    continue;
+                }
+
+                var adapterName = ExtractAdapterName(instanceName);
+                if (string.IsNullOrWhiteSpace(adapterName))
+                {
+                    continue;
+                }
+
+                if (!byAdapter.TryGetValue(adapterName, out var adapterCounters))
+                {
+                    adapterCounters = new GpuAdapterCounters(new List<PerformanceCounter>(), new List<PerformanceCounter>());
+                    byAdapter[adapterName] = adapterCounters;
+                }
+
+                adapterCounters.Total.Add(utilCounter);
+
+                if (instanceName.IndexOf("engtype_3D", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    adapterCounters.ThreeD.Add(utilCounter);
+                }
+            }
+
+            return byAdapter;
+        }
+
+        private static string ExtractAdapterName(string instanceName)
+        {
+            const string pidToken = "pid_";
+            var pidIndex = instanceName.IndexOf(pidToken, StringComparison.OrdinalIgnoreCase);
+            if (pidIndex <= 0)
+            {
+                return instanceName;
+            }
+
+            var name = instanceName[..pidIndex].TrimEnd('_');
+            return string.IsNullOrWhiteSpace(name) ? instanceName : name;
         }
 
         private (double? CpuTemp, double? GpuTemp) ReadTemperatures()
@@ -459,7 +549,7 @@ namespace Virgil.App.Services
                 $"ram(total={total},avail={avail},used={used},pct={FormatDiag(snapshot.RamPercent)}) " +
                 $"cpu(raw={FormatDiag(cpuRaw)},avg={FormatDiag(cpuAvg)}) " +
                 $"disk(raw={FormatDiag(diskRaw)},avg={FormatDiag(diskAvg)},readBps={FormatDiag(snapshot.DiskReadBps)},writeBps={FormatDiag(snapshot.DiskWriteBps)}) " +
-                $"gpu(provider={snapshot.ProviderName},raw={FormatDiag(gpuRaw)},avg={FormatDiag(gpuAvg)}) " +
+                $"gpu(provider={snapshot.ProviderName},active={snapshot.ActiveGpuName ?? "unavailable"},raw={FormatDiag(gpuRaw)},avg={FormatDiag(gpuAvg)},adapters={FormatGpuAdapters(snapshot.GpuAdapters)}) " +
                 $"temp(cpu={FormatDiag(snapshot.CpuTempC)},gpu={FormatDiag(snapshot.GpuTempC)}) " +
                 $"lastError={_lastError}";
 
@@ -471,6 +561,16 @@ namespace Virgil.App.Services
 
         private static string FormatDiag(double? value)
             => value.HasValue ? value.Value.ToString("0.0") : "unavailable";
+
+        private static string FormatGpuAdapters(IReadOnlyList<GpuAdapterMetric> adapters)
+        {
+            if (adapters.Count == 0)
+            {
+                return "none";
+            }
+
+            return string.Join(",", adapters.Select(a => $"{a.Name}:3D={FormatDiag(a.Percent3D)} total={FormatDiag(a.PercentTotal)}"));
+        }
 
         private static string BuildSourceFlags(bool ram, bool cpu, bool disk, bool gpu, bool temp)
             => $"RAM={(ram ? "Win32GlobalMemoryStatusEx" : "Unavailable")};CPU={(cpu ? "PerfCounter" : "Unavailable")};DISK={(disk ? "PerfCounter" : "Unavailable")};GPU={(gpu ? "GPUEngine" : "Unavailable")};TEMP={(temp ? "LibreHardwareMonitor" : "Unavailable")}";
@@ -505,6 +605,17 @@ namespace Virgil.App.Services
 #else
             return string.Equals(Environment.GetEnvironmentVariable("VIRGIL_DIAGNOSTIC"), "1", StringComparison.OrdinalIgnoreCase);
 #endif
+        }
+
+
+        private sealed record GpuAdapterCounters(List<PerformanceCounter> ThreeD, List<PerformanceCounter> Total);
+
+        private sealed record GpuSample(
+            IReadOnlyList<GpuAdapterMetric> Adapters,
+            string? ActiveGpuName,
+            double? ActiveGpuPercent3D)
+        {
+            public static GpuSample Empty { get; } = new(Array.Empty<GpuAdapterMetric>(), null, null);
         }
 
         private void LogTickDuration(TimeSpan duration, bool sampled)
