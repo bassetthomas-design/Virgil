@@ -19,6 +19,13 @@ public sealed class SystemMetricsSnapshot
     public double? ActiveGpuPercent { get; init; }
     public double? CpuTempC { get; init; }
     public double? GpuTempC { get; init; }
+    public string TempProviderName { get; init; } = string.Empty;
+    public string? CpuTempSensorName { get; init; }
+    public string? GpuTempSensorName { get; init; }
+    public double? CpuTempRawC { get; init; }
+    public double? GpuTempRawC { get; init; }
+    public double? CpuTempSmoothedC { get; init; }
+    public double? GpuTempSmoothedC { get; init; }
     public string SourceFlags { get; init; } = string.Empty;
     public string ProviderName { get; init; } = string.Empty;
     public double SampleAgeMs { get; init; }

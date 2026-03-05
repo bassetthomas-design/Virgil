@@ -41,6 +41,8 @@ namespace Virgil.App.Services
         private readonly FixedWindowAverage _gpuSmoothing = new(3);
         private readonly FixedWindowAverage _cpuTempSmoothing = new(3);
         private readonly FixedWindowAverage _gpuTempSmoothing = new(3);
+        private double? _lastAcceptedCpuTempRaw;
+        private double? _lastAcceptedGpuTempRaw;
 
         private bool _cpuWarmupDone;
         private string _lastError = "none";
@@ -232,12 +234,14 @@ namespace Virgil.App.Services
             var diskWriteBps = ReadCounter(_diskWriteCounter, 0, null);
             var gpuSample = ReadGpuSample();
             var temps = ReadTemperatures();
+            var cpuTempRaw = ValidateTemperatureSample(temps.CpuTemp, ref _lastAcceptedCpuTempRaw);
+            var gpuTempRaw = ValidateTemperatureSample(temps.GpuTemp, ref _lastAcceptedGpuTempRaw);
 
             var cpu = _cpuSmoothing.AddAndAverage(cpuRaw);
             var disk = _diskSmoothing.AddAndAverage(diskActiveRaw);
             var gpu = _gpuSmoothing.AddAndAverage(gpuSample.ActiveGpuPercent3D);
-            var cpuTemp = _cpuTempSmoothing.AddAndAverage(temps.CpuTemp);
-            var gpuTemp = _gpuTempSmoothing.AddAndAverage(temps.GpuTemp);
+            var cpuTempSmoothed = _cpuTempSmoothing.AddAndAverage(cpuTempRaw);
+            var gpuTempSmoothed = _gpuTempSmoothing.AddAndAverage(gpuTempRaw);
 
             var snapshot = new SystemMetricsSnapshot
             {
@@ -253,9 +257,16 @@ namespace Virgil.App.Services
                 GpuAdapters = gpuSample.Adapters,
                 ActiveGpuName = gpuSample.ActiveGpuName,
                 ActiveGpuPercent = gpuSample.ActiveGpuPercent3D,
-                CpuTempC = ClampPlausibleTemp(cpuTemp),
-                GpuTempC = ClampPlausibleTemp(gpuTemp),
-                SourceFlags = BuildSourceFlags(ram.IsAvailable, _cpuCounter != null, _diskActiveCounter != null, _gpuCountersByAdapter.Count > 0, _isHardwareAvailable),
+                CpuTempC = cpuTempSmoothed,
+                GpuTempC = gpuTempSmoothed,
+                TempProviderName = temps.ProviderName,
+                CpuTempSensorName = temps.CpuSensorName,
+                GpuTempSensorName = temps.GpuSensorName,
+                CpuTempRawC = cpuTempRaw,
+                GpuTempRawC = gpuTempRaw,
+                CpuTempSmoothedC = cpuTempSmoothed,
+                GpuTempSmoothedC = gpuTempSmoothed,
+                SourceFlags = BuildSourceFlags(ram.IsAvailable, _cpuCounter != null, _diskActiveCounter != null, _gpuCountersByAdapter.Count > 0, temps.IsProviderAvailable),
                 ProviderName = _gpuCountersByAdapter.Count > 0 ? "GPUEngineCounter" : "Unavailable",
                 SampleAgeMs = (DateTimeOffset.UtcNow - now).TotalMilliseconds
             };
@@ -487,15 +498,17 @@ namespace Virgil.App.Services
             return string.IsNullOrWhiteSpace(name) ? instanceName : name;
         }
 
-        private (double? CpuTemp, double? GpuTemp) ReadTemperatures()
+        private TempReadResult ReadTemperatures()
         {
             if (!_isHardwareAvailable || _computer == null)
             {
-                return (null, null);
+                return new TempReadResult(false, "Unavailable", null, null, null, null);
             }
 
             double? cpu = null;
             double? gpu = null;
+            string? cpuSensorName = null;
+            string? gpuSensorName = null;
 
             foreach (var hw in _computer.Hardware)
             {
@@ -509,7 +522,12 @@ namespace Virgil.App.Services
                             {
                                 if (s.SensorType == SensorType.Temperature && s.Name.Contains("Package", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    cpu = ClampPlausibleTemp(s.Value);
+                                    var value = RoundTemperature(s.Value);
+                                    if (value.HasValue)
+                                    {
+                                        cpu = value;
+                                        cpuSensorName = s.Name;
+                                    }
                                 }
                             }
                             break;
@@ -521,7 +539,13 @@ namespace Virgil.App.Services
                             {
                                 if (s.SensorType == SensorType.Temperature)
                                 {
-                                    gpu = ClampPlausibleTemp(s.Value);
+                                    var value = RoundTemperature(s.Value);
+                                    if (value.HasValue)
+                                    {
+                                        gpu = value;
+                                        gpuSensorName = s.Name;
+                                        break;
+                                    }
                                 }
                             }
                             break;
@@ -533,7 +557,7 @@ namespace Virgil.App.Services
                 }
             }
 
-            return (cpu, gpu);
+            return new TempReadResult(true, "LibreHardwareMonitor", cpuSensorName, gpuSensorName, cpu, gpu);
         }
 
         private void BuildDiagnostics(SystemMetricsSnapshot snapshot, double? cpuRaw, double? cpuAvg, double? diskRaw, double? diskAvg, double? gpuRaw, double? gpuAvg)
@@ -550,7 +574,7 @@ namespace Virgil.App.Services
                 $"cpu(raw={FormatDiag(cpuRaw)},avg={FormatDiag(cpuAvg)}) " +
                 $"disk(raw={FormatDiag(diskRaw)},avg={FormatDiag(diskAvg)},readBps={FormatDiag(snapshot.DiskReadBps)},writeBps={FormatDiag(snapshot.DiskWriteBps)}) " +
                 $"gpu(provider={snapshot.ProviderName},active={snapshot.ActiveGpuName ?? "unavailable"},raw={FormatDiag(gpuRaw)},avg={FormatDiag(gpuAvg)},adapters={FormatGpuAdapters(snapshot.GpuAdapters)}) " +
-                $"temp(cpu={FormatDiag(snapshot.CpuTempC)},gpu={FormatDiag(snapshot.GpuTempC)}) " +
+                $"temp(provider={snapshot.TempProviderName},cpuSensor={snapshot.CpuTempSensorName ?? "unavailable"},gpuSensor={snapshot.GpuTempSensorName ?? "unavailable"},cpuRaw={FormatDiag(snapshot.CpuTempRawC)},cpuSmoothed={FormatDiag(snapshot.CpuTempSmoothedC)},gpuRaw={FormatDiag(snapshot.GpuTempRawC)},gpuSmoothed={FormatDiag(snapshot.GpuTempSmoothedC)}) " +
                 $"lastError={_lastError}";
 
             if (IsDiagnosticMode())
@@ -575,17 +599,39 @@ namespace Virgil.App.Services
         private static string BuildSourceFlags(bool ram, bool cpu, bool disk, bool gpu, bool temp)
             => $"RAM={(ram ? "Win32GlobalMemoryStatusEx" : "Unavailable")};CPU={(cpu ? "PerfCounter" : "Unavailable")};DISK={(disk ? "PerfCounter" : "Unavailable")};GPU={(gpu ? "GPUEngine" : "Unavailable")};TEMP={(temp ? "LibreHardwareMonitor" : "Unavailable")}";
 
-        private static double? ClampPlausibleTemp(float? value)
-            => value.HasValue ? ClampPlausibleTemp((double?)value.Value) : null;
+        private static double? RoundTemperature(float? value)
+            => value.HasValue ? RoundTemperature((double?)value.Value) : null;
 
-        private static double? ClampPlausibleTemp(double? value)
+        private static double? RoundTemperature(double? value)
         {
             if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value))
             {
                 return null;
             }
 
-            return Math.Clamp(Math.Round(value.Value, 1, MidpointRounding.AwayFromZero), 0d, 120d);
+            return Math.Round(value.Value, 1, MidpointRounding.AwayFromZero);
+        }
+
+        private static double? ValidateTemperatureSample(double? candidateRaw, ref double? lastAcceptedRaw)
+        {
+            if (!candidateRaw.HasValue)
+            {
+                return null;
+            }
+
+            var value = candidateRaw.Value;
+            if (value < 10d || value > 110d)
+            {
+                return null;
+            }
+
+            if (lastAcceptedRaw.HasValue && Math.Abs(value - lastAcceptedRaw.Value) > 25d)
+            {
+                return null;
+            }
+
+            lastAcceptedRaw = value;
+            return value;
         }
 
         private static double ClampPercent(double value)
@@ -607,6 +653,14 @@ namespace Virgil.App.Services
 #endif
         }
 
+
+        private sealed record TempReadResult(
+            bool IsProviderAvailable,
+            string ProviderName,
+            string? CpuSensorName,
+            string? GpuSensorName,
+            double? CpuTemp,
+            double? GpuTemp);
 
         private sealed record GpuAdapterCounters(List<PerformanceCounter> ThreeD, List<PerformanceCounter> Total);
 
