@@ -132,9 +132,7 @@ namespace Virgil.App.ViewModels
 
         public async Task InitializeAsync()
         {
-            _monitoringService.SetIntervalRange(
-                _settingsService.Settings.MonitoringIntervalMinutesMin,
-                _settingsService.Settings.MonitoringIntervalMinutesMax);
+            _monitoringService.SetMonitoringIntervalMs(_settingsService.Settings.MonitoringIntervalMs);
             if (_settingsService.Settings.MonitoringEnabled)
             {
                 _monitoringService.Start();
@@ -157,9 +155,7 @@ namespace Virgil.App.ViewModels
 
         public async Task ReloadUiFromSettingsAsync(CancellationToken ct)
         {
-            _monitoringService.SetIntervalRange(
-                _settingsService.Settings.MonitoringIntervalMinutesMin,
-                _settingsService.Settings.MonitoringIntervalMinutesMax);
+            _monitoringService.SetMonitoringIntervalMs(_settingsService.Settings.MonitoringIntervalMs);
             _isMonitoringEnabled = _settingsService.Settings.MonitoringEnabled;
             if (_isMonitoringEnabled)
             {
