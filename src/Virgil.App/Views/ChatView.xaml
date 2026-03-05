@@ -89,7 +89,10 @@
 
         <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="10" Padding="8" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0.5">
             <Grid>
-                <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto" CanContentScroll="False">
+                <ScrollViewer x:Name="ChatScroll"
+                              VerticalScrollBarVisibility="Auto"
+                              CanContentScroll="False"
+                              ScrollChanged="OnChatScrollChanged">
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
