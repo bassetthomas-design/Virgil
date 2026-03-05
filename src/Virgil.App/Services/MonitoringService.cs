@@ -257,6 +257,7 @@ namespace Virgil.App.Services
                 GpuAdapters = gpuSample.Adapters,
                 ActiveGpuName = gpuSample.ActiveGpuName,
                 ActiveGpuPercent = gpuSample.ActiveGpuPercent3D,
+                ActiveGpuTempC = gpuTempSmoothed,
                 CpuTempC = cpuTempSmoothed,
                 GpuTempC = gpuTempSmoothed,
                 TempProviderName = temps.ProviderName,
@@ -315,7 +316,8 @@ namespace Virgil.App.Services
                 GpuTempLastUpdatedUtc = snapshot.GpuTempC.HasValue ? snapshot.Timestamp.UtcDateTime : null,
                 GpuAdapters = snapshot.GpuAdapters,
                 ActiveGpuName = snapshot.ActiveGpuName,
-                ActiveGpuPercent = snapshot.ActiveGpuPercent
+                ActiveGpuPercent = snapshot.ActiveGpuPercent,
+                ActiveGpuTemp = snapshot.ActiveGpuTempC
             });
         }
 
@@ -413,7 +415,7 @@ namespace Virgil.App.Services
                 return new GpuSample(
                     adapters,
                     active.Name,
-                    active.Percent3D);
+                    active.Percent3D ?? active.PercentTotal);
             }
             catch
             {

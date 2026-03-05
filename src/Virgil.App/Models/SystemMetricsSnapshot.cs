@@ -17,6 +17,7 @@ public sealed class SystemMetricsSnapshot
     public IReadOnlyList<GpuAdapterMetric> GpuAdapters { get; init; } = Array.Empty<GpuAdapterMetric>();
     public string? ActiveGpuName { get; init; }
     public double? ActiveGpuPercent { get; init; }
+    public double? ActiveGpuTempC { get; init; }
     public double? CpuTempC { get; init; }
     public double? GpuTempC { get; init; }
     public string TempProviderName { get; init; } = string.Empty;

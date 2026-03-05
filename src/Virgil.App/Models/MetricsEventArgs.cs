@@ -39,6 +39,7 @@ namespace Virgil.App.Models
         public IReadOnlyList<GpuAdapterMetric> GpuAdapters { get; init; } = Array.Empty<GpuAdapterMetric>();
         public string? ActiveGpuName { get; init; }
         public double? ActiveGpuPercent { get; init; }
+        public double? ActiveGpuTemp { get; init; }
 
         // Legacy aliases kept for backward compatibility (if used somewhere)
         public double Cpu => CpuUsage;

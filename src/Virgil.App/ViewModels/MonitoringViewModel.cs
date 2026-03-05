@@ -313,7 +313,7 @@ namespace Virgil.App.ViewModels
             }
         }
 
-        public string GpuHeaderText => $"GPU ({ActiveGpuName}):";
+        public string GpuHeaderText => "GPU:";
         public string GpuUsageDisplayText => $"{Math.Round(ActiveGpuPercent, 1, MidpointRounding.AwayFromZero):0.#}%";
 
         private double _ramUsage;

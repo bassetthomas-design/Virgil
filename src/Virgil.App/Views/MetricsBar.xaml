@@ -8,8 +8,8 @@
             <TextBlock Text="{Binding CpuUsageText}" Margin="0,0,12,0"/>
             <TextBlock Text="Temp:" FontWeight="SemiBold" Margin="0,0,6,0"/>
             <TextBlock Text="{Binding CpuTempText}" Margin="0,0,12,0"/>
-            <TextBlock Text="{Binding GpuHeaderText}" FontWeight="SemiBold" Margin="0,0,6,0"/>
-            <TextBlock Text="{Binding GpuUsageDisplayText}" Margin="0,0,12,0"/>
+            <TextBlock Text="GPU:" FontWeight="SemiBold" Margin="0,0,6,0"/>
+            <TextBlock Text="{Binding GpuUsageDisplayText}" ToolTip="{Binding ActiveGpuName}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxWidth="90" Margin="0,0,12,0"/>
             <TextBlock Text="Temp:" FontWeight="SemiBold" Margin="0,0,6,0"/>
             <TextBlock Text="{Binding GpuTempText}" Margin="0,0,12,0"/>
             <TextBlock Text="RAM:" FontWeight="SemiBold" Margin="0,0,6,0"/>
