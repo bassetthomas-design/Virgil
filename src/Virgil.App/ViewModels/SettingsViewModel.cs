@@ -82,7 +82,7 @@ namespace Virgil.App.ViewModels
             // Charger une "copie" (en champs) pour permettre Annuler sans effet de bord
             var s = _svc.Settings;
 
-            _monitoringIntervalMs = Math.Clamp(s.MonitoringIntervalMs, 1000, 5000);
+            _monitoringIntervalMs = (int)TimeSpan.FromMinutes(5).TotalMilliseconds;
             _chatMessageTtlSeconds = s.ChatMessageTTLSeconds;
             _localMaxTokens = s.LocalMaxTokens;
             _companionTalkative = s.CompanionTalkative;
@@ -477,8 +477,8 @@ namespace Virgil.App.ViewModels
         {
             var s = _svc.Settings;
 
-            var monitoringIntervalMs = Math.Clamp(_monitoringIntervalMs, 1000, 5000);
-            s.MonitoringIntervalMs = monitoringIntervalMs;
+            _monitoringIntervalMs = (int)TimeSpan.FromMinutes(5).TotalMilliseconds;
+            s.MonitoringIntervalMs = _monitoringIntervalMs;
             var chatTtlSeconds = Math.Max(_chatMessageTtlSeconds, MinChatTtlSeconds);
             s.ChatMessageTTLSeconds = chatTtlSeconds;
             s.DefaultMessageTtlMs = chatTtlSeconds * 1000;

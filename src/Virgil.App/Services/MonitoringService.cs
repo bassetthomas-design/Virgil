@@ -14,9 +14,7 @@ namespace Virgil.App.Services
 {
     public class MonitoringService
     {
-        private const int MinMonitoringIntervalMs = 1000;
-        private const int MaxMonitoringIntervalMs = 5000;
-        private static readonly TimeSpan DefaultMonitoringInterval = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan DefaultMonitoringInterval = TimeSpan.FromMinutes(5);
 
         public event EventHandler<MetricsEventArgs>? Updated;
         public event Action<double, double, double, double>? Metrics;
@@ -119,14 +117,15 @@ namespace Virgil.App.Services
 
         public void SetMonitoringIntervalMs(int intervalMs)
         {
-            var clampedIntervalMs = Math.Clamp(intervalMs, MinMonitoringIntervalMs, MaxMonitoringIntervalMs);
-            _monitoringInterval = TimeSpan.FromMilliseconds(clampedIntervalMs);
+            _ = intervalMs;
+            _monitoringInterval = DefaultMonitoringInterval;
         }
 
         public void SetIntervalRange(int minMinutes, int maxMinutes)
         {
-            var requestedSeconds = Math.Max(1, Math.Min(minMinutes, maxMinutes));
-            SetMonitoringIntervalMs(requestedSeconds * 1000);
+            _ = minMinutes;
+            _ = maxMinutes;
+            _monitoringInterval = DefaultMonitoringInterval;
         }
 
         public void Start()
@@ -183,13 +182,16 @@ namespace Virgil.App.Services
                 started.Stop();
 
                 LogTickDuration(started.Elapsed, sampled);
-                var delay = _monitoringInterval - started.Elapsed;
+                TimeSpan refreshInterval = TimeSpan.FromMinutes(5);
+                _monitoringInterval = refreshInterval;
+                var delay = refreshInterval - started.Elapsed;
                 if (delay < TimeSpan.Zero)
                 {
                     delay = TimeSpan.Zero;
                 }
 
-                NextTelemetryUpdateUtc = DateTime.UtcNow + delay;
+                var nextUpdate = DateTimeOffset.Now + refreshInterval;
+                NextTelemetryUpdateUtc = nextUpdate.DateTime;
                 Trace.WriteLine($"Monitoring next tick scheduled at {NextTelemetryUpdateUtc:O} (interval {_monitoringInterval.TotalSeconds:F1}s).");
 
                 try

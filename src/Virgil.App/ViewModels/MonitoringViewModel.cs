@@ -100,6 +100,7 @@ namespace Virgil.App.ViewModels
                 if (_telemetryCooldownRemaining == value) return;
                 _telemetryCooldownRemaining = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(TimerText));
                 OnPropertyChanged(nameof(TelemetryCooldownRemainingText));
                 OnPropertyChanged(nameof(TelemetryCooldownDisplay));
             }
@@ -121,8 +122,10 @@ namespace Virgil.App.ViewModels
 
         public string TelemetryCooldownRemainingText
             => _nextTelemetryUpdateUtc.HasValue
-                ? FormatCooldown(TelemetryCooldownRemaining)
+                ? TimerText
                 : "--:--";
+
+        public string TimerText => TelemetryCooldownRemaining.ToString(@"mm\:ss");
 
         public string TelemetryCooldownDisplay
             => $"🔄 Prochaine mise à jour dans {TelemetryCooldownRemainingText}";
@@ -938,8 +941,14 @@ namespace Virgil.App.ViewModels
         {
             if (_nextTelemetryUpdateUtc.HasValue)
             {
-                var remaining = _nextTelemetryUpdateUtc.Value - DateTime.UtcNow;
-                TelemetryCooldownRemaining = remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
+                var nextUpdate = new DateTimeOffset(_nextTelemetryUpdateUtc.Value);
+                var remaining = nextUpdate - DateTimeOffset.Now;
+                if (remaining < TimeSpan.Zero)
+                {
+                    remaining = TimeSpan.Zero;
+                }
+
+                TelemetryCooldownRemaining = remaining;
             }
             else
             {
@@ -974,11 +983,7 @@ namespace Virgil.App.ViewModels
         }
 
         private static string FormatCooldown(TimeSpan remaining)
-        {
-            var totalMinutes = Math.Max(0, (int)remaining.TotalMinutes);
-            var seconds = Math.Max(0, remaining.Seconds);
-            return $"{totalMinutes:00}:{seconds:00}";
-        }
+            => remaining.ToString(@"mm\:ss");
 
         private static class TelemetryCooldownStates
         {

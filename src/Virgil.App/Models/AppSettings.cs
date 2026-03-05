@@ -20,7 +20,7 @@ namespace Virgil.App.Models
 
     public class AppSettings
     {
-        public int MonitoringIntervalMs { get; set; } = 2000;
+        public int MonitoringIntervalMs { get; set; } = 300000;
         public int MonitoringIntervalMinutesMin { get; set; } = 2;
         public int MonitoringIntervalMinutesMax { get; set; } = 2;
         public int DefaultMessageTtlMs { get; set; } = 180000;
