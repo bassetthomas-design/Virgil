@@ -82,8 +82,7 @@ namespace Virgil.App.ViewModels
             // Charger une "copie" (en champs) pour permettre Annuler sans effet de bord
             var s = _svc.Settings;
 
-            _monitoringIntervalMinutesMin = s.MonitoringIntervalMinutesMin;
-            _monitoringIntervalMinutesMax = s.MonitoringIntervalMinutesMax;
+            _monitoringIntervalMs = Math.Clamp(s.MonitoringIntervalMs, 1000, 5000);
             _chatMessageTtlSeconds = s.ChatMessageTTLSeconds;
             _localMaxTokens = s.LocalMaxTokens;
             _companionTalkative = s.CompanionTalkative;
@@ -125,18 +124,11 @@ namespace Virgil.App.ViewModels
             _clearMemoryCommand = new RelayCommand(_ => ClearMemory());
         }
 
-        private int _monitoringIntervalMinutesMin;
-        public int MonitoringIntervalMinutesMin
+        private int _monitoringIntervalMs;
+        public int MonitoringIntervalMs
         {
-            get => _monitoringIntervalMinutesMin;
-            set { _monitoringIntervalMinutesMin = value; OnPropertyChanged(); }
-        }
-
-        private int _monitoringIntervalMinutesMax;
-        public int MonitoringIntervalMinutesMax
-        {
-            get => _monitoringIntervalMinutesMax;
-            set { _monitoringIntervalMinutesMax = value; OnPropertyChanged(); }
+            get => _monitoringIntervalMs;
+            set { _monitoringIntervalMs = value; OnPropertyChanged(); }
         }
 
         private int _chatMessageTtlSeconds;
@@ -485,15 +477,8 @@ namespace Virgil.App.ViewModels
         {
             var s = _svc.Settings;
 
-            var minMinutes = Math.Clamp(_monitoringIntervalMinutesMin, 1, 30);
-            var maxMinutes = Math.Clamp(_monitoringIntervalMinutesMax, 1, 30);
-            if (maxMinutes < minMinutes)
-            {
-                (minMinutes, maxMinutes) = (maxMinutes, minMinutes);
-            }
-
-            s.MonitoringIntervalMinutesMin = minMinutes;
-            s.MonitoringIntervalMinutesMax = maxMinutes;
+            var monitoringIntervalMs = Math.Clamp(_monitoringIntervalMs, 1000, 5000);
+            s.MonitoringIntervalMs = monitoringIntervalMs;
             var chatTtlSeconds = Math.Max(_chatMessageTtlSeconds, MinChatTtlSeconds);
             s.ChatMessageTTLSeconds = chatTtlSeconds;
             s.DefaultMessageTtlMs = chatTtlSeconds * 1000;

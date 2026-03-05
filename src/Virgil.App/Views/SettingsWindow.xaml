@@ -16,13 +16,9 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <TextBlock Text="Monitoring" FontWeight="Bold" Margin="0,0,0,6"/>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                    <TextBlock Text="Intervalle min (s):" Width="140" VerticalAlignment="Center"/>
-                    <TextBox Width="120" Text="{Binding MonitoringIntervalMinutesMin}"/>
-                </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <TextBlock Text="Intervalle max (s):" Width="140" VerticalAlignment="Center"/>
-                    <TextBox Width="120" Text="{Binding MonitoringIntervalMinutesMax}"/>
+                    <TextBlock Text="Intervalle (ms):" Width="140" VerticalAlignment="Center"/>
+                    <TextBox Width="120" Text="{Binding MonitoringIntervalMs}"/>
                 </StackPanel>
 
                 <TextBlock Text="Chat" FontWeight="Bold" Margin="0,8,0,6"/>
