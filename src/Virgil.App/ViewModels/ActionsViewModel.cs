@@ -25,6 +25,9 @@ namespace Virgil.App.ViewModels
         private bool _isDriverScanRunning;
         private bool _isDriverInstallRunning;
         private bool _isActionRunning;
+        private bool _isSecurityScanRunning;
+        private bool _isDefenderFullScanRunning;
+        private CancellationTokenSource? _defenderFullScanCts;
         private int _driversFoundCount;
         private string _driverUpdatesSummary = string.Empty;
         private bool _hasDriverScanResult;
@@ -39,9 +42,16 @@ namespace Virgil.App.ViewModels
         public ICommand InvokeActionCommand { get; }
         public ICommand ScanDriversCommand => _scanDriversCommand;
         public ICommand InstallDriversCommand => _installDriversCommand;
+        public ICommand RunDefenderQuickScanCommand { get; }
+        public ICommand RunDefenderFullScanCommand { get; }
+        public ICommand RunWindowsMalwareScanCommand { get; }
+        public ICommand CancelDefenderFullScanCommand { get; }
 
         public bool CanRunWindowsUpdate => !_isWindowsUpdateRunning;
-        public bool IsBusy => _isDriverScanRunning || _isDriverInstallRunning || _isActionRunning;
+        public bool IsBusy => _isDriverScanRunning || _isDriverInstallRunning || _isActionRunning || _isSecurityScanRunning;
+        public bool IsSecurityScanRunning => _isSecurityScanRunning;
+        public bool IsDefenderFullScanRunning => _isDefenderFullScanRunning;
+        public bool CanCancelDefenderFullScan => _isDefenderFullScanRunning && _defenderFullScanCts is not null;
         public bool CanScanDrivers => !IsBusy;
         public bool CanInstallDrivers => DriversFoundCount > 0 && !IsBusy;
         public bool HasDriverUpdates => DriversFoundCount > 0;
@@ -78,6 +88,10 @@ namespace Virgil.App.ViewModels
             _driverUpdateService = new DriverUpdateService();
             _scanDriversCommand = new AsyncRelayCommand(_ => ScanDriversAsync(), _ => CanScanDrivers);
             _installDriversCommand = new AsyncRelayCommand(_ => InstallDriversAsync(), _ => CanInstallDrivers);
+            RunDefenderQuickScanCommand = new AsyncRelayCommand(_ => RunSecurityActionAsync("defender_quick_scan"), _ => !IsBusy);
+            RunDefenderFullScanCommand = new AsyncRelayCommand(_ => RunDefenderFullScanAsync(), _ => !IsBusy);
+            RunWindowsMalwareScanCommand = new AsyncRelayCommand(_ => RunSecurityActionAsync("windows_malware_scan"), _ => !IsBusy);
+            CancelDefenderFullScanCommand = new RelayCommand(_ => CancelDefenderFullScan(), _ => CanCancelDefenderFullScan);
             RefreshStartupRestoreState();
             InvokeActionCommand = new AsyncRelayCommand(async param =>
             {
@@ -209,6 +223,58 @@ namespace Virgil.App.ViewModels
             }
         }
 
+
+        private async Task RunSecurityActionAsync(string actionId)
+        {
+            if (IsBusy)
+            {
+                return;
+            }
+
+            _isSecurityScanRunning = true;
+            NotifyDriverStateChanged();
+            try
+            {
+                await RunActionAsync(actionId).ConfigureAwait(false);
+            }
+            finally
+            {
+                _isSecurityScanRunning = false;
+                NotifyDriverStateChanged();
+            }
+        }
+
+        private async Task RunDefenderFullScanAsync()
+        {
+            if (IsBusy)
+            {
+                return;
+            }
+
+            _defenderFullScanCts = new CancellationTokenSource();
+            _isSecurityScanRunning = true;
+            _isDefenderFullScanRunning = true;
+            NotifyDriverStateChanged();
+
+            try
+            {
+                await _runner("defender_full_scan", _defenderFullScanCts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                _defenderFullScanCts.Dispose();
+                _defenderFullScanCts = null;
+                _isDefenderFullScanRunning = false;
+                _isSecurityScanRunning = false;
+                NotifyDriverStateChanged();
+            }
+        }
+
+        private void CancelDefenderFullScan()
+        {
+            _defenderFullScanCts?.Cancel();
+        }
+
         private void UpdateDriverScanState(DriverUpdateResult result)
         {
             if (!result.Succeeded)
@@ -321,8 +387,30 @@ namespace Virgil.App.ViewModels
             OnPropertyChanged(nameof(HasDriverScanResult));
             OnPropertyChanged(nameof(CanOptimizeStartup));
             OnPropertyChanged(nameof(CanRestoreStartup));
+            OnPropertyChanged(nameof(IsSecurityScanRunning));
+            OnPropertyChanged(nameof(IsDefenderFullScanRunning));
+            OnPropertyChanged(nameof(CanCancelDefenderFullScan));
             _scanDriversCommand.RaiseCanExecuteChanged();
             _installDriversCommand.RaiseCanExecuteChanged();
+            if (RunDefenderQuickScanCommand is AsyncRelayCommand quickScanCommand)
+            {
+                quickScanCommand.RaiseCanExecuteChanged();
+            }
+
+            if (RunDefenderFullScanCommand is AsyncRelayCommand fullScanCommand)
+            {
+                fullScanCommand.RaiseCanExecuteChanged();
+            }
+
+            if (RunWindowsMalwareScanCommand is AsyncRelayCommand mrtScanCommand)
+            {
+                mrtScanCommand.RaiseCanExecuteChanged();
+            }
+
+            if (CancelDefenderFullScanCommand is RelayCommand cancelFullScanCommand)
+            {
+                cancelFullScanCommand.RaiseCanExecuteChanged();
+            }
         }
     }
 }

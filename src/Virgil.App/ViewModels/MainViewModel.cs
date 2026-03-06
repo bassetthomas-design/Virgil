@@ -627,6 +627,24 @@ namespace Virgil.App.ViewModels
                 return;
             }
 
+            if (string.Equals(actionId, "defender_quick_scan", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("Je lance une analyse rapide Defender.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "defender_full_scan", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("Je lance une analyse complète Defender. Cela peut prendre du temps.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "windows_malware_scan", StringComparison.OrdinalIgnoreCase))
+            {
+                _chat.PostSystemMessage("Je vérifie la présence de logiciels malveillants.", MessageType.Info, ChatKind.Info);
+                return;
+            }
+
             _chat.PostSystemMessage($"Je lance « {actionTitle} »…", MessageType.Info, ChatKind.Info);
         }
 
@@ -662,6 +680,15 @@ namespace Virgil.App.ViewModels
             if (string.Equals(actionId, "startup_restore", StringComparison.OrdinalIgnoreCase))
             {
                 _chat.PostSystemMessage(summary, messageType, ChatKind.Info);
+                return;
+            }
+
+            if (string.Equals(actionId, "defender_quick_scan", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(actionId, "defender_full_scan", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(actionId, "windows_malware_scan", StringComparison.OrdinalIgnoreCase))
+            {
+                var endMessage = result.Status == ActionResultStatus.Failed ? "Analyse terminée." : "Aucune menace détectée.";
+                _chat.PostSystemMessage(endMessage, messageType, ChatKind.Info);
                 return;
             }
 

@@ -46,5 +46,10 @@ public enum VirgilActionId
     RamboMode,                  // 27
     ThanosChatWipe,             // 28
     ReloadConfiguration,        // 29
-    RescanSystem                // 30
+    RescanSystem,               // 30
+
+    // Sécurité Windows
+    DefenderQuickScan,          // 31
+    DefenderFullScan,           // 32
+    WindowsMalwareScan          // 33
 }
