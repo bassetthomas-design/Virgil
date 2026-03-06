@@ -7,6 +7,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Collections.Specialized;
+using System.Windows.Threading;
 using Virgil.App.ViewModels;
 
 namespace Virgil.App.Views
@@ -14,12 +16,26 @@ namespace Virgil.App.Views
     public partial class ChatView : UserControl
     {
         private readonly Random _snapRandom = new();
+        private const double AutoScrollThresholdPx = 40;
         private ChatViewModel? _viewModel;
+        private bool _isNearBottom = true;
 
         public ChatView()
         {
             InitializeComponent();
             DataContextChanged += OnDataContextChanged;
+            Unloaded += OnUnloaded;
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel is null)
+            {
+                return;
+            }
+
+            _viewModel.SnapRequested -= OnSnapRequestedAsync;
+            _viewModel.Messages.CollectionChanged -= OnMessagesCollectionChanged;
         }
 
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -27,6 +43,7 @@ namespace Virgil.App.Views
             if (_viewModel is not null)
             {
                 _viewModel.SnapRequested -= OnSnapRequestedAsync;
+                _viewModel.Messages.CollectionChanged -= OnMessagesCollectionChanged;
             }
 
             _viewModel = DataContext as ChatViewModel;
@@ -34,7 +51,44 @@ namespace Virgil.App.Views
             if (_viewModel is not null)
             {
                 _viewModel.SnapRequested += OnSnapRequestedAsync;
+                _viewModel.Messages.CollectionChanged += OnMessagesCollectionChanged;
+                _isNearBottom = IsNearBottom();
             }
+        }
+
+        private void OnChatScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            _isNearBottom = IsNearBottom();
+        }
+
+        private void OnMessagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action != NotifyCollectionChangedAction.Add || !_isNearBottom)
+            {
+                return;
+            }
+
+            _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            {
+                if (ChatScroll is null)
+                {
+                    return;
+                }
+
+                ChatScroll.UpdateLayout();
+                ChatScroll.ScrollToEnd();
+                _isNearBottom = true;
+            }));
+        }
+
+        private bool IsNearBottom()
+        {
+            if (ChatScroll is null)
+            {
+                return true;
+            }
+
+            return ChatScroll.ScrollableHeight - ChatScroll.VerticalOffset <= AutoScrollThresholdPx;
         }
 
         private void OnInputPreviewKeyDown(object sender, KeyEventArgs e)
