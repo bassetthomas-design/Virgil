@@ -19,6 +19,10 @@ public sealed record RamboResult(
     int OrphanFoldersRemoved,
     double StandbyMemoryFreedBytes,
     int HeavyProcessesClosed,
+    int SkippedItems,
+    int FailedSteps,
+    bool AutoContinueModeUsed,
+    List<string> ErrorLogs,
     List<string> DiskInsights,
     List<string> StartupInsights,
     List<string> RamInsights,
@@ -34,6 +38,10 @@ public sealed record RamboResult(
             0,
             0,
             0,
+            0,
+            0,
+            false,
+            new List<string>(),
             new List<string>(),
             new List<string>(),
             new List<string>(),
@@ -52,17 +60,20 @@ public sealed class RamboModeService
     private readonly IStartupAnalyzer _startupAnalyzer;
     private readonly PerformanceService.IStandbyMemoryReleaser _standbyReleaser;
     private readonly ISystemCommandRunner _commandRunner;
+    private readonly IConfirmationPrompt? _confirmationPrompt;
 
     public RamboModeService(
         BrowserCleanupService? browserCleanup = null,
         IStartupAnalyzer? startupAnalyzer = null,
         PerformanceService.IStandbyMemoryReleaser? standbyReleaser = null,
-        ISystemCommandRunner? commandRunner = null)
+        ISystemCommandRunner? commandRunner = null,
+        IConfirmationPrompt? confirmationPrompt = null)
     {
         _browserCleanup = browserCleanup ?? new BrowserCleanupService();
         _startupAnalyzer = startupAnalyzer ?? new StartupAnalyzer();
         _standbyReleaser = standbyReleaser ?? new NullStandbyReleaser();
         _commandRunner = commandRunner ?? new SystemCommandRunner();
+        _confirmationPrompt = confirmationPrompt;
     }
 
     public async Task<RamboResult> RunAsync(CancellationToken ct)
@@ -76,6 +87,7 @@ public sealed class RamboModeService
         var diskInsights = new List<string>();
         var startupInsights = new List<string>();
         var ramInsights = new List<string>();
+        var errorLogs = new List<string>();
 
         var tempFreed = 0d;
         var browserFreed = 0d;
@@ -83,58 +95,92 @@ public sealed class RamboModeService
         var orphanRemoved = 0;
         var standbyFreed = 0d;
         var heavyClosed = 0;
+        var skippedItems = 0;
+        var failedSteps = 0;
+        var autoContinueErrors = false;
 
         try
         {
             ct.ThrowIfCancellationRequested();
 
-            // Phase 1 - baseline + insights
-            CollectBaseline(diagnostics);
-            CollectDiskInsights(diskInsights);
-            CollectStartupInsights(startupInsights);
-            CollectRamInsights(ramInsights);
+            await ExecuteStepAsync("CollectBaseline", "système local", () =>
+            {
+                CollectBaseline(diagnostics);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CollectDiskInsights", "stockage utilisateur", () =>
+            {
+                CollectDiskInsights(diskInsights);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CollectStartupInsights", "démarrage", () =>
+            {
+                CollectStartupInsights(startupInsights);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CollectRamInsights", "processus mémoire", () =>
+            {
+                CollectRamInsights(ramInsights);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 2 - temp cleanup
-            tempFreed += await CleanupTempAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CleanupTemp", "fichiers temporaires", async () =>
+            {
+                tempFreed += await CleanupTempAsync(ct).ConfigureAwait(false);
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 3 - windows cache cleanup
-            tempFreed += await CleanupWindowsCachesAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CleanupWindowsCaches", "caches Windows", async () =>
+            {
+                tempFreed += await CleanupWindowsCachesAsync(ct).ConfigureAwait(false);
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 4 - Windows update cache cleanup
-            await CleanupWindowsUpdateCacheAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CleanupWindowsUpdateCache", "cache Windows Update", () => CleanupWindowsUpdateCacheAsync(ct), OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 5 - browser cleanup
-            var browserResult = await _browserCleanup.CleanAsync(
-                new BrowserCleanupOptions
-                {
-                    Cache = true,
-                    Cookies = false,
-                    History = false,
-                    Downloads = false,
-                    Sessions = false,
-                    SiteData = false,
-                    Autofill = false,
-                },
-                progress: null,
-                ct).ConfigureAwait(false);
-            browserFreed += browserResult.FreedBytes;
+            await ExecuteStepAsync("BrowserCleanup", "cache navigateur", async () =>
+            {
+                var browserResult = await _browserCleanup.CleanAsync(
+                    new BrowserCleanupOptions
+                    {
+                        Cache = true,
+                        Cookies = false,
+                        History = false,
+                        Downloads = false,
+                        Sessions = false,
+                        SiteData = false,
+                        Autofill = false,
+                    },
+                    progress: null,
+                    ct).ConfigureAwait(false);
+                browserFreed += browserResult.FreedBytes;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 6
-            emptyRemoved += RemoveEmptyFolders();
+            await ExecuteStepAsync("RemoveEmptyFolders", "dossiers vides", () =>
+            {
+                emptyRemoved += RemoveEmptyFolders();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 7
-            orphanRemoved += RemoveOrphanedResidues();
+            await ExecuteStepAsync("RemoveOrphanedResidues", "résidus applicatifs", () =>
+            {
+                orphanRemoved += RemoveOrphanedResidues();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 8
-            standbyFreed += OptimizeMemory();
+            await ExecuteStepAsync("OptimizeMemory", "optimisation mémoire", () =>
+            {
+                standbyFreed += OptimizeMemory();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 9
-            heavyClosed += CleanupHeavyBackgroundProcesses();
+            await ExecuteStepAsync("CleanupHeavyBackgroundProcesses", "processus lourds", () =>
+            {
+                heavyClosed += CleanupHeavyBackgroundProcesses();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 10
-            await SystemRefreshAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("SystemRefresh", "rafraîchissement système", () => SystemRefreshAsync(ct), OnErrorAsync, ct).ConfigureAwait(false);
 
-            var summary = BuildSummary(tempFreed, browserFreed, emptyRemoved, orphanRemoved, standbyFreed, heavyClosed);
+            var summary = BuildSummary(tempFreed, browserFreed, emptyRemoved, orphanRemoved, standbyFreed, heavyClosed, skippedItems, failedSteps, autoContinueErrors);
             return new RamboResult(
                 true,
                 tempFreed,
@@ -143,11 +189,19 @@ public sealed class RamboModeService
                 orphanRemoved,
                 standbyFreed,
                 heavyClosed,
+                skippedItems,
+                failedSteps,
+                autoContinueErrors,
+                errorLogs,
                 diskInsights,
                 startupInsights,
                 ramInsights,
                 summary,
                 null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -160,19 +214,98 @@ public sealed class RamboModeService
                 orphanRemoved,
                 standbyFreed,
                 heavyClosed,
+                skippedItems,
+                failedSteps,
+                autoContinueErrors,
+                errorLogs,
                 diskInsights,
                 startupInsights,
                 ramInsights,
                 "Mode RAMBO: échec partiel.",
                 ex.Message);
         }
+
+        async Task<bool> OnErrorAsync(string stepName, string resource, Exception ex, CancellationToken token)
+        {
+            failedSteps++;
+
+            if (autoContinueErrors)
+            {
+                skippedItems++;
+                AppendErrorLog(stepName, ex, resource, RamboErrorDecision.Continue, errorLogs);
+                return true;
+            }
+
+            var friendlyMessage = BuildFriendlyErrorMessage(ex);
+            var decision = _confirmationPrompt is null
+                ? new RamboErrorDialogResult { Decision = RamboErrorDecision.Stop, AutoContinueSimilarErrors = false }
+                : await _confirmationPrompt.AskRamboErrorDecisionAsync(friendlyMessage, token).ConfigureAwait(false);
+
+            autoContinueErrors = autoContinueErrors || decision.AutoContinueSimilarErrors;
+            AppendErrorLog(stepName, ex, resource, decision.Decision, errorLogs);
+
+            if (decision.Decision == RamboErrorDecision.Continue)
+            {
+                skippedItems++;
+                return true;
+            }
+
+            throw new InvalidOperationException($"Exécution RAMBO arrêtée par l'utilisateur ({stepName}).", ex);
+        }
     }
 
-    private static string BuildSummary(double tempFreed, double browserFreed, int emptyRemoved, int orphanRemoved, double standbyFreed, int heavyClosed)
+    private static string BuildSummary(double tempFreed, double browserFreed, int emptyRemoved, int orphanRemoved, double standbyFreed, int heavyClosed, int skippedItems, int failedSteps, bool autoContinueUsed)
     {
         var totalGo = (tempFreed + browserFreed + standbyFreed) / (1024d * 1024d * 1024d);
         var folders = emptyRemoved + orphanRemoved;
-        return string.Create(CultureInfo.InvariantCulture, $"Mode RAMBO terminé. Résumé: {totalGo:F2} Go nettoyés, {heavyClosed} processus fermés, {folders} dossiers supprimés.");
+        var autoContinueLabel = autoContinueUsed ? "oui" : "non";
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Mode RAMBO terminé
+• {totalGo:F1} Go nettoyés
+• {heavyClosed} processus fermés
+• {skippedItems} éléments ignorés (erreurs mineures)
+• {failedSteps} étapes en échec
+• Auto-continue: {autoContinueLabel}
+• {folders} dossiers supprimés");
+    }
+
+    private static async Task ExecuteStepAsync(string stepName, string resource, Func<Task> action, Func<string, string, Exception, CancellationToken, Task<bool>> errorHandler, CancellationToken ct)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var shouldContinue = await errorHandler(stepName, resource, ex, ct).ConfigureAwait(false);
+            if (!shouldContinue)
+            {
+                throw;
+            }
+        }
+    }
+
+    private static string BuildFriendlyErrorMessage(Exception ex)
+    {
+        return ex switch
+        {
+            UnauthorizedAccessException => "Accès refusé sur un élément système. Ce composant peut être protégé.",
+            IOException => "Un fichier est actuellement utilisé par une autre application.",
+            TimeoutException => "Le service a mis trop de temps à répondre.",
+            _ => "L'opération n'a pas pu se terminer correctement."
+        };
+    }
+
+    private static void AppendErrorLog(string stepName, Exception ex, string resource, RamboErrorDecision decision, List<string> errorLogs)
+    {
+        var line = string.Create(
+            CultureInfo.InvariantCulture,
+            $"StepName={stepName}; ExceptionType={ex.GetType().Name}; Resource={resource}; UserDecision={decision}");
+        errorLogs.Add(line);
     }
 
     private static void CollectBaseline(List<string> diagnostics)
