@@ -94,6 +94,15 @@ public sealed class DryRunServiceProbes
         public Task<ActionExecutionResult> InstallDriversAsync(CancellationToken ct = default)
             => CompleteAsync("Installation drivers (dry-run)");
 
+        public Task<ActionExecutionResult> RunDefenderQuickScanAsync(CancellationToken ct = default)
+            => CompleteAsync("Scan rapide Defender (dry-run)");
+
+        public Task<ActionExecutionResult> RunDefenderFullScanAsync(CancellationToken ct = default)
+            => CompleteAsync("Scan complet Defender (dry-run)");
+
+        public Task<ActionExecutionResult> RunWindowsMalwareScanAsync(CancellationToken ct = default)
+            => CompleteAsync("Analyse malware Windows MRT (dry-run)");
+
         private Task<ActionExecutionResult> CompleteAsync(string label)
         {
             InvocationCount++;
