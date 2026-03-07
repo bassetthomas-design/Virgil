@@ -140,4 +140,16 @@ public sealed class SpecialService : ISpecialService
 
         return sb.ToString().TrimEnd();
     }
+
+
+    private sealed class NoopProgressController : IActionProgressController
+    {
+        public void StartIndeterminate()
+        {
+        }
+
+        public void Complete()
+        {
+        }
+    }
 }
