@@ -259,14 +259,9 @@ public sealed class RamboModeService
         var totalGo = (tempFreed + browserFreed + standbyFreed) / (1024d * 1024d * 1024d);
         var folders = emptyRemoved + orphanRemoved;
         var autoContinueLabel = autoContinueUsed ? "oui" : "non";
-        return string.Create(CultureInfo.InvariantCulture,
-            $"Mode RAMBO terminé
-• {totalGo:F1} Go nettoyés
-• {heavyClosed} processus fermés
-• {skippedItems} éléments ignorés (erreurs mineures)
-• {failedSteps} étapes en échec
-• Auto-continue: {autoContinueLabel}
-• {folders} dossiers supprimés");
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"Mode RAMBO terminé\n• {totalGo:F1} Go nettoyés\n• {heavyClosed} processus fermés\n• {skippedItems} éléments ignorés (erreurs mineures)\n• {failedSteps} étapes en échec\n• Auto-continue: {autoContinueLabel}\n• {folders} dossiers supprimés");
     }
 
     private static async Task ExecuteStepAsync(string stepName, string resource, Func<Task> action, Func<string, string, Exception, CancellationToken, Task<bool>> errorHandler, CancellationToken ct)
