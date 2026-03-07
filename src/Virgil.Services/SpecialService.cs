@@ -107,10 +107,10 @@ public sealed class SpecialService : ISpecialService
         var sb = new StringBuilder();
         sb.AppendLine($"TempFilesFreedBytes={result.TempFilesFreedBytes.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine($"BrowserCacheFreedBytes={result.BrowserCacheFreedBytes.ToString(CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"EmptyFoldersRemoved={result.EmptyFoldersRemoved}");
-        sb.AppendLine($"OrphanFoldersRemoved={result.OrphanFoldersRemoved}");
+        sb.AppendLine($"FilesDeleted={result.FilesDeleted}");
+        sb.AppendLine($"FoldersDeleted={result.FoldersDeleted}");
         sb.AppendLine($"StandbyMemoryFreedBytes={result.StandbyMemoryFreedBytes.ToString(CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"HeavyProcessesClosed={result.HeavyProcessesClosed}");
+        sb.AppendLine($"ProcessesClosed={result.ProcessesClosed}");
         sb.AppendLine($"SkippedItems={result.SkippedItems}");
         sb.AppendLine($"FailedSteps={result.FailedSteps}");
         sb.AppendLine($"AutoContinueModeUsed={result.AutoContinueModeUsed}");
