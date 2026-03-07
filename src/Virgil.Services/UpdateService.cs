@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -123,6 +124,113 @@ public sealed class UpdateService : IUpdateService
         {
             return ActionExecutionResult.Failure("Installation des pilotes", $"Erreur pilotes: {ex.Message}");
         }
+    }
+
+
+    public Task<ActionExecutionResult> RunDefenderQuickScanAsync(CancellationToken ct = default)
+        => RunPowerShellScanAsync(
+            "Scan rapide Defender",
+            "Start-MpScan -ScanType QuickScan",
+            "Aucune menace détectée.",
+            ct);
+
+    public Task<ActionExecutionResult> RunDefenderFullScanAsync(CancellationToken ct = default)
+        => RunPowerShellScanAsync(
+            "Scan complet Defender",
+            "Start-MpScan -ScanType FullScan",
+            "Analyse terminée.",
+            ct);
+
+    public async Task<ActionExecutionResult> RunWindowsMalwareScanAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var command = "/Q";
+            var result = await RunProcessAsync("mrt.exe", command, ct).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                var details = string.IsNullOrWhiteSpace(result.Output) ? "Sortie indisponible." : result.Output.Trim();
+                return ActionExecutionResult.Failure("Analyse malware Windows (MRT)", $"Analyse MRT échouée: {details}");
+            }
+
+            return ActionExecutionResult.Ok("Analyse malware Windows (MRT)", "Analyse terminée.");
+        }
+        catch (OperationCanceledException)
+        {
+            return ActionExecutionResult.Skipped("Analyse malware Windows (MRT)", "Analyse annulée.");
+        }
+        catch (Exception ex)
+        {
+            return ActionExecutionResult.Failure("Analyse malware Windows (MRT)", $"Erreur MRT: {ex.Message}");
+        }
+    }
+
+    private static async Task<ActionExecutionResult> RunPowerShellScanAsync(
+        string title,
+        string script,
+        string successSummary,
+        CancellationToken ct)
+    {
+        try
+        {
+            var args = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{script}\"";
+            var result = await RunProcessAsync("powershell.exe", args, ct).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                var details = string.IsNullOrWhiteSpace(result.Output) ? "Sortie indisponible." : result.Output.Trim();
+                return ActionExecutionResult.Failure(title, $"{title}: échec ({details})");
+            }
+
+            return ActionExecutionResult.Ok(title, successSummary);
+        }
+        catch (OperationCanceledException)
+        {
+            return ActionExecutionResult.Skipped(title, "Analyse annulée.");
+        }
+        catch (Exception ex)
+        {
+            return ActionExecutionResult.Failure(title, $"Erreur scan sécurité: {ex.Message}");
+        }
+    }
+
+    private static async Task<(bool Success, string Output)> RunProcessAsync(string fileName, string arguments, CancellationToken ct)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
+            }
+        };
+
+        process.Start();
+
+        using var registration = ct.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+        });
+
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+        output += await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+
+        return (process.ExitCode == 0, output);
     }
 
     private static string BuildDriverDebugInfo(DriverUpdateResult result)

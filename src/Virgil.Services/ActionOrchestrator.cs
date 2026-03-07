@@ -119,6 +119,15 @@ public sealed class ActionOrchestrator : IActionOrchestrator
             case VirgilActionId.DriverInstall:
                 return await ExecuteAsync("Installation des pilotes", () => _update.InstallDriversAsync(ct), ct, notifyChat: false);
 
+            case VirgilActionId.DefenderQuickScan:
+                return await ExecuteAsync("Scan rapide Defender", () => _update.RunDefenderQuickScanAsync(ct), ct, notifyChat: false);
+
+            case VirgilActionId.DefenderFullScan:
+                return await ExecuteAsync("Scan complet Defender", () => _update.RunDefenderFullScanAsync(ct), ct, notifyChat: false);
+
+            case VirgilActionId.WindowsMalwareScan:
+                return await ExecuteAsync("Analyse malware Windows (MRT)", () => _update.RunWindowsMalwareScanAsync(ct), ct, notifyChat: false);
+
             case VirgilActionId.UpdateSoftwares:
                 return await ExecuteAsync("Mise à jour des logiciels", () => _update.UpdateAppsAsync(ct), ct);
 

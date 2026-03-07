@@ -30,6 +30,25 @@
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
 
+            <TextBlock Text="Sécurité Windows" Margin="0,4,0,4" FontWeight="Bold"/>
+            <Button Content="Scan rapide" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanScanDrivers}"
+                    Command="{Binding RunDefenderQuickScanCommand}"/>
+            <Button Content="Scan complet" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanScanDrivers}"
+                    Command="{Binding RunDefenderFullScanCommand}"/>
+            <Button Content="Analyse malware" Margin="0,0,0,4"
+                    IsEnabled="{Binding CanScanDrivers}"
+                    Command="{Binding RunWindowsMalwareScanCommand}"/>
+            <Button Content="Annuler scan complet" Margin="0,0,0,4"
+                    Visibility="{Binding IsDefenderFullScanRunning, Converter={StaticResource BoolToVisibility}}"
+                    IsEnabled="{Binding CanCancelDefenderFullScan}"
+                    Command="{Binding CancelDefenderFullScanCommand}"/>
+            <ProgressBar Height="4"
+                         Margin="0,0,0,8"
+                         IsIndeterminate="{Binding IsSecurityScanRunning}"
+                         Visibility="{Binding IsSecurityScanRunning, Converter={StaticResource BoolToVisibility}}"/>
+
             <!-- Maintenance avancée -->
             <TextBlock Text="Maintenance avancée" Margin="0,4,0,4" FontWeight="Bold"/>
             <Button Content="Nettoyage disque avancé" Tag="deep_disk_clean" Margin="0,0,0,4"

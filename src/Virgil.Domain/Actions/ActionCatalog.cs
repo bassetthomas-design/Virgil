@@ -48,6 +48,9 @@ public static class ActionCatalog
         ["windows_update"] = new(ActionKey: "windows_update", VirgilActionId.RunWindowsUpdate, "Mise à jour Windows", IsDestructive: true, IsImplemented: true, Service: "WindowsUpdateService"),
         ["drivers_scan"] = new(ActionKey: "drivers_scan", VirgilActionId.DriverScan, "Vérifier les drivers", IsDestructive: false, IsImplemented: true, Service: "UpdateService"),
         ["drivers_install"] = new(ActionKey: "drivers_install", VirgilActionId.DriverInstall, "Installer les drivers", IsDestructive: false, IsImplemented: true, Service: "UpdateService"),
+        ["defender_quick_scan"] = new(ActionKey: "defender_quick_scan", VirgilActionId.DefenderQuickScan, "Scan rapide Defender", IsDestructive: false, IsImplemented: true, Service: "SecurityService"),
+        ["defender_full_scan"] = new(ActionKey: "defender_full_scan", VirgilActionId.DefenderFullScan, "Scan complet Defender", IsDestructive: false, IsImplemented: true, Service: "SecurityService"),
+        ["windows_malware_scan"] = new(ActionKey: "windows_malware_scan", VirgilActionId.WindowsMalwareScan, "Analyse malware Windows (MRT)", IsDestructive: false, IsImplemented: true, Service: "SecurityService"),
 
         // Spéciaux
         ["rambo_repair"] = new(ActionKey: "rambo_repair", VirgilActionId.RamboMode, "Mode RAMBO", IsDestructive: true, IsImplemented: true, Service: "SpecialService"),

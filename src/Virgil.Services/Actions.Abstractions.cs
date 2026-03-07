@@ -25,6 +25,9 @@ public interface IUpdateService
     Task<ActionExecutionResult> RunWindowsUpdateAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> ScanDriversAsync(CancellationToken ct = default);
     Task<ActionExecutionResult> InstallDriversAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunDefenderQuickScanAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunDefenderFullScanAsync(CancellationToken ct = default);
+    Task<ActionExecutionResult> RunWindowsMalwareScanAsync(CancellationToken ct = default);
 }
 
 public interface INetworkService
