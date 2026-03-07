@@ -60,7 +60,7 @@ namespace Virgil.App.Views
                 new NetworkService(),
                 new PerformanceService(sessionConfirmation: new UiSessionConfirmation(_confirmationService)),
                 new DiagnosticService(),
-                new SpecialService(reloader, confirmationPrompt, uiChat),
+                new SpecialService(reloader, confirmationPrompt, uiChat, progress: new ActionProgressControllerAdapter(ActionProgressService.Instance)),
                 uiChat);
             var chatEngine = new RuleBasedChatEngine();
             var chatBridge = new ChatActionBridge(_orchestrator, uiChat, new UiConfirmationProvider(_confirmationService));

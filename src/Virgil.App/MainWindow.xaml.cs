@@ -55,7 +55,7 @@ namespace Virgil.App
                 new NetworkService(),
                 new PerformanceService(sessionConfirmation: new UiSessionConfirmation(_confirmationService)),
                 new DiagnosticService(),
-                new SpecialService(reloader, confirmationPrompt, uiChat),
+                new SpecialService(reloader, confirmationPrompt, uiChat, progress: new ActionProgressControllerAdapter(ActionProgressService.Instance)),
                 uiChat);
             var assistantProvider = assistantProviderFactory.CreateProvider();
             var assistantService = assistantProvider is null ? null : new AssistantService(assistantProvider);

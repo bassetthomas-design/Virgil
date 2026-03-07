@@ -133,7 +133,7 @@
 
             <!-- Spéciaux -->
             <TextBlock Text="Spéciaux" Margin="0,4,0,4" FontWeight="Bold"/>
-            <Button Content="Mode RAMBO (réparer Explorer &amp; cache)" Tag="rambo_repair" Margin="0,0,0,4"
+            <Button Content="Mode RAMBO" Tag="rambo_repair" Margin="0,0,0,4"
                     Command="{Binding InvokeActionCommand}"
                     CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Tag}"/>
             <Button Content="Effet Thanos (effacer le chat)" Tag="chat_thanos" Margin="0,0,0,4"
