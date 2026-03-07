@@ -73,3 +73,10 @@ public interface IChatService
 
     Task ThanosWipeAsync(bool preservePinned = true, CancellationToken ct = default);
 }
+
+
+public interface IActionProgressController
+{
+    void StartIndeterminate();
+    void Complete();
+}

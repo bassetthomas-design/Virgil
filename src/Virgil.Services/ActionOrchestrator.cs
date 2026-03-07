@@ -133,7 +133,7 @@ public sealed class ActionOrchestrator : IActionOrchestrator
 
             // Spéciaux
             case VirgilActionId.RamboMode:
-                return await ExecuteAsync("Mode RAMBO", () => _special.RamboModeAsync(ct), ct);
+                return await ExecuteAsync("Mode RAMBO", () => _special.RamboModeAsync(ct), ct, notifyChat: false);
 
             case VirgilActionId.ThanosChatWipe:
                 await _chat.ThanosWipeAsync(preservePinned: false, ct);

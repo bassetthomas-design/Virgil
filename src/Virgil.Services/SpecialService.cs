@@ -1,31 +1,69 @@
 using System;
+using System.Globalization;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Virgil.Services.Abstractions;
 
 namespace Virgil.Services;
 
-/// <summary>
-/// Stub de ISpecialService – Rambo mode, reload config, etc. viendront ensuite.
-/// </summary>
 public sealed class SpecialService : ISpecialService
 {
     private readonly IConfigurationReloader _reloader;
     private readonly IConfirmationPrompt _confirmation;
     private readonly IChatService _chat;
+    private readonly RamboModeService _rambo;
+    private readonly IActionProgressController _progress;
 
     public SpecialService(
         IConfigurationReloader reloader,
         IConfirmationPrompt confirmation,
-        IChatService chat)
+        IChatService chat,
+        RamboModeService? rambo = null,
+        IActionProgressController? progress = null)
     {
         _reloader = reloader ?? throw new ArgumentNullException(nameof(reloader));
         _confirmation = confirmation ?? throw new ArgumentNullException(nameof(confirmation));
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
+        _rambo = rambo ?? new RamboModeService();
+        _progress = progress ?? new NoopProgressController();
     }
 
-    public Task<ActionExecutionResult> RamboModeAsync(CancellationToken ct = default)
-        => Task.FromResult(ActionExecutionResult.NotImplemented("Mode RAMBO", "Mode Rambo non encore implémenté."));
+    public async Task<ActionExecutionResult> RamboModeAsync(CancellationToken ct = default)
+    {
+        var confirmed = await _confirmation.ConfirmRamboAsync(ct).ConfigureAwait(false);
+        if (!confirmed)
+        {
+            return ActionExecutionResult.Skipped("Mode RAMBO", "Mode RAMBO annulé par l'utilisateur.");
+        }
+
+        await _chat.InfoAsync("Mode RAMBO activé. Je lance un nettoyage profond et une optimisation du système.", ct).ConfigureAwait(false);
+        _progress.StartIndeterminate();
+        try
+        {
+            var result = await _rambo.RunAsync(ct).ConfigureAwait(false);
+            if (!result.Succeeded)
+            {
+                var reason = string.IsNullOrWhiteSpace(result.FailureReason) ? "raison inconnue" : result.FailureReason;
+                var shortFailure = $"Mode RAMBO: échec partiel ({reason}).";
+                await _chat.WarnAsync(shortFailure, ct).ConfigureAwait(false);
+                return ActionExecutionResult.Partial("Mode RAMBO", shortFailure, debugInfo: BuildDebugInfo(result));
+            }
+
+            await _chat.InfoAsync(result.Summary, ct).ConfigureAwait(false);
+            return ActionExecutionResult.Ok("Mode RAMBO terminé", result.Summary, debugInfo: BuildDebugInfo(result));
+        }
+        catch (Exception ex)
+        {
+            var shortFailure = $"Mode RAMBO: échec partiel ({ex.Message}).";
+            await _chat.WarnAsync(shortFailure, ct).ConfigureAwait(false);
+            return ActionExecutionResult.Failure("Mode RAMBO", shortFailure);
+        }
+        finally
+        {
+            _progress.Complete();
+        }
+    }
 
     public async Task<ActionExecutionResult> ReloadConfigurationAsync(CancellationToken ct = default)
     {
@@ -61,6 +99,57 @@ public sealed class SpecialService : ISpecialService
             var message = $"Résultat: Échec — {ex.Message}";
             await _chat.WarnAsync(message, ct).ConfigureAwait(false);
             return ActionExecutionResult.Failure(message);
+        }
+    }
+
+    private static string BuildDebugInfo(RamboResult result)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"TempFilesFreedBytes={result.TempFilesFreedBytes.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"BrowserCacheFreedBytes={result.BrowserCacheFreedBytes.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"EmptyFoldersRemoved={result.EmptyFoldersRemoved}");
+        sb.AppendLine($"OrphanFoldersRemoved={result.OrphanFoldersRemoved}");
+        sb.AppendLine($"StandbyMemoryFreedBytes={result.StandbyMemoryFreedBytes.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"HeavyProcessesClosed={result.HeavyProcessesClosed}");
+        if (result.DiskInsights.Count > 0)
+        {
+            sb.AppendLine("DiskInsights:");
+            foreach (var x in result.DiskInsights)
+            {
+                sb.AppendLine($"- {x}");
+            }
+        }
+
+        if (result.StartupInsights.Count > 0)
+        {
+            sb.AppendLine("StartupInsights:");
+            foreach (var x in result.StartupInsights)
+            {
+                sb.AppendLine($"- {x}");
+            }
+        }
+
+        if (result.RamInsights.Count > 0)
+        {
+            sb.AppendLine("RamInsights:");
+            foreach (var x in result.RamInsights)
+            {
+                sb.AppendLine($"- {x}");
+            }
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+
+    private sealed class NoopProgressController : IActionProgressController
+    {
+        public void StartIndeterminate()
+        {
+        }
+
+        public void Complete()
+        {
         }
     }
 }
