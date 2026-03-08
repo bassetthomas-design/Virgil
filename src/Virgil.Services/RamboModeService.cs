@@ -148,8 +148,7 @@ public sealed class RamboModeService
 
         try
         {
-            await NarrateAsync("Mode RAMBO activé.
-Bon… c’est pas ma guerre, mais quelqu’un doit nettoyer ce système.", ct).ConfigureAwait(false);
+            await NarrateAsync("Mode RAMBO activé.\nBon… c’est pas ma guerre, mais quelqu’un doit nettoyer ce système.", ct).ConfigureAwait(false);
 
             await ExecuteStepAsync("DiskInsights", "autopsie disque", () =>
             {
@@ -244,8 +243,7 @@ Bon… c’est pas ma guerre, mais quelqu’un doit nettoyer ce système.", ct).
                 foldersDeleted += metrics.FoldersDeleted;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            await NarrateAsync("Caches navigateurs détectés.
-Je m’en occupe.", ct).ConfigureAwait(false);
+            await NarrateAsync("Caches navigateurs détectés.\nJe m’en occupe.", ct).ConfigureAwait(false);
             await ExecuteStepAsync("BrowserCleanup", "cache navigateur", async () =>
             {
                 var result = await _browserCleanup.CleanAsync(new BrowserCleanupOptions { Cache = true }, null, ct).ConfigureAwait(false);
@@ -291,8 +289,7 @@ Je m’en occupe.", ct).ConfigureAwait(false);
                 await RunAdvancedActionWithConfirmationAsync("Suppression Windows.old", "cmd.exe", "/c rd /s /q C:\\Windows.old", "la suppression de Windows.old retire la capacité de rollback.", ct);
             }
 
-            await NarrateAsync("Mission accomplie.
-Le système est plus propre.", ct).ConfigureAwait(false);
+            await NarrateAsync("Mission accomplie.\nLe système est plus propre.", ct).ConfigureAwait(false);
 
             return new RamboResult
             {
