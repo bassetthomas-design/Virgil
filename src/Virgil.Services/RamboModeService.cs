@@ -4,66 +4,87 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Win32;
 using Virgil.Services.Startup;
 
 namespace Virgil.Services;
 
-public sealed record RamboResult(
-    bool Succeeded,
-    long TempFilesFreedBytes,
-    long BrowserCacheFreedBytes,
-    int FilesDeleted,
-    int FoldersDeleted,
-    int ProcessesClosed,
-    long StandbyMemoryFreedBytes,
-    int SkippedItems,
-    int FailedSteps,
-    bool AutoContinueModeUsed,
-    List<string> ErrorLogs,
-    List<string> DiskInsights,
-    List<string> StartupInsights,
-    List<string> RamInsights,
-    string Summary,
-    string? FailureReason)
+public sealed class InactiveFolderCandidate
 {
-    public static RamboResult Failed(string reason)
-        => new(
-            false,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            false,
-            new List<string>(),
-            new List<string>(),
-            new List<string>(),
-            new List<string>(),
-            "Mode RAMBO interrompu.",
-            reason);
+    public string Path { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public long SizeBytes { get; init; }
+    public DateTime LastUseUtc { get; init; }
+    public bool IsSelected { get; set; }
+}
+
+public sealed class DuplicateFileItem
+{
+    public string Path { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public long SizeBytes { get; init; }
+    public string Hash { get; init; } = string.Empty;
+    public bool IsSelected { get; set; }
+}
+
+public sealed class DuplicateGroup
+{
+    public List<DuplicateFileItem> Files { get; init; } = new();
+    public long SizeBytes { get; init; }
+    public int Count { get; init; }
+}
+
+public sealed class RamboResult
+{
+    public bool Succeeded { get; init; }
+    public long TempFilesFreedBytes { get; init; }
+    public long BrowserCacheFreedBytes { get; init; }
+    public long SystemCacheFreedBytes { get; init; }
+    public long DuplicateFilesPotentialBytes { get; init; }
+    public long InactiveFoldersPotentialBytes { get; init; }
+    public long StandbyMemoryFreedBytes { get; init; }
+    public int FilesDeleted { get; init; }
+    public int FoldersDeleted { get; init; }
+    public int EmptyFoldersDeleted { get; init; }
+    public int HeavyProcessesClosed { get; init; }
+    public int IgnoredItems { get; init; }
+    public int FailedSteps { get; init; }
+    public bool AutoContinueUsed { get; init; }
+    public List<string> DiskInsights { get; init; } = new();
+    public List<string> StartupInsights { get; init; } = new();
+    public List<string> RamInsights { get; init; } = new();
+    public List<InactiveFolderCandidate> InactiveFolders { get; init; } = new();
+    public List<DuplicateGroup> DuplicateGroups { get; init; } = new();
+    public string Summary { get; init; } = "Mode RAMBO terminé.";
+    public string? FailureReason { get; init; }
+    public List<string> ErrorLogs { get; init; } = new();
+
+    public static RamboResult Failed(string reason) => new()
+    {
+        Succeeded = false,
+        FailureReason = reason,
+        Summary = "Mode RAMBO interrompu."
+    };
 }
 
 public sealed class RamboModeService
 {
-    private static readonly string[] ProtectedVendors =
-    {
-        "microsoft", "windows", "nvidia", "amd", "intel", "realtek", "defender", "driver"
-    };
+    private static readonly string[] BrowserSafeSubFolders = ["Cache", "GPUCache", "Code Cache", "ShaderCache", "Crashpad", "Temp"];
+    private static readonly string[] GlobalProtectedZones =
+    [
+        @"C:\Program Files",
+        @"C:\Program Files (x86)",
+        @"C:\Windows\System32",
+        @"C:\Windows\WinSxS"
+    ];
 
     private readonly BrowserCleanupService _browserCleanup;
     private readonly IStartupAnalyzer _startupAnalyzer;
     private readonly PerformanceService.IStandbyMemoryReleaser _standbyReleaser;
     private readonly ISystemCommandRunner _commandRunner;
     private readonly IConfirmationPrompt? _confirmationPrompt;
-
-
-    private readonly record struct CleanupDeletionMetrics(long FreedBytes, int FilesDeleted);
 
     public RamboModeService(
         BrowserCleanupService? browserCleanup = null,
@@ -86,244 +107,698 @@ public sealed class RamboModeService
             return RamboResult.Failed("Mode disponible uniquement sous Windows.");
         }
 
-        var diagnostics = new List<string>();
         var diskInsights = new List<string>();
         var startupInsights = new List<string>();
         var ramInsights = new List<string>();
         var errorLogs = new List<string>();
+        var inactiveFolders = new List<InactiveFolderCandidate>();
+        var duplicateGroups = new List<DuplicateGroup>();
 
-        var tempFreedBytes = 0L;
-        var browserFreedBytes = 0L;
-        var foldersDeleted = 0;
-        var filesDeleted = 0;
-        var standbyFreedBytes = 0L;
-        var processesClosed = 0;
-        var ignoredItems = 0;
-        var failedSteps = 0;
-        var autoContinueErrors = false;
+        long tempFreed = 0;
+        long browserFreed = 0;
+        long systemFreed = 0;
+        long duplicatePotential = 0;
+        long inactivePotential = 0;
+        long standbyFreed = 0;
+        int filesDeleted = 0;
+        int foldersDeleted = 0;
+        int emptyFoldersDeleted = 0;
+        int heavyClosed = 0;
+        int ignored = 0;
+        int failedSteps = 0;
+        var autoContinue = false;
 
         try
         {
-            ct.ThrowIfCancellationRequested();
-
-            await ExecuteStepAsync("CollectBaseline", "système local", () =>
-            {
-                CollectBaseline(diagnostics);
-                return Task.CompletedTask;
-            }, OnErrorAsync, ct).ConfigureAwait(false);
-            await ExecuteStepAsync("CollectDiskInsights", "stockage utilisateur", () =>
+            await ExecuteStepAsync("DiskInsights", "insights disque", () =>
             {
                 CollectDiskInsights(diskInsights);
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
-            await ExecuteStepAsync("CollectStartupInsights", "démarrage", () =>
+
+            await ExecuteStepAsync("StartupInsights", "insights démarrage", () =>
             {
                 CollectStartupInsights(startupInsights);
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
-            await ExecuteStepAsync("CollectRamInsights", "processus mémoire", () =>
+
+            await ExecuteStepAsync("RamInsights", "insights RAM", () =>
             {
                 CollectRamInsights(ramInsights);
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            await ExecuteStepAsync("CleanupTemp", "fichiers temporaires", async () =>
+            await ExecuteStepAsync("InactiveFolders", "dossiers inactifs", () =>
             {
-                var metrics = await CleanupTempAsync(ct).ConfigureAwait(false);
-                tempFreedBytes += metrics.FreedBytes;
-                filesDeleted += metrics.FilesDeleted;
+                var scan = ScanInactiveFolders();
+                inactiveFolders.AddRange(scan);
+                inactivePotential = scan.Sum(x => x.SizeBytes);
+                return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            await ExecuteStepAsync("CleanupWindowsCaches", "caches Windows", async () =>
+            await ExecuteStepAsync("DuplicateFiles", "fichiers dupliqués", () =>
             {
-                var metrics = await CleanupWindowsCachesAsync(ct).ConfigureAwait(false);
-                tempFreedBytes += metrics.FreedBytes;
-                filesDeleted += metrics.FilesDeleted;
+                var groups = ScanDuplicateFiles();
+                duplicateGroups.AddRange(groups);
+                duplicatePotential = groups.Sum(g => g.SizeBytes * Math.Max(0, g.Count - 1));
+                return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            await ExecuteStepAsync("CleanupWindowsUpdateCache", "cache Windows Update", async () =>
+            await ExecuteStepAsync("AnalyzeOrphans", "résidus logiciels", () =>
             {
-                var metrics = await CleanupWindowsUpdateCacheAsync(ct).ConfigureAwait(false);
-                tempFreedBytes += metrics.FreedBytes;
+                AnalyzeOrphanResidues(diskInsights);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+
+            await ExecuteStepAsync("CleanupTemp", "temporaires", () =>
+            {
+                var metrics = CleanupFilesInRoots(GetTempCleanupRoots(), onlyOlderThan: DateTime.UtcNow.AddHours(-24), ct);
+                tempFreed += metrics.FreedBytes;
                 filesDeleted += metrics.FilesDeleted;
+                foldersDeleted += metrics.FoldersDeleted;
+                ignored += metrics.Ignored;
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+
+            await ExecuteStepAsync("CleanupSystemCache", "caches système", () =>
+            {
+                var metrics = CleanupFilesInRoots(GetSystemCacheRoots(), null, ct);
+                systemFreed += metrics.FreedBytes;
+                filesDeleted += metrics.FilesDeleted;
+                foldersDeleted += metrics.FoldersDeleted;
+                ignored += metrics.Ignored;
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+
+            await ExecuteStepAsync("WindowsUpdateCache", "cache windows update", async () =>
+            {
+                await RunWindowsUpdateCacheCleanupAsync(ct).ConfigureAwait(false);
+                var metrics = CleanupFilesInRoots(GetWindowsUpdateRoots(), null, ct);
+                systemFreed += metrics.FreedBytes;
+                filesDeleted += metrics.FilesDeleted;
+                foldersDeleted += metrics.FoldersDeleted;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
             await ExecuteStepAsync("BrowserCleanup", "cache navigateur", async () =>
             {
-                var browserResult = await _browserCleanup.CleanAsync(
-                    new BrowserCleanupOptions
-                    {
-                        Cache = true,
-                        Cookies = false,
-                        History = false,
-                        Downloads = false,
-                        Sessions = false,
-                        SiteData = false,
-                        Autofill = false,
-                    },
-                    progress: null,
-                    ct).ConfigureAwait(false);
-                browserFreedBytes += browserResult.FreedBytes;
+                var result = await _browserCleanup.CleanAsync(new BrowserCleanupOptions { Cache = true }, null, ct).ConfigureAwait(false);
+                browserFreed += result.FreedBytes;
+                filesDeleted += result.FilesDeleted;
+                ignored += result.LockedItems;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            await ExecuteStepAsync("RemoveEmptyFolders", "dossiers vides", () =>
+            await ExecuteStepAsync("EmptyFolders", "dossiers vides", () =>
             {
-                foldersDeleted += RemoveEmptyFolders();
+                emptyFoldersDeleted = RemoveEmptyFoldersInSafeRoots();
+                foldersDeleted += emptyFoldersDeleted;
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            await ExecuteStepAsync("RemoveOrphanedResidues", "résidus applicatifs", () =>
+            var runModerate = _confirmationPrompt is not null && await _confirmationPrompt
+                .ConfirmAsync("RAMBO souhaite effectuer des optimisations système supplémentaires. Continuer ?", ct)
+                .ConfigureAwait(false);
+
+            if (runModerate)
             {
-                foldersDeleted += RemoveOrphanedResidues();
-                return Task.CompletedTask;
-            }, OnErrorAsync, ct).ConfigureAwait(false);
+                await ExecuteStepAsync("ModerateActions", "optimisations système", async () =>
+                {
+                    standbyFreed += OptimizeStandbyAndWorkingSets();
+                    heavyClosed += CleanupHeavyBackgroundProcesses();
+                    await _commandRunner.RunAsync("ipconfig", "/flushdns", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+                    await _commandRunner.RunAsync("taskkill", "/f /im explorer.exe", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+                    await _commandRunner.RunAsync("cmd.exe", "/c start explorer.exe", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+                    _ = await _commandRunner.RunAsync("wsreset.exe", "", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+                }, OnErrorAsync, ct).ConfigureAwait(false);
+            }
 
-            await ExecuteStepAsync("OptimizeMemory", "optimisation mémoire", () =>
+            await RunAdvancedActionWithConfirmationAsync("cleanmgr /sagerun", "cleanmgr.exe", "/sagerun:1", "peut durer plusieurs minutes.", ct);
+            await RunAdvancedActionWithConfirmationAsync("DISM StartComponentCleanup", "dism.exe", "/Online /Cleanup-Image /StartComponentCleanup", "nettoie le magasin de composants.", ct);
+            await RunAdvancedActionWithConfirmationAsync("DISM ResetBase", "dism.exe", "/Online /Cleanup-Image /StartComponentCleanup /ResetBase", "ResetBase empêche la désinstallation de versions antérieures des composants.", ct);
+            await RunAdvancedActionWithConfirmationAsync("SFC", "sfc.exe", "/scannow", "sfc peut prendre du temps.", ct);
+            await RunAdvancedActionWithConfirmationAsync("Winsock reset", "netsh", "winsock reset", "le reset winsock modifie la pile réseau.", ct);
+
+            var windowsOld = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "..", "Windows.old");
+            if (Directory.Exists(Path.GetFullPath(windowsOld)))
             {
-                standbyFreedBytes += OptimizeMemory();
-                return Task.CompletedTask;
-            }, OnErrorAsync, ct).ConfigureAwait(false);
+                await RunAdvancedActionWithConfirmationAsync("Suppression Windows.old", "cmd.exe", "/c rd /s /q C:\\Windows.old", "la suppression de Windows.old retire la capacité de rollback.", ct);
+            }
 
-            await ExecuteStepAsync("CleanupHeavyBackgroundProcesses", "processus lourds", () =>
+            return new RamboResult
             {
-                processesClosed += CleanupHeavyBackgroundProcesses();
-                return Task.CompletedTask;
-            }, OnErrorAsync, ct).ConfigureAwait(false);
-
-            await ExecuteStepAsync("SystemRefresh", "rafraîchissement système", () => SystemRefreshAsync(ct), OnErrorAsync, ct).ConfigureAwait(false);
-
-            var summary = BuildSummary(tempFreedBytes, browserFreedBytes, filesDeleted, foldersDeleted, processesClosed, ignoredItems);
-            return new RamboResult(
-                true,
-                tempFreedBytes,
-                browserFreedBytes,
-                filesDeleted,
-                foldersDeleted,
-                processesClosed,
-                standbyFreedBytes,
-                ignoredItems,
-                failedSteps,
-                autoContinueErrors,
-                errorLogs,
-                diskInsights,
-                startupInsights,
-                ramInsights,
-                summary,
-                null);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
+                Succeeded = true,
+                TempFilesFreedBytes = tempFreed,
+                BrowserCacheFreedBytes = browserFreed,
+                SystemCacheFreedBytes = systemFreed,
+                DuplicateFilesPotentialBytes = duplicatePotential,
+                InactiveFoldersPotentialBytes = inactivePotential,
+                StandbyMemoryFreedBytes = standbyFreed,
+                FilesDeleted = filesDeleted,
+                FoldersDeleted = foldersDeleted,
+                EmptyFoldersDeleted = emptyFoldersDeleted,
+                HeavyProcessesClosed = heavyClosed,
+                IgnoredItems = ignored,
+                FailedSteps = failedSteps,
+                AutoContinueUsed = autoContinue,
+                DiskInsights = diskInsights,
+                StartupInsights = startupInsights,
+                RamInsights = ramInsights,
+                InactiveFolders = inactiveFolders,
+                DuplicateGroups = duplicateGroups,
+                Summary = BuildSummary(tempFreed, browserFreed, systemFreed, filesDeleted, foldersDeleted, emptyFoldersDeleted, heavyClosed, ignored, failedSteps),
+                ErrorLogs = errorLogs
+            };
         }
         catch (Exception ex)
         {
-            diagnostics.Add(ex.Message);
-            return new RamboResult(
-                false,
-                tempFreedBytes,
-                browserFreedBytes,
-                filesDeleted,
-                foldersDeleted,
-                processesClosed,
-                standbyFreedBytes,
-                ignoredItems,
-                failedSteps,
-                autoContinueErrors,
-                errorLogs,
-                diskInsights,
-                startupInsights,
-                ramInsights,
-                "Mode RAMBO: échec partiel.",
-                ex.Message);
+            return new RamboResult
+            {
+                Succeeded = false,
+                TempFilesFreedBytes = tempFreed,
+                BrowserCacheFreedBytes = browserFreed,
+                SystemCacheFreedBytes = systemFreed,
+                DuplicateFilesPotentialBytes = duplicatePotential,
+                InactiveFoldersPotentialBytes = inactivePotential,
+                StandbyMemoryFreedBytes = standbyFreed,
+                FilesDeleted = filesDeleted,
+                FoldersDeleted = foldersDeleted,
+                EmptyFoldersDeleted = emptyFoldersDeleted,
+                HeavyProcessesClosed = heavyClosed,
+                IgnoredItems = ignored,
+                FailedSteps = failedSteps,
+                AutoContinueUsed = autoContinue,
+                DiskInsights = diskInsights,
+                StartupInsights = startupInsights,
+                RamInsights = ramInsights,
+                InactiveFolders = inactiveFolders,
+                DuplicateGroups = duplicateGroups,
+                Summary = "Mode RAMBO: échec partiel.",
+                FailureReason = ex.Message,
+                ErrorLogs = errorLogs
+            };
         }
 
         async Task<bool> OnErrorAsync(string stepName, string resource, Exception ex, CancellationToken token)
         {
             failedSteps++;
-
-            if (autoContinueErrors)
+            if (autoContinue)
             {
-                ignoredItems++;
+                ignored++;
                 AppendErrorLog(stepName, ex, resource, RamboErrorDecision.Continue, errorLogs);
                 return true;
             }
 
-            var friendlyMessage = BuildFriendlyErrorMessage(ex);
             var decision = _confirmationPrompt is null
-                ? new RamboErrorDialogResult { Decision = RamboErrorDecision.Stop, AutoContinueSimilarErrors = false }
-                : await _confirmationPrompt.AskRamboErrorDecisionAsync(friendlyMessage, token).ConfigureAwait(false);
+                ? new RamboErrorDialogResult { Decision = RamboErrorDecision.Stop }
+                : await _confirmationPrompt.AskRamboErrorDecisionAsync(BuildFriendlyErrorMessage(ex), token).ConfigureAwait(false);
 
-            autoContinueErrors = autoContinueErrors || decision.AutoContinueSimilarErrors;
+            autoContinue = autoContinue || decision.AutoContinueSimilarErrors;
             AppendErrorLog(stepName, ex, resource, decision.Decision, errorLogs);
 
             if (decision.Decision == RamboErrorDecision.Continue)
             {
-                ignoredItems++;
+                ignored++;
                 return true;
             }
 
-            throw new InvalidOperationException($"Exécution RAMBO arrêtée par l'utilisateur ({stepName}).", ex);
+            throw new InvalidOperationException("RAMBO interrompu par l'utilisateur.", ex);
         }
     }
 
-    private static string BuildSummary(long tempFreedBytes, long browserCacheFreedBytes, int filesDeleted, int foldersDeleted, int processesClosed, int ignoredItems)
+    private async Task RunWindowsUpdateCacheCleanupAsync(CancellationToken ct)
     {
-        var lines = new List<string> { "Mode RAMBO terminé" };
+        _ = await _commandRunner.RunAsync("sc.exe", "stop wuauserv", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+        _ = await _commandRunner.RunAsync("sc.exe", "stop bits", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+        _ = await _commandRunner.RunAsync("sc.exe", "start bits", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+        _ = await _commandRunner.RunAsync("sc.exe", "start wuauserv", TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+    }
 
-        if (tempFreedBytes > 0)
+    private async Task RunAdvancedActionWithConfirmationAsync(string label, string fileName, string args, string warning, CancellationToken ct)
+    {
+        if (_confirmationPrompt is null)
         {
-            lines.Add($"• {FormatBytes(tempFreedBytes)} fichiers temporaires supprimés");
+            return;
         }
 
-        if (foldersDeleted > 0)
+        var confirmed = await _confirmationPrompt
+            .ConfirmAsync($"Action avancée: {label}. Attention: {warning} Continuer ?", ct)
+            .ConfigureAwait(false);
+        if (!confirmed)
         {
-            lines.Add($"• {foldersDeleted} dossiers supprimés");
+            return;
         }
 
-        if (filesDeleted > 0)
+        var result = await _commandRunner.RunAsync(fileName, args, TimeSpan.FromMinutes(30), ct).ConfigureAwait(false);
+        if (!result.Success && result.PickMessage()?.Contains("denied", StringComparison.OrdinalIgnoreCase) == true)
         {
-            lines.Add($"• {filesDeleted} fichiers supprimés");
+            var elevate = await _confirmationPrompt.ConfirmAsync($"L'opération {label} nécessite des droits administrateur ciblés. Lancer en mode administrateur ?", ct).ConfigureAwait(false);
+            if (elevate)
+            {
+                var escapedArgs = args.Replace("\"", "\\\"");
+                var psArgs = $"-NoProfile -Command \"Start-Process -FilePath '{fileName}' -ArgumentList '{escapedArgs}' -Verb runAs -Wait\"";
+                _ = await _commandRunner.RunAsync("powershell.exe", psArgs, TimeSpan.FromMinutes(30), ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static void CollectDiskInsights(List<string> insights)
+    {
+        var user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var targets = new[] { "Downloads", "Videos", "Pictures", "Desktop", "Documents", "Steam" }
+            .Select(name => Path.Combine(user, name))
+            .Where(Directory.Exists)
+            .Select(path => (Name: Path.GetFileName(path), Bytes: TryGetDirectorySize(path)))
+            .Where(x => x.Bytes > 0)
+            .OrderByDescending(x => x.Bytes)
+            .Take(6);
+
+        foreach (var item in targets)
+        {
+            insights.Add($"{item.Name} utilise {FormatBytes(item.Bytes)}");
+        }
+    }
+
+    private void CollectStartupInsights(List<string> insights)
+    {
+        var report = _startupAnalyzer.Analyze();
+        insights.Add($"Éléments de démarrage: {report.Items.Count}");
+        foreach (var item in report.Items.Where(i => i.RecommendedForDisable).Take(3))
+        {
+            insights.Add($"Non essentiel: {item.Name}");
+        }
+    }
+
+    private static void CollectRamInsights(List<string> insights)
+    {
+        foreach (var p in Process.GetProcesses().OrderByDescending(x => SafeWorkingSet(x)).Take(5))
+        {
+            try
+            {
+                if (IsProtectedProcess(p))
+                {
+                    continue;
+                }
+
+                insights.Add($"{p.ProcessName} utilise {FormatBytes(SafeWorkingSet(p))}");
+            }
+            finally
+            {
+                p.Dispose();
+            }
+        }
+    }
+
+    private static List<InactiveFolderCandidate> ScanInactiveFolders(long minSizeBytes = 500L * 1024 * 1024, int inactiveDays = 180)
+    {
+        var now = DateTime.UtcNow;
+        return EnumerateUserScanRoots()
+            .SelectMany(TryEnumerateDirectories)
+            .Where(path => !IsProtectedPath(path))
+            .Select(path => new InactiveFolderCandidate
+            {
+                Path = path,
+                Name = System.IO.Path.GetFileName(path),
+                SizeBytes = TryGetDirectorySize(path),
+                LastUseUtc = SafeGetLastWriteUtc(path)
+            })
+            .Where(x => x.SizeBytes > minSizeBytes && (now - x.LastUseUtc).TotalDays > inactiveDays)
+            .OrderByDescending(x => x.SizeBytes)
+            .Take(100)
+            .ToList();
+    }
+
+    private static List<DuplicateGroup> ScanDuplicateFiles()
+    {
+        var files = EnumerateUserScanRoots()
+            .SelectMany(path => TryEnumerateFiles(path))
+            .Where(path => !IsProtectedPath(path))
+            .Select(path => new FileInfo(path))
+            .Where(fi => fi.Exists && fi.Length > 0)
+            .GroupBy(fi => fi.Length)
+            .Where(g => g.Count() > 1)
+            .Take(500);
+
+        var groups = new List<DuplicateGroup>();
+        foreach (var sizeGroup in files)
+        {
+            var hashGroups = sizeGroup.GroupBy(fi => ComputeHash(fi.FullName)).Where(g => !string.IsNullOrWhiteSpace(g.Key) && g.Count() > 1);
+            foreach (var hashGroup in hashGroups)
+            {
+                var items = hashGroup.Select(fi => new DuplicateFileItem
+                {
+                    Path = fi.FullName,
+                    Name = fi.Name,
+                    SizeBytes = fi.Length,
+                    Hash = hashGroup.Key ?? string.Empty
+                }).ToList();
+
+                groups.Add(new DuplicateGroup
+                {
+                    Files = items,
+                    SizeBytes = items.First().SizeBytes,
+                    Count = items.Count
+                });
+            }
         }
 
-        if (browserCacheFreedBytes > 0)
+        return groups.OrderByDescending(x => x.SizeBytes * x.Count).Take(100).ToList();
+    }
+
+    private static string ComputeHash(string path)
+    {
+        try
         {
-            lines.Add($"• {FormatBytes(browserCacheFreedBytes)} caches navigateurs nettoyés");
+            using var sha = SHA256.Create();
+            using var stream = File.OpenRead(path);
+            var hash = sha.ComputeHash(stream);
+            return Convert.ToHexString(hash);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static void AnalyzeOrphanResidues(List<string> insights)
+    {
+        var roots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+        };
+
+        foreach (var root in roots.Where(Directory.Exists))
+        {
+            foreach (var dir in Directory.EnumerateDirectories(root).Take(10))
+            {
+                var ageDays = (DateTime.UtcNow - SafeGetLastWriteUtc(dir)).TotalDays;
+                if (ageDays < 180)
+                {
+                    continue;
+                }
+
+                var size = TryGetDirectorySize(dir);
+                if (size < 100L * 1024 * 1024)
+                {
+                    continue;
+                }
+
+                insights.Add($"Résidu suspect (analyse): {dir} ({FormatBytes(size)}, {ageDays:F0} jours)");
+            }
+        }
+    }
+
+    private static CleanupMetrics CleanupFilesInRoots(IEnumerable<string> roots, DateTime? onlyOlderThan, CancellationToken ct)
+    {
+        long freed = 0;
+        int filesDeleted = 0;
+        int foldersDeleted = 0;
+        int ignored = 0;
+
+        foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase).Where(Directory.Exists))
+        {
+            foreach (var file in TryEnumerateFiles(root))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!IsSafeDeletionPath(file))
+                {
+                    ignored++;
+                    continue;
+                }
+
+                try
+                {
+                    var fi = new FileInfo(file);
+                    if (onlyOlderThan.HasValue && fi.LastWriteTimeUtc > onlyOlderThan.Value)
+                    {
+                        continue;
+                    }
+
+                    var len = fi.Length;
+                    fi.IsReadOnly = false;
+                    fi.Delete();
+                    freed += len;
+                    filesDeleted++;
+                }
+                catch
+                {
+                    ignored++;
+                }
+            }
+
+            foreach (var dir in TryEnumerateDirectories(root).OrderByDescending(x => x.Length))
+            {
+                if (!IsSafeDeletionPath(dir))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                    {
+                        Directory.Delete(dir, false);
+                        foldersDeleted++;
+                    }
+                }
+                catch
+                {
+                    ignored++;
+                }
+            }
         }
 
-        if (processesClosed > 0)
+        return new CleanupMetrics(freed, filesDeleted, foldersDeleted, ignored);
+    }
+
+    private static int RemoveEmptyFoldersInSafeRoots()
+    {
+        return CleanupFilesInRoots(GetSafeCleanupRoots(), null, CancellationToken.None).FoldersDeleted;
+    }
+
+    private long OptimizeStandbyAndWorkingSets()
+    {
+        _standbyReleaser.TryRelease(out _);
+        var before = GC.GetTotalMemory(false);
+
+        foreach (var p in Process.GetProcesses())
         {
-            lines.Add($"• {processesClosed} processus fermés");
+            try
+            {
+                if (p.HasExited || IsProtectedProcess(p))
+                {
+                    continue;
+                }
+
+                PerformanceService.EmptyWorkingSet(p.Handle);
+            }
+            catch
+            {
+                // best effort
+            }
+            finally
+            {
+                p.Dispose();
+            }
         }
 
-        if (ignoredItems > 0)
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var after = GC.GetTotalMemory(true);
+        return Math.Max(0, before - after);
+    }
+
+    private static int CleanupHeavyBackgroundProcesses()
+    {
+        var closed = 0;
+        foreach (var p in Process.GetProcesses())
         {
-            lines.Add($"• {ignoredItems} éléments ignorés (protégés)");
+            try
+            {
+                if (p.HasExited || IsProtectedProcess(p) || p.WorkingSet64 <= 700L * 1024 * 1024)
+                {
+                    continue;
+                }
+
+                if (!p.CloseMainWindow())
+                {
+                    p.Kill(false);
+                }
+
+                closed++;
+            }
+            catch
+            {
+                // skip
+            }
+            finally
+            {
+                p.Dispose();
+            }
         }
 
+        return closed;
+    }
+
+    private static bool IsSafeDeletionPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (IsProtectedPath(fullPath))
+        {
+            return false;
+        }
+
+        return GetSafeCleanupRoots().Any(root => IsWithin(fullPath, root));
+    }
+
+    private static bool IsProtectedPath(string path)
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+
+        if (GlobalProtectedZones.Any(zone => IsWithin(path, zone)))
+        {
+            return true;
+        }
+
+        return string.Equals(path, appData, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(path, localAppData, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(path, programData, StringComparison.OrdinalIgnoreCase)
+               || IsWithin(path, Path.Combine(localAppData, "Programs"));
+    }
+
+    private static bool IsWithin(string path, string root)
+    {
+        var fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> GetTempCleanupRoots()
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        return new[] { Path.GetTempPath(), Path.Combine(local, "Temp"), Path.Combine(windows, "Temp") };
+    }
+
+    private static IEnumerable<string> GetWindowsUpdateRoots()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        return new[]
+        {
+            Path.Combine(windows, "SoftwareDistribution", "Download"),
+            Path.Combine(windows, "SoftwareDistribution", "DataStore"),
+            Path.Combine(windows, "SoftwareDistribution", "DeliveryOptimization")
+        };
+    }
+
+    private static IEnumerable<string> GetSystemCacheRoots()
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        return new[]
+        {
+            Path.Combine(programData, "Microsoft", "Windows", "WER"),
+            Path.Combine(windows, "Logs"),
+            Path.Combine(windows, "Logs", "CBS"),
+            Path.Combine(windows, "Panther"),
+            Path.Combine(local, "Microsoft", "Windows", "Explorer"),
+            Path.Combine(local, "D3DSCache"),
+            Path.Combine(windows, "Minidump"),
+            Path.Combine(programData, "Microsoft", "Diagnosis"),
+            Path.Combine(programData, "Microsoft", "Windows Defender", "Scans", "History"),
+            Path.Combine(programData, "Microsoft", "Windows", "DeliveryOptimization")
+        };
+    }
+
+    private static IEnumerable<string> GetSafeCleanupRoots()
+        => GetTempCleanupRoots().Concat(GetWindowsUpdateRoots()).Concat(GetSystemCacheRoots());
+
+    private static IEnumerable<string> EnumerateUserScanRoots()
+    {
+        var user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var names = new[] { "Downloads", "Documents", "Videos", "Pictures", "Desktop" };
+        return names.Select(x => Path.Combine(user, x)).Where(Directory.Exists);
+    }
+
+    private static IEnumerable<string> TryEnumerateFiles(string root)
+    {
+        try { return Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories); }
+        catch { return Array.Empty<string>(); }
+    }
+
+    private static IEnumerable<string> TryEnumerateDirectories(string root)
+    {
+        try { return Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly); }
+        catch { return Array.Empty<string>(); }
+    }
+
+    private static DateTime SafeGetLastWriteUtc(string path)
+    {
+        try { return Directory.GetLastWriteTimeUtc(path); }
+        catch { return DateTime.UtcNow; }
+    }
+
+    private static long SafeWorkingSet(Process p)
+    {
+        try { return p.WorkingSet64; }
+        catch { return 0; }
+    }
+
+    private static bool IsProtectedProcess(Process p)
+    {
+        var name = p.ProcessName.ToLowerInvariant();
+        return name is "system" or "idle" or "registry"
+               || p.SessionId == 0
+               || name.Contains("defender")
+               || name.Contains("service");
+    }
+
+    private static long TryGetDirectorySize(string path)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .Select(file =>
+                {
+                    try { return new FileInfo(file).Length; }
+                    catch { return 0L; }
+                })
+                .Sum();
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static string BuildSummary(long temp, long browser, long systemCache, int filesDeleted, int foldersDeleted, int emptyFolders, int processesClosed, int ignored, int failed)
+    {
+        var lines = new List<string> { "Mode RAMBO terminé." };
+        if (temp > 0) lines.Add($"• {FormatBytes(temp)} de fichiers temporaires supprimés");
+        if (browser > 0) lines.Add($"• {FormatBytes(browser)} de caches navigateurs nettoyés");
+        if (systemCache > 0) lines.Add($"• {FormatBytes(systemCache)} de caches système nettoyés");
+        if (filesDeleted > 0) lines.Add($"• {filesDeleted} fichiers supprimés");
+        if (foldersDeleted > 0) lines.Add($"• {foldersDeleted} dossiers supprimés");
+        if (emptyFolders > 0) lines.Add($"• {emptyFolders} dossiers vides supprimés");
+        if (processesClosed > 0) lines.Add($"• {processesClosed} processus fermés");
+        if (ignored > 0) lines.Add($"• {ignored} éléments ignorés");
+        if (failed > 0) lines.Add($"• {failed} étapes en échec");
         return string.Join(Environment.NewLine, lines);
     }
 
-    private static string FormatBytes(long bytes)
+    public static string FormatBytes(long bytes)
     {
         const long kb = 1024;
         const long mb = 1024 * kb;
         const long gb = 1024 * mb;
 
-        if (bytes >= gb)
-        {
-            return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)gb:F1} GB");
-        }
-
-        if (bytes >= mb)
-        {
-            return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)mb:F0} MB");
-        }
-
-        if (bytes >= kb)
-        {
-            return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)kb:F0} KB");
-        }
-
+        if (bytes >= gb) return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)gb:F1} GB");
+        if (bytes >= mb) return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)mb:F0} MB");
+        if (bytes >= kb) return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)kb:F0} KB");
         return string.Create(CultureInfo.InvariantCulture, $"{bytes} bytes");
     }
 
@@ -351,455 +826,25 @@ public sealed class RamboModeService
     {
         return ex switch
         {
-            UnauthorizedAccessException => "Accès refusé sur un élément système. Ce composant peut être protégé.",
-            IOException => "Un fichier est actuellement utilisé par une autre application.",
-            TimeoutException => "Le service a mis trop de temps à répondre.",
+            UnauthorizedAccessException => "Accès refusé sur un élément protégé.",
+            IOException => "Un fichier est en cours d'utilisation.",
             _ => "L'opération n'a pas pu se terminer correctement."
         };
     }
 
-    private static void AppendErrorLog(string stepName, Exception ex, string resource, RamboErrorDecision decision, List<string> errorLogs)
+    private static void AppendErrorLog(string stepName, Exception ex, string resource, RamboErrorDecision decision, List<string> logs)
     {
-        var line = string.Create(
-            CultureInfo.InvariantCulture,
-            $"StepName={stepName}; ExceptionType={ex.GetType().Name}; Resource={resource}; UserDecision={decision}");
-        errorLogs.Add(line);
+        logs.Add($"StepName={stepName}; ExceptionType={ex.GetType().Name}; Resource={resource}; UserDecision={decision}");
     }
 
-    private static void CollectBaseline(List<string> diagnostics)
-    {
-        var systemDrive = DriveInfo.GetDrives().FirstOrDefault(d => d.IsReady && d.Name.StartsWith("C", StringComparison.OrdinalIgnoreCase));
-        if (systemDrive is not null)
-        {
-            diagnostics.Add($"DiskFree={systemDrive.AvailableFreeSpace}");
-        }
-
-        using var current = Process.GetCurrentProcess();
-        diagnostics.Add($"ProcessCount={Process.GetProcesses().Length}");
-        diagnostics.Add($"WorkingSet={current.WorkingSet64}");
-    }
-
-    private static void CollectDiskInsights(List<string> insights)
-    {
-        var user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var targets = new[] { "Downloads", "Videos", "Documents", "Desktop", "Pictures", "Steam" }
-            .Select(name => Path.Combine(user, name))
-            .Where(Directory.Exists)
-            .Select(path => (Name: Path.GetFileName(path), Bytes: TryGetDirectorySize(path)))
-            .Where(x => x.Bytes > 0)
-            .OrderByDescending(x => x.Bytes)
-            .Take(5);
-
-        foreach (var item in targets)
-        {
-            var gb = item.Bytes / (1024d * 1024d * 1024d);
-            insights.Add($"{item.Name} utilise {gb:F1} Go");
-        }
-    }
-
-    private void CollectStartupInsights(List<string> insights)
-    {
-        var report = _startupAnalyzer.Analyze();
-        insights.Add($"Éléments de démarrage détectés: {report.Items.Count}");
-        foreach (var item in report.Items.Where(i => i.RecommendedForDisable).Take(3))
-        {
-            insights.Add($"À surveiller: {item.Name}");
-        }
-    }
-
-    private static void CollectRamInsights(List<string> insights)
-    {
-        foreach (var p in Process.GetProcesses()
-                     .Where(p => !string.IsNullOrWhiteSpace(p.ProcessName))
-                     .OrderByDescending(p => SafeWorkingSet(p))
-                     .Take(5))
-        {
-            var gb = SafeWorkingSet(p) / (1024d * 1024d * 1024d);
-            insights.Add($"{p.ProcessName} utilise {gb:F1} Go");
-            p.Dispose();
-        }
-    }
-
-    private static long SafeWorkingSet(Process p)
-    {
-        try { return p.WorkingSet64; }
-        catch { return 0; }
-    }
-
-    private static async Task<CleanupDeletionMetrics> CleanupTempAsync(CancellationToken ct)
-    {
-        var freed = 0L;
-        var filesDeleted = 0;
-        var now = DateTime.UtcNow;
-        var roots = new List<string>
-        {
-            Path.GetTempPath(),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "AppData", "Local", "Temp"),
-        };
-
-        foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase).Where(Directory.Exists))
-        {
-            await Task.Yield();
-            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-            {
-                ct.ThrowIfCancellationRequested();
-                try
-                {
-                    var info = new FileInfo(file);
-                    if (info.LastWriteTimeUtc > now.AddHours(-24))
-                    {
-                        continue;
-                    }
-
-                    var len = info.Length;
-                    info.IsReadOnly = false;
-                    info.Delete();
-                    freed += len;
-                    filesDeleted++;
-                }
-                catch
-                {
-                    // locked/safe skip
-                }
-            }
-        }
-
-        return new CleanupDeletionMetrics(freed, filesDeleted);
-    }
-
-    private static async Task<CleanupDeletionMetrics> CleanupWindowsCachesAsync(CancellationToken ct)
-    {
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var targets = new[]
-        {
-            Path.Combine(local, "Microsoft", "Windows", "Explorer"),
-            Path.Combine(local, "Microsoft", "Windows", "WER"),
-            Path.Combine(windows, "ProgramData", "Microsoft", "Windows", "WER"),
-        };
-
-        long freed = 0;
-        var filesDeleted = 0;
-        foreach (var target in targets.Where(Directory.Exists))
-        {
-            await Task.Yield();
-            foreach (var file in Directory.EnumerateFiles(target, "*", SearchOption.AllDirectories))
-            {
-                ct.ThrowIfCancellationRequested();
-                var name = Path.GetFileName(file);
-                var isCache = name.StartsWith("thumbcache", StringComparison.OrdinalIgnoreCase)
-                              || name.StartsWith("iconcache", StringComparison.OrdinalIgnoreCase)
-                              || target.Contains("WER", StringComparison.OrdinalIgnoreCase);
-                if (!isCache)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var info = new FileInfo(file);
-                    var len = info.Length;
-                    info.IsReadOnly = false;
-                    info.Delete();
-                    freed += len;
-                    filesDeleted++;
-                }
-                catch
-                {
-                    // skip locked
-                }
-            }
-        }
-
-        return new CleanupDeletionMetrics(freed, filesDeleted);
-    }
-
-    private async Task<CleanupDeletionMetrics> CleanupWindowsUpdateCacheAsync(CancellationToken ct)
-    {
-        _ = await _commandRunner.RunAsync("sc.exe", "stop wuauserv", TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
-
-        var freedBytes = 0L;
-        var filesDeleted = 0;
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "SoftwareDistribution", "Download");
-        if (Directory.Exists(path))
-        {
-            foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-            {
-                ct.ThrowIfCancellationRequested();
-                try
-                {
-                    var info = new FileInfo(file);
-                    var len = info.Length;
-                    info.IsReadOnly = false;
-                    info.Delete();
-                    freedBytes += len;
-                    filesDeleted++;
-                }
-                catch
-                {
-                    // skip locked
-                }
-            }
-        }
-
-        await Task.Yield();
-
-        _ = await _commandRunner.RunAsync("sc.exe", "start wuauserv", TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
-        return new CleanupDeletionMetrics(freedBytes, filesDeleted);
-    }
-
-    private static int RemoveEmptyFolders()
-    {
-        var removed = 0;
-        foreach (var root in EnumerateSafeRoots())
-        {
-            if (!Directory.Exists(root))
-            {
-                continue;
-            }
-
-            foreach (var dir in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
-            {
-                try
-                {
-                    if (!Directory.EnumerateFileSystemEntries(dir).Any())
-                    {
-                        Directory.Delete(dir, false);
-                        removed++;
-                    }
-                }
-                catch
-                {
-                    // skip
-                }
-            }
-        }
-
-        return removed;
-    }
-
-    private static int RemoveOrphanedResidues()
-    {
-        var installed = GetInstalledSoftwareNames();
-        var removed = 0;
-        foreach (var root in new[]
-                 {
-                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
-                 }.Where(Directory.Exists))
-        {
-            foreach (var dir in Directory.EnumerateDirectories(root))
-            {
-                try
-                {
-                    var name = Path.GetFileName(dir);
-                    var norm = name.ToLowerInvariant();
-                    if (ProtectedVendors.Any(v => norm.Contains(v, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        continue;
-                    }
-
-                    if (installed.Any(app => norm.Contains(app, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        continue;
-                    }
-
-                    var age = DateTime.UtcNow - Directory.GetLastWriteTimeUtc(dir);
-                    if (age < TimeSpan.FromDays(30))
-                    {
-                        continue;
-                    }
-
-                    if (dir.Contains("Program Files", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    Directory.Delete(dir, recursive: true);
-                    removed++;
-                }
-                catch
-                {
-                    // skip protected/locked
-                }
-            }
-        }
-
-        return removed;
-    }
-
-    private long OptimizeMemory()
-    {
-        var before = GC.GetTotalMemory(forceFullCollection: false);
-        _standbyReleaser.TryRelease(out _);
-
-        foreach (var p in Process.GetProcesses())
-        {
-            try
-            {
-                if (p.HasExited || IsProtectedProcess(p) || p.ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                PerformanceService.EmptyWorkingSet(p.Handle);
-            }
-            catch
-            {
-                // skip
-            }
-            finally
-            {
-                p.Dispose();
-            }
-        }
-
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        var after = GC.GetTotalMemory(forceFullCollection: true);
-        return Math.Max(0, before - after);
-    }
-
-    private static int CleanupHeavyBackgroundProcesses()
-    {
-        var closed = 0;
-        foreach (var p in Process.GetProcesses())
-        {
-            try
-            {
-                if (p.HasExited || IsProtectedProcess(p))
-                {
-                    continue;
-                }
-
-                if (p.WorkingSet64 <= 700L * 1024 * 1024)
-                {
-                    continue;
-                }
-
-                var name = p.ProcessName.ToLowerInvariant();
-                var closable = name.Contains("launcher")
-                               || name.Contains("updater")
-                               || name.Contains("helper")
-                               || name.Contains("discord")
-                               || name.Contains("teams");
-                if (!closable)
-                {
-                    continue;
-                }
-
-                if (!p.CloseMainWindow())
-                {
-                    p.Kill(entireProcessTree: false);
-                }
-
-                closed++;
-            }
-            catch
-            {
-                // skip
-            }
-            finally
-            {
-                p.Dispose();
-            }
-        }
-
-        return closed;
-    }
-
-    private async Task SystemRefreshAsync(CancellationToken ct)
-    {
-        _ = await _commandRunner.RunAsync("ipconfig", "/flushdns", TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
-        _ = await _commandRunner.RunAsync("taskkill", "/f /im explorer.exe", TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
-        _ = await _commandRunner.RunAsync("cmd.exe", "/c start explorer.exe", TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
-    }
-
-    private static IEnumerable<string> EnumerateSafeRoots()
-    {
-        yield return Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        yield return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        yield return Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        yield return Path.GetTempPath();
-    }
-
-    private static bool IsProtectedProcess(Process p)
-    {
-        var name = p.ProcessName.ToLowerInvariant();
-        return name is "system" or "idle" or "registry" or "explorer"
-               || name.Contains("defender")
-               || name.Contains("nvidia")
-               || name.Contains("amd")
-               || name.Contains("intel")
-               || name.Contains("realtek")
-               || name.Contains("audio")
-               || name.Contains("driver")
-               || p.SessionId == 0;
-    }
-
-    private static HashSet<string> GetInstalledSoftwareNames()
-    {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        LoadUninstallRegistry(set, RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
-        LoadUninstallRegistry(set, RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
-        return set;
-    }
-
-    private static void LoadUninstallRegistry(HashSet<string> set, RegistryHive hive, string keyPath)
-    {
-        try
-        {
-            using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
-            using var uninstall = baseKey.OpenSubKey(keyPath);
-            if (uninstall is null)
-            {
-                return;
-            }
-
-            foreach (var sub in uninstall.GetSubKeyNames())
-            {
-                using var appKey = uninstall.OpenSubKey(sub);
-                var displayName = appKey?.GetValue("DisplayName") as string;
-                if (!string.IsNullOrWhiteSpace(displayName))
-                {
-                    set.Add(displayName.ToLowerInvariant());
-                }
-            }
-        }
-        catch
-        {
-            // best effort
-        }
-    }
-
-    private static long TryGetDirectorySize(string path)
-    {
-        try
-        {
-            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
-                .Select(file =>
-                {
-                    try { return new FileInfo(file).Length; }
-                    catch { return 0L; }
-                })
-                .Sum();
-        }
-        catch
-        {
-            return 0;
-        }
-    }
     private sealed class NullStandbyReleaser : PerformanceService.IStandbyMemoryReleaser
     {
         public bool TryRelease(out string message)
         {
-            message = "";
+            message = string.Empty;
             return false;
         }
     }
 
+    private readonly record struct CleanupMetrics(long FreedBytes, int FilesDeleted, int FoldersDeleted, int Ignored);
 }

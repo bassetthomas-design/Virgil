@@ -141,7 +141,7 @@ namespace Virgil.App.Services
             {
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 16),
-                Text = "Mode RAMBO va exécuter un nettoyage profond: nettoyage des temporaires, cache navigateurs, purge mémoire standby, analyse disque/démarrage/RAM, nettoyage ciblé des processus lourds, puis redémarrage de l'explorateur.\n\nCertaines applications en arrière-plan peuvent être fermées. Les actions sont ciblées et sécurisées."
+                Text = "• Nettoyage profond des fichiers temporaires et caches\n• Nettoyage Windows Update / logs / miniatures / shaders\n• Nettoyage caches navigateurs\n• Optimisation mémoire et refresh système\n• Analyse des gros dossiers, démarrage et RAM\n• Recherche de dossiers inactifs et fichiers dupliqués\n\nCertaines étapes avancées peuvent demander confirmation."
             };
             DockPanel.SetDock(body, Dock.Top);
             root.Children.Add(body);
