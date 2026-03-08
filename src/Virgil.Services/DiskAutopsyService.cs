@@ -11,7 +11,7 @@ public sealed class DiskAutopsyReport
 {
     public List<DiskAutopsyEntry> Entries { get; init; } = new();
     public Dictionary<string, long> CategoryTotals { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-    public string Summary { get; init; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
 }
 
 public sealed class DiskAutopsyService
