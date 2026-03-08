@@ -25,7 +25,7 @@ public sealed class SpecialService : ISpecialService
         _reloader = reloader ?? throw new ArgumentNullException(nameof(reloader));
         _confirmation = confirmation ?? throw new ArgumentNullException(nameof(confirmation));
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
-        _rambo = rambo ?? new RamboModeService();
+        _rambo = rambo ?? new RamboModeService(confirmationPrompt: _confirmation);
         _progress = progress ?? new NoopProgressController();
     }
 
@@ -107,10 +107,22 @@ public sealed class SpecialService : ISpecialService
         var sb = new StringBuilder();
         sb.AppendLine($"TempFilesFreedBytes={result.TempFilesFreedBytes.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine($"BrowserCacheFreedBytes={result.BrowserCacheFreedBytes.ToString(CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"EmptyFoldersRemoved={result.EmptyFoldersRemoved}");
-        sb.AppendLine($"OrphanFoldersRemoved={result.OrphanFoldersRemoved}");
+        sb.AppendLine($"FilesDeleted={result.FilesDeleted}");
+        sb.AppendLine($"FoldersDeleted={result.FoldersDeleted}");
         sb.AppendLine($"StandbyMemoryFreedBytes={result.StandbyMemoryFreedBytes.ToString(CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"HeavyProcessesClosed={result.HeavyProcessesClosed}");
+        sb.AppendLine($"ProcessesClosed={result.ProcessesClosed}");
+        sb.AppendLine($"SkippedItems={result.SkippedItems}");
+        sb.AppendLine($"FailedSteps={result.FailedSteps}");
+        sb.AppendLine($"AutoContinueModeUsed={result.AutoContinueModeUsed}");
+        if (result.ErrorLogs.Count > 0)
+        {
+            sb.AppendLine("ErrorLogs:");
+            foreach (var x in result.ErrorLogs)
+            {
+                sb.AppendLine($"- {x}");
+            }
+        }
+
         if (result.DiskInsights.Count > 0)
         {
             sb.AppendLine("DiskInsights:");

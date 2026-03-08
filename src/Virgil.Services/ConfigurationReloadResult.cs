@@ -13,6 +13,7 @@ public interface IConfirmationPrompt
 {
     Task<bool> ConfirmAsync(string message, CancellationToken ct = default);
     Task<bool> ConfirmRamboAsync(CancellationToken ct = default);
+    Task<RamboErrorDialogResult> AskRamboErrorDecisionAsync(string friendlyMessage, CancellationToken ct = default);
 }
 
 public enum ConfigurationReloadStatus

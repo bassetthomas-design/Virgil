@@ -13,12 +13,16 @@ namespace Virgil.Services;
 
 public sealed record RamboResult(
     bool Succeeded,
-    double TempFilesFreedBytes,
-    double BrowserCacheFreedBytes,
-    int EmptyFoldersRemoved,
-    int OrphanFoldersRemoved,
-    double StandbyMemoryFreedBytes,
-    int HeavyProcessesClosed,
+    long TempFilesFreedBytes,
+    long BrowserCacheFreedBytes,
+    int FilesDeleted,
+    int FoldersDeleted,
+    int ProcessesClosed,
+    long StandbyMemoryFreedBytes,
+    int SkippedItems,
+    int FailedSteps,
+    bool AutoContinueModeUsed,
+    List<string> ErrorLogs,
     List<string> DiskInsights,
     List<string> StartupInsights,
     List<string> RamInsights,
@@ -34,6 +38,10 @@ public sealed record RamboResult(
             0,
             0,
             0,
+            0,
+            0,
+            false,
+            new List<string>(),
             new List<string>(),
             new List<string>(),
             new List<string>(),
@@ -52,17 +60,23 @@ public sealed class RamboModeService
     private readonly IStartupAnalyzer _startupAnalyzer;
     private readonly PerformanceService.IStandbyMemoryReleaser _standbyReleaser;
     private readonly ISystemCommandRunner _commandRunner;
+    private readonly IConfirmationPrompt? _confirmationPrompt;
+
+
+    private readonly record struct CleanupDeletionMetrics(long FreedBytes, int FilesDeleted);
 
     public RamboModeService(
         BrowserCleanupService? browserCleanup = null,
         IStartupAnalyzer? startupAnalyzer = null,
         PerformanceService.IStandbyMemoryReleaser? standbyReleaser = null,
-        ISystemCommandRunner? commandRunner = null)
+        ISystemCommandRunner? commandRunner = null,
+        IConfirmationPrompt? confirmationPrompt = null)
     {
         _browserCleanup = browserCleanup ?? new BrowserCleanupService();
         _startupAnalyzer = startupAnalyzer ?? new StartupAnalyzer();
         _standbyReleaser = standbyReleaser ?? new NullStandbyReleaser();
         _commandRunner = commandRunner ?? new SystemCommandRunner();
+        _confirmationPrompt = confirmationPrompt;
     }
 
     public async Task<RamboResult> RunAsync(CancellationToken ct)
@@ -76,103 +90,280 @@ public sealed class RamboModeService
         var diskInsights = new List<string>();
         var startupInsights = new List<string>();
         var ramInsights = new List<string>();
+        var errorLogs = new List<string>();
 
-        var tempFreed = 0d;
-        var browserFreed = 0d;
-        var emptyRemoved = 0;
-        var orphanRemoved = 0;
-        var standbyFreed = 0d;
-        var heavyClosed = 0;
+        var tempFreedBytes = 0L;
+        var browserFreedBytes = 0L;
+        var foldersDeleted = 0;
+        var filesDeleted = 0;
+        var standbyFreedBytes = 0L;
+        var processesClosed = 0;
+        var ignoredItems = 0;
+        var failedSteps = 0;
+        var autoContinueErrors = false;
 
         try
         {
             ct.ThrowIfCancellationRequested();
 
-            // Phase 1 - baseline + insights
-            CollectBaseline(diagnostics);
-            CollectDiskInsights(diskInsights);
-            CollectStartupInsights(startupInsights);
-            CollectRamInsights(ramInsights);
+            await ExecuteStepAsync("CollectBaseline", "système local", () =>
+            {
+                CollectBaseline(diagnostics);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CollectDiskInsights", "stockage utilisateur", () =>
+            {
+                CollectDiskInsights(diskInsights);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CollectStartupInsights", "démarrage", () =>
+            {
+                CollectStartupInsights(startupInsights);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CollectRamInsights", "processus mémoire", () =>
+            {
+                CollectRamInsights(ramInsights);
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 2 - temp cleanup
-            tempFreed += await CleanupTempAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CleanupTemp", "fichiers temporaires", async () =>
+            {
+                var metrics = await CleanupTempAsync(ct).ConfigureAwait(false);
+                tempFreedBytes += metrics.FreedBytes;
+                filesDeleted += metrics.FilesDeleted;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 3 - windows cache cleanup
-            tempFreed += await CleanupWindowsCachesAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CleanupWindowsCaches", "caches Windows", async () =>
+            {
+                var metrics = await CleanupWindowsCachesAsync(ct).ConfigureAwait(false);
+                tempFreedBytes += metrics.FreedBytes;
+                filesDeleted += metrics.FilesDeleted;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 4 - Windows update cache cleanup
-            await CleanupWindowsUpdateCacheAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("CleanupWindowsUpdateCache", "cache Windows Update", async () =>
+            {
+                var metrics = await CleanupWindowsUpdateCacheAsync(ct).ConfigureAwait(false);
+                tempFreedBytes += metrics.FreedBytes;
+                filesDeleted += metrics.FilesDeleted;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 5 - browser cleanup
-            var browserResult = await _browserCleanup.CleanAsync(
-                new BrowserCleanupOptions
-                {
-                    Cache = true,
-                    Cookies = false,
-                    History = false,
-                    Downloads = false,
-                    Sessions = false,
-                    SiteData = false,
-                    Autofill = false,
-                },
-                progress: null,
-                ct).ConfigureAwait(false);
-            browserFreed += browserResult.FreedBytes;
+            await ExecuteStepAsync("BrowserCleanup", "cache navigateur", async () =>
+            {
+                var browserResult = await _browserCleanup.CleanAsync(
+                    new BrowserCleanupOptions
+                    {
+                        Cache = true,
+                        Cookies = false,
+                        History = false,
+                        Downloads = false,
+                        Sessions = false,
+                        SiteData = false,
+                        Autofill = false,
+                    },
+                    progress: null,
+                    ct).ConfigureAwait(false);
+                browserFreedBytes += browserResult.FreedBytes;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 6
-            emptyRemoved += RemoveEmptyFolders();
+            await ExecuteStepAsync("RemoveEmptyFolders", "dossiers vides", () =>
+            {
+                foldersDeleted += RemoveEmptyFolders();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 7
-            orphanRemoved += RemoveOrphanedResidues();
+            await ExecuteStepAsync("RemoveOrphanedResidues", "résidus applicatifs", () =>
+            {
+                foldersDeleted += RemoveOrphanedResidues();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 8
-            standbyFreed += OptimizeMemory();
+            await ExecuteStepAsync("OptimizeMemory", "optimisation mémoire", () =>
+            {
+                standbyFreedBytes += OptimizeMemory();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 9
-            heavyClosed += CleanupHeavyBackgroundProcesses();
+            await ExecuteStepAsync("CleanupHeavyBackgroundProcesses", "processus lourds", () =>
+            {
+                processesClosed += CleanupHeavyBackgroundProcesses();
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
 
-            // Phase 10
-            await SystemRefreshAsync(ct).ConfigureAwait(false);
+            await ExecuteStepAsync("SystemRefresh", "rafraîchissement système", () => SystemRefreshAsync(ct), OnErrorAsync, ct).ConfigureAwait(false);
 
-            var summary = BuildSummary(tempFreed, browserFreed, emptyRemoved, orphanRemoved, standbyFreed, heavyClosed);
+            var summary = BuildSummary(tempFreedBytes, browserFreedBytes, filesDeleted, foldersDeleted, processesClosed, ignoredItems);
             return new RamboResult(
                 true,
-                tempFreed,
-                browserFreed,
-                emptyRemoved,
-                orphanRemoved,
-                standbyFreed,
-                heavyClosed,
+                tempFreedBytes,
+                browserFreedBytes,
+                filesDeleted,
+                foldersDeleted,
+                processesClosed,
+                standbyFreedBytes,
+                ignoredItems,
+                failedSteps,
+                autoContinueErrors,
+                errorLogs,
                 diskInsights,
                 startupInsights,
                 ramInsights,
                 summary,
                 null);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             diagnostics.Add(ex.Message);
             return new RamboResult(
                 false,
-                tempFreed,
-                browserFreed,
-                emptyRemoved,
-                orphanRemoved,
-                standbyFreed,
-                heavyClosed,
+                tempFreedBytes,
+                browserFreedBytes,
+                filesDeleted,
+                foldersDeleted,
+                processesClosed,
+                standbyFreedBytes,
+                ignoredItems,
+                failedSteps,
+                autoContinueErrors,
+                errorLogs,
                 diskInsights,
                 startupInsights,
                 ramInsights,
                 "Mode RAMBO: échec partiel.",
                 ex.Message);
         }
+
+        async Task<bool> OnErrorAsync(string stepName, string resource, Exception ex, CancellationToken token)
+        {
+            failedSteps++;
+
+            if (autoContinueErrors)
+            {
+                ignoredItems++;
+                AppendErrorLog(stepName, ex, resource, RamboErrorDecision.Continue, errorLogs);
+                return true;
+            }
+
+            var friendlyMessage = BuildFriendlyErrorMessage(ex);
+            var decision = _confirmationPrompt is null
+                ? new RamboErrorDialogResult { Decision = RamboErrorDecision.Stop, AutoContinueSimilarErrors = false }
+                : await _confirmationPrompt.AskRamboErrorDecisionAsync(friendlyMessage, token).ConfigureAwait(false);
+
+            autoContinueErrors = autoContinueErrors || decision.AutoContinueSimilarErrors;
+            AppendErrorLog(stepName, ex, resource, decision.Decision, errorLogs);
+
+            if (decision.Decision == RamboErrorDecision.Continue)
+            {
+                ignoredItems++;
+                return true;
+            }
+
+            throw new InvalidOperationException($"Exécution RAMBO arrêtée par l'utilisateur ({stepName}).", ex);
+        }
     }
 
-    private static string BuildSummary(double tempFreed, double browserFreed, int emptyRemoved, int orphanRemoved, double standbyFreed, int heavyClosed)
+    private static string BuildSummary(long tempFreedBytes, long browserCacheFreedBytes, int filesDeleted, int foldersDeleted, int processesClosed, int ignoredItems)
     {
-        var totalGo = (tempFreed + browserFreed + standbyFreed) / (1024d * 1024d * 1024d);
-        var folders = emptyRemoved + orphanRemoved;
-        return string.Create(CultureInfo.InvariantCulture, $"Mode RAMBO terminé. Résumé: {totalGo:F2} Go nettoyés, {heavyClosed} processus fermés, {folders} dossiers supprimés.");
+        var lines = new List<string> { "Mode RAMBO terminé" };
+
+        if (tempFreedBytes > 0)
+        {
+            lines.Add($"• {FormatBytes(tempFreedBytes)} fichiers temporaires supprimés");
+        }
+
+        if (foldersDeleted > 0)
+        {
+            lines.Add($"• {foldersDeleted} dossiers supprimés");
+        }
+
+        if (filesDeleted > 0)
+        {
+            lines.Add($"• {filesDeleted} fichiers supprimés");
+        }
+
+        if (browserCacheFreedBytes > 0)
+        {
+            lines.Add($"• {FormatBytes(browserCacheFreedBytes)} caches navigateurs nettoyés");
+        }
+
+        if (processesClosed > 0)
+        {
+            lines.Add($"• {processesClosed} processus fermés");
+        }
+
+        if (ignoredItems > 0)
+        {
+            lines.Add($"• {ignoredItems} éléments ignorés (protégés)");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        const long kb = 1024;
+        const long mb = 1024 * kb;
+        const long gb = 1024 * mb;
+
+        if (bytes >= gb)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)gb:F1} GB");
+        }
+
+        if (bytes >= mb)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)mb:F0} MB");
+        }
+
+        if (bytes >= kb)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)kb:F0} KB");
+        }
+
+        return string.Create(CultureInfo.InvariantCulture, $"{bytes} bytes");
+    }
+
+    private static async Task ExecuteStepAsync(string stepName, string resource, Func<Task> action, Func<string, string, Exception, CancellationToken, Task<bool>> errorHandler, CancellationToken ct)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var shouldContinue = await errorHandler(stepName, resource, ex, ct).ConfigureAwait(false);
+            if (!shouldContinue)
+            {
+                throw;
+            }
+        }
+    }
+
+    private static string BuildFriendlyErrorMessage(Exception ex)
+    {
+        return ex switch
+        {
+            UnauthorizedAccessException => "Accès refusé sur un élément système. Ce composant peut être protégé.",
+            IOException => "Un fichier est actuellement utilisé par une autre application.",
+            TimeoutException => "Le service a mis trop de temps à répondre.",
+            _ => "L'opération n'a pas pu se terminer correctement."
+        };
+    }
+
+    private static void AppendErrorLog(string stepName, Exception ex, string resource, RamboErrorDecision decision, List<string> errorLogs)
+    {
+        var line = string.Create(
+            CultureInfo.InvariantCulture,
+            $"StepName={stepName}; ExceptionType={ex.GetType().Name}; Resource={resource}; UserDecision={decision}");
+        errorLogs.Add(line);
     }
 
     private static void CollectBaseline(List<string> diagnostics)
@@ -235,9 +426,10 @@ public sealed class RamboModeService
         catch { return 0; }
     }
 
-    private static async Task<double> CleanupTempAsync(CancellationToken ct)
+    private static async Task<CleanupDeletionMetrics> CleanupTempAsync(CancellationToken ct)
     {
         var freed = 0L;
+        var filesDeleted = 0;
         var now = DateTime.UtcNow;
         var roots = new List<string>
         {
@@ -264,6 +456,7 @@ public sealed class RamboModeService
                     info.IsReadOnly = false;
                     info.Delete();
                     freed += len;
+                    filesDeleted++;
                 }
                 catch
                 {
@@ -272,10 +465,10 @@ public sealed class RamboModeService
             }
         }
 
-        return freed;
+        return new CleanupDeletionMetrics(freed, filesDeleted);
     }
 
-    private static async Task<double> CleanupWindowsCachesAsync(CancellationToken ct)
+    private static async Task<CleanupDeletionMetrics> CleanupWindowsCachesAsync(CancellationToken ct)
     {
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -287,6 +480,7 @@ public sealed class RamboModeService
         };
 
         long freed = 0;
+        var filesDeleted = 0;
         foreach (var target in targets.Where(Directory.Exists))
         {
             await Task.Yield();
@@ -309,6 +503,7 @@ public sealed class RamboModeService
                     info.IsReadOnly = false;
                     info.Delete();
                     freed += len;
+                    filesDeleted++;
                 }
                 catch
                 {
@@ -317,13 +512,15 @@ public sealed class RamboModeService
             }
         }
 
-        return freed;
+        return new CleanupDeletionMetrics(freed, filesDeleted);
     }
 
-    private async Task CleanupWindowsUpdateCacheAsync(CancellationToken ct)
+    private async Task<CleanupDeletionMetrics> CleanupWindowsUpdateCacheAsync(CancellationToken ct)
     {
         _ = await _commandRunner.RunAsync("sc.exe", "stop wuauserv", TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
 
+        var freedBytes = 0L;
+        var filesDeleted = 0;
         var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "SoftwareDistribution", "Download");
         if (Directory.Exists(path))
         {
@@ -333,8 +530,11 @@ public sealed class RamboModeService
                 try
                 {
                     var info = new FileInfo(file);
+                    var len = info.Length;
                     info.IsReadOnly = false;
                     info.Delete();
+                    freedBytes += len;
+                    filesDeleted++;
                 }
                 catch
                 {
@@ -346,6 +546,7 @@ public sealed class RamboModeService
         await Task.Yield();
 
         _ = await _commandRunner.RunAsync("sc.exe", "start wuauserv", TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+        return new CleanupDeletionMetrics(freedBytes, filesDeleted);
     }
 
     private static int RemoveEmptyFolders()
@@ -429,7 +630,7 @@ public sealed class RamboModeService
         return removed;
     }
 
-    private double OptimizeMemory()
+    private long OptimizeMemory()
     {
         var before = GC.GetTotalMemory(forceFullCollection: false);
         _standbyReleaser.TryRelease(out _);

@@ -41,6 +41,14 @@ public class RamboModeTests
         public Task<bool> ConfirmAsync(string message, CancellationToken ct = default) => Task.FromResult(true);
 
         public Task<bool> ConfirmRamboAsync(CancellationToken ct = default) => Task.FromResult(_confirmRambo);
+
+        public Task<RamboErrorDialogResult> AskRamboErrorDecisionAsync(string friendlyMessage, CancellationToken ct = default)
+            => Task.FromResult(new RamboErrorDialogResult
+            {
+                Decision = RamboErrorDecision.Stop,
+                AutoContinueSimilarErrors = false
+            });
+
     }
 
     private sealed class FakeChat : IChatService
