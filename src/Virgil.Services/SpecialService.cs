@@ -37,11 +37,10 @@ public sealed class SpecialService : ISpecialService
             return ActionExecutionResult.Skipped("Mode RAMBO", "Mode RAMBO annulé par l'utilisateur.");
         }
 
-        await _chat.InfoAsync("Mode RAMBO activé. Je lance un nettoyage profond et une optimisation du système.", ct).ConfigureAwait(false);
         _progress.StartIndeterminate();
         try
         {
-            var result = await _rambo.RunAsync(ct).ConfigureAwait(false);
+            var result = await _rambo.RunAsync(ct, (message, token) => _chat.InfoAsync(message, token)).ConfigureAwait(false);
             if (!result.Succeeded)
             {
                 var reason = string.IsNullOrWhiteSpace(result.FailureReason) ? "raison inconnue" : result.FailureReason;
@@ -116,6 +115,7 @@ public sealed class SpecialService : ISpecialService
         sb.AppendLine($"SystemCacheFreedBytes={result.SystemCacheFreedBytes.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine($"DuplicateFilesPotentialBytes={result.DuplicateFilesPotentialBytes.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine($"InactiveFoldersPotentialBytes={result.InactiveFoldersPotentialBytes.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"GhostFilesCount={result.GhostFiles.Count}");
         sb.AppendLine($"EmptyFoldersDeleted={result.EmptyFoldersDeleted}");
         sb.AppendLine($"AutoContinueUsed={result.AutoContinueUsed}");
         if (result.ErrorLogs.Count > 0)

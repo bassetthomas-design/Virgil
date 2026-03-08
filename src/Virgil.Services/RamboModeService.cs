@@ -29,6 +29,16 @@ public sealed class DuplicateFileItem
     public bool IsSelected { get; set; }
 }
 
+public sealed class GhostFileCandidate
+{
+    public string Path { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public long SizeBytes { get; init; }
+    public DateTime LastUseUtc { get; init; }
+    public string Extension { get; init; } = string.Empty;
+    public bool IsSelected { get; set; }
+}
+
 public sealed class DuplicateGroup
 {
     public List<DuplicateFileItem> Files { get; init; } = new();
@@ -57,6 +67,7 @@ public sealed class RamboResult
     public List<string> RamInsights { get; init; } = new();
     public List<InactiveFolderCandidate> InactiveFolders { get; init; } = new();
     public List<DuplicateGroup> DuplicateGroups { get; init; } = new();
+    public List<GhostFileCandidate> GhostFiles { get; init; } = new();
     public string Summary { get; init; } = "Mode RAMBO terminé.";
     public string? FailureReason { get; init; }
     public List<string> ErrorLogs { get; init; } = new();
@@ -85,22 +96,28 @@ public sealed class RamboModeService
     private readonly PerformanceService.IStandbyMemoryReleaser _standbyReleaser;
     private readonly ISystemCommandRunner _commandRunner;
     private readonly IConfirmationPrompt? _confirmationPrompt;
+    private readonly DiskAutopsyService _diskAutopsy;
+    private readonly QuarantineService _quarantine;
 
     public RamboModeService(
         BrowserCleanupService? browserCleanup = null,
         IStartupAnalyzer? startupAnalyzer = null,
         PerformanceService.IStandbyMemoryReleaser? standbyReleaser = null,
         ISystemCommandRunner? commandRunner = null,
-        IConfirmationPrompt? confirmationPrompt = null)
+        IConfirmationPrompt? confirmationPrompt = null,
+        DiskAutopsyService? diskAutopsy = null,
+        QuarantineService? quarantine = null)
     {
         _browserCleanup = browserCleanup ?? new BrowserCleanupService();
         _startupAnalyzer = startupAnalyzer ?? new StartupAnalyzer();
         _standbyReleaser = standbyReleaser ?? new NullStandbyReleaser();
         _commandRunner = commandRunner ?? new SystemCommandRunner();
         _confirmationPrompt = confirmationPrompt;
+        _diskAutopsy = diskAutopsy ?? new DiskAutopsyService();
+        _quarantine = quarantine ?? new QuarantineService();
     }
 
-    public async Task<RamboResult> RunAsync(CancellationToken ct)
+    public async Task<RamboResult> RunAsync(CancellationToken ct, Func<string, CancellationToken, Task>? narrateAsync = null)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -113,6 +130,7 @@ public sealed class RamboModeService
         var errorLogs = new List<string>();
         var inactiveFolders = new List<InactiveFolderCandidate>();
         var duplicateGroups = new List<DuplicateGroup>();
+        var ghostFiles = new List<GhostFileCandidate>();
 
         long tempFreed = 0;
         long browserFreed = 0;
@@ -130,9 +148,22 @@ public sealed class RamboModeService
 
         try
         {
-            await ExecuteStepAsync("DiskInsights", "insights disque", () =>
+            await NarrateAsync("Mode RAMBO activé.
+Bon… c’est pas ma guerre, mais quelqu’un doit nettoyer ce système.", ct).ConfigureAwait(false);
+
+            await ExecuteStepAsync("DiskInsights", "autopsie disque", () =>
             {
-                CollectDiskInsights(diskInsights);
+                var report = _diskAutopsy.Analyze();
+                foreach (var entry in report.Entries.OrderByDescending(x => x.SizeBytes).Take(8))
+                {
+                    diskInsights.Add($"{entry.PathLabel} → {FormatBytes(entry.SizeBytes)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(report.Summary))
+                {
+                    diskInsights.Add(report.Summary);
+                }
+
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
@@ -148,6 +179,7 @@ public sealed class RamboModeService
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
+            await NarrateAsync("Je cherche les dossiers oubliés.", ct).ConfigureAwait(false);
             await ExecuteStepAsync("InactiveFolders", "dossiers inactifs", () =>
             {
                 var scan = ScanInactiveFolders();
@@ -156,6 +188,7 @@ public sealed class RamboModeService
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
+            await NarrateAsync("Je recherche des fichiers dupliqués.", ct).ConfigureAwait(false);
             await ExecuteStepAsync("DuplicateFiles", "fichiers dupliqués", () =>
             {
                 var groups = ScanDuplicateFiles();
@@ -164,12 +197,23 @@ public sealed class RamboModeService
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
+            await ExecuteStepAsync("GhostFiles", "fichiers fantômes", () =>
+            {
+                ghostFiles.AddRange(ScanGhostFiles());
+                return Task.CompletedTask;
+            }, OnErrorAsync, ct).ConfigureAwait(false);
+
+            diskInsights.Add($"Duplicates → {FormatBytes(duplicatePotential)}");
+            diskInsights.Add($"Inactive files → {FormatBytes(inactivePotential)}");
+            diskInsights.Add($"Ghost files détectés → {ghostFiles.Count}");
+
             await ExecuteStepAsync("AnalyzeOrphans", "résidus logiciels", () =>
             {
                 AnalyzeOrphanResidues(diskInsights);
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
+            await NarrateAsync("Je nettoie les fichiers temporaires.", ct).ConfigureAwait(false);
             await ExecuteStepAsync("CleanupTemp", "temporaires", () =>
             {
                 var metrics = CleanupFilesInRoots(GetTempCleanupRoots(), onlyOlderThan: DateTime.UtcNow.AddHours(-24), ct);
@@ -180,6 +224,7 @@ public sealed class RamboModeService
                 return Task.CompletedTask;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
+            await NarrateAsync("Je fouille les caches du système.", ct).ConfigureAwait(false);
             await ExecuteStepAsync("CleanupSystemCache", "caches système", () =>
             {
                 var metrics = CleanupFilesInRoots(GetSystemCacheRoots(), null, ct);
@@ -199,6 +244,8 @@ public sealed class RamboModeService
                 foldersDeleted += metrics.FoldersDeleted;
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
+            await NarrateAsync("Caches navigateurs détectés.
+Je m’en occupe.", ct).ConfigureAwait(false);
             await ExecuteStepAsync("BrowserCleanup", "cache navigateur", async () =>
             {
                 var result = await _browserCleanup.CleanAsync(new BrowserCleanupOptions { Cache = true }, null, ct).ConfigureAwait(false);
@@ -215,11 +262,12 @@ public sealed class RamboModeService
             }, OnErrorAsync, ct).ConfigureAwait(false);
 
             var runModerate = _confirmationPrompt is not null && await _confirmationPrompt
-                .ConfirmAsync("RAMBO souhaite effectuer des optimisations système supplémentaires. Continuer ?", ct)
+                .ConfirmAsync("RAMBO souhaite effectuer des optimisations système.", ct)
                 .ConfigureAwait(false);
 
             if (runModerate)
             {
+                await NarrateAsync("Je libère de la mémoire.", ct).ConfigureAwait(false);
                 await ExecuteStepAsync("ModerateActions", "optimisations système", async () =>
                 {
                     standbyFreed += OptimizeStandbyAndWorkingSets();
@@ -243,6 +291,9 @@ public sealed class RamboModeService
                 await RunAdvancedActionWithConfirmationAsync("Suppression Windows.old", "cmd.exe", "/c rd /s /q C:\\Windows.old", "la suppression de Windows.old retire la capacité de rollback.", ct);
             }
 
+            await NarrateAsync("Mission accomplie.
+Le système est plus propre.", ct).ConfigureAwait(false);
+
             return new RamboResult
             {
                 Succeeded = true,
@@ -264,6 +315,7 @@ public sealed class RamboModeService
                 RamInsights = ramInsights,
                 InactiveFolders = inactiveFolders,
                 DuplicateGroups = duplicateGroups,
+                GhostFiles = ghostFiles,
                 Summary = BuildSummary(tempFreed, browserFreed, systemFreed, filesDeleted, foldersDeleted, emptyFoldersDeleted, heavyClosed, ignored, failedSteps),
                 ErrorLogs = errorLogs
             };
@@ -291,10 +343,21 @@ public sealed class RamboModeService
                 RamInsights = ramInsights,
                 InactiveFolders = inactiveFolders,
                 DuplicateGroups = duplicateGroups,
+                GhostFiles = ghostFiles,
                 Summary = "Mode RAMBO: échec partiel.",
                 FailureReason = ex.Message,
                 ErrorLogs = errorLogs
             };
+        }
+
+        async Task NarrateAsync(string message, CancellationToken token)
+        {
+            if (narrateAsync is null || string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            await narrateAsync(message, token).ConfigureAwait(false);
         }
 
         async Task<bool> OnErrorAsync(string stepName, string resource, Exception ex, CancellationToken token)
@@ -461,6 +524,30 @@ public sealed class RamboModeService
         }
 
         return groups.OrderByDescending(x => x.SizeBytes * x.Count).Take(100).ToList();
+    }
+
+
+    private static List<GhostFileCandidate> ScanGhostFiles(long minBytes = 1024L * 1024 * 1024, int inactiveDays = 90)
+    {
+        var now = DateTime.UtcNow;
+        var largeExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".iso", ".rar", ".zip", ".mkv", ".mp4" };
+
+        return EnumerateUserScanRoots()
+            .SelectMany(TryEnumerateFiles)
+            .Where(path => !IsProtectedPath(path))
+            .Select(path => new FileInfo(path))
+            .Where(fi => fi.Exists && fi.Length >= minBytes && largeExtensions.Contains(fi.Extension) && (now - fi.LastAccessTimeUtc).TotalDays > inactiveDays)
+            .OrderByDescending(fi => fi.Length)
+            .Take(150)
+            .Select(fi => new GhostFileCandidate
+            {
+                Path = fi.FullName,
+                Name = fi.Name,
+                SizeBytes = fi.Length,
+                LastUseUtc = fi.LastAccessTimeUtc,
+                Extension = fi.Extension
+            })
+            .ToList();
     }
 
     private static string ComputeHash(string path)
@@ -835,6 +922,39 @@ public sealed class RamboModeService
     private static void AppendErrorLog(string stepName, Exception ex, string resource, RamboErrorDecision decision, List<string> logs)
     {
         logs.Add($"StepName={stepName}; ExceptionType={ex.GetType().Name}; Resource={resource}; UserDecision={decision}");
+    }
+
+    public async Task<IReadOnlyList<string>> MoveInactiveFoldersToQuarantineAsync(IEnumerable<InactiveFolderCandidate> folders, CancellationToken ct = default)
+    {
+        var moved = new List<string>();
+        foreach (var folder in folders.Where(x => x.IsSelected))
+        {
+            if (!Directory.Exists(folder.Path) || IsProtectedPath(folder.Path))
+            {
+                continue;
+            }
+
+            moved.Add(await _quarantine.MoveFolderAsync(folder.Path, ct).ConfigureAwait(false));
+        }
+
+        return moved;
+    }
+
+    public static IReadOnlyList<string> BuildSafeDuplicateDeletionPlan(IEnumerable<DuplicateGroup> groups)
+    {
+        var plan = new List<string>();
+        foreach (var group in groups)
+        {
+            var selected = group.Files.Where(x => x.IsSelected).ToList();
+            if (selected.Count >= group.Files.Count)
+            {
+                selected = selected.Take(group.Files.Count - 1).ToList();
+            }
+
+            plan.AddRange(selected.Select(x => x.Path));
+        }
+
+        return plan;
     }
 
     private sealed class NullStandbyReleaser : PerformanceService.IStandbyMemoryReleaser
