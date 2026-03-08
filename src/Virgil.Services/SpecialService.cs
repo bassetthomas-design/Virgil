@@ -110,10 +110,14 @@ public sealed class SpecialService : ISpecialService
         sb.AppendLine($"FilesDeleted={result.FilesDeleted}");
         sb.AppendLine($"FoldersDeleted={result.FoldersDeleted}");
         sb.AppendLine($"StandbyMemoryFreedBytes={result.StandbyMemoryFreedBytes.ToString(CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"ProcessesClosed={result.ProcessesClosed}");
-        sb.AppendLine($"SkippedItems={result.SkippedItems}");
+        sb.AppendLine($"HeavyProcessesClosed={result.HeavyProcessesClosed}");
+        sb.AppendLine($"IgnoredItems={result.IgnoredItems}");
         sb.AppendLine($"FailedSteps={result.FailedSteps}");
-        sb.AppendLine($"AutoContinueModeUsed={result.AutoContinueModeUsed}");
+        sb.AppendLine($"SystemCacheFreedBytes={result.SystemCacheFreedBytes.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"DuplicateFilesPotentialBytes={result.DuplicateFilesPotentialBytes.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"InactiveFoldersPotentialBytes={result.InactiveFoldersPotentialBytes.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"EmptyFoldersDeleted={result.EmptyFoldersDeleted}");
+        sb.AppendLine($"AutoContinueUsed={result.AutoContinueUsed}");
         if (result.ErrorLogs.Count > 0)
         {
             sb.AppendLine("ErrorLogs:");
