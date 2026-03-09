@@ -307,6 +307,7 @@ public sealed class BrowserCleanupService
                     Path.Combine(cacheRoot, "Code Cache"),
                     Path.Combine(cacheRoot, "GPUCache"),
                     Path.Combine(cacheRoot, "ShaderCache"),
+                    Path.Combine(cacheRoot, "Crashpad"),
                     Path.Combine(cacheRoot, "System Cache"),
                 },
                 CookieFiles: new[]
@@ -348,6 +349,11 @@ public sealed class BrowserCleanupService
             "chrome",
             Path.Combine(local, "Google", "Chrome", "User Data"));
 
+        AddChromium(
+            "Edge",
+            "msedge",
+            Path.Combine(local, "Microsoft", "Edge", "User Data"));
+
         var operaProfile = Path.Combine(roaming, "Opera Software", "Opera Stable");
         var operaCache = Path.Combine(local, "Opera Software", "Opera Stable");
         AddOpera("Opera", "opera", operaProfile, operaCache);
@@ -372,6 +378,7 @@ public sealed class BrowserCleanupService
                 Path.Combine(root, "Code Cache"),
                 Path.Combine(root, "GPUCache"),
                 Path.Combine(root, "ShaderCache"),
+                Path.Combine(root, "Crashpad"),
             },
             CookieFiles: new[]
             {
@@ -424,6 +431,7 @@ public sealed class BrowserCleanupService
                     localCache,
                     Path.Combine(dir, "cache2"),
                     Path.Combine(dir, "shader-cache"),
+                    Path.Combine(dir, "crashes"),
                 },
                 CookieFiles: new[]
                 {

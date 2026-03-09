@@ -141,7 +141,7 @@ namespace Virgil.App.Services
             {
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 16),
-                Text = "• Nettoyage profond des fichiers temporaires et caches\n• Nettoyage Windows Update / logs / miniatures / shaders\n• Nettoyage caches navigateurs\n• Optimisation mémoire et refresh système\n• Analyse des gros dossiers, démarrage et RAM\n• Recherche de dossiers inactifs et fichiers dupliqués\n\nCertaines étapes avancées peuvent demander confirmation."
+                Text = "• Nettoyage profond du système\n• Nettoyage caches Windows et navigateurs\n• Optimisations mémoire et système\n• Analyse du disque\n• Détection dossiers inactifs\n• Détection fichiers dupliqués\n• Autopsie du stockage"
             };
             DockPanel.SetDock(body, Dock.Top);
             root.Children.Add(body);
