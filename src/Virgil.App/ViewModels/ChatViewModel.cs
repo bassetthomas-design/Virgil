@@ -15,6 +15,7 @@ using Virgil.App.Chat;
 using Virgil.App.Commands;
 using Virgil.App.Models;
 using Virgil.App.Services;
+using Virgil.App.Interfaces;
 using Virgil.Core.Logging;
 using Virgil.Services.Assistant;
 
@@ -31,6 +32,8 @@ namespace Virgil.App.ViewModels
         private readonly LocalLlamaController? _localLlamaController;
         private readonly Func<AssistantContext>? _assistantContextProvider;
         private readonly Func<string, Dictionary<string, string>?, CancellationToken, Task<ActionResult>>? _actionExecutor;
+        private readonly IConfirmationService? _confirmationService;
+        private readonly ActionIntentParser _intentParser = new();
         private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
         private string _inputText = string.Empty;
         private bool _isBusy;
@@ -52,6 +55,9 @@ namespace Virgil.App.ViewModels
         private int _defaultTtlMs = MinChatTtlMs;
         private readonly AsyncRelayCommand _enableAiCommand;
         private readonly AsyncRelayCommand _disableAiCommand;
+        private readonly DispatcherTimer _autonomousReflectionTimer;
+        private DateTimeOffset _lastAutonomousReflectionUtc = DateTimeOffset.MinValue;
+        private static readonly TimeSpan AutonomousReflectionCooldown = TimeSpan.FromMinutes(5);
 
         public ChatViewModel(
             ChatService chat,
@@ -61,7 +67,8 @@ namespace Virgil.App.ViewModels
             Func<AssistantContext>? assistantContextProvider = null,
             Func<string, Dictionary<string, string>?, CancellationToken, Task<ActionResult>>? actionExecutor = null,
             SettingsService? settingsService = null,
-            LocalLlamaController? localLlamaController = null)
+            LocalLlamaController? localLlamaController = null,
+            IConfirmationService? confirmationService = null)
         {
             _chat = chat;
             _actionBridge = bridge;
@@ -71,6 +78,7 @@ namespace Virgil.App.ViewModels
             _actionExecutor = actionExecutor;
             _settingsService = settingsService;
             _localLlamaController = localLlamaController;
+            _confirmationService = confirmationService;
             _chat.MessagePosted += OnMessagePosted;
             _chat.HistoryCleared += OnHistoryCleared;
             SendCommand = new RelayCommand(_ => _ = SendAsync(), _ => CanSend());
@@ -89,6 +97,10 @@ namespace Virgil.App.ViewModels
             };
             _aiStatusTimer.Tick += (_, _) => UpdateAiStatus(_latestLlamaSnapshot);
             UpdateAiStatus(_latestLlamaSnapshot);
+
+            _autonomousReflectionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(45) };
+            _autonomousReflectionTimer.Tick += (_, _) => TryEmitAutonomousReflection();
+            _autonomousReflectionTimer.Start();
 
             ApplySettingsTtl();
         }
@@ -399,6 +411,11 @@ namespace Virgil.App.ViewModels
             _dispatcher.Invoke(() => Messages.Add(userItem));
             _chat.RecordMessage("user", message);
 
+            if (await TryHandleActionIntentAsync(message).ConfigureAwait(false))
+            {
+                return;
+            }
+
             IsBusy = true;
             try
             {
@@ -443,6 +460,43 @@ namespace Virgil.App.ViewModels
             {
                 IsBusy = false;
             }
+        }
+
+        private async Task<bool> TryHandleActionIntentAsync(string message)
+        {
+            if (_actionExecutor is null || _confirmationService is null)
+            {
+                return false;
+            }
+
+            var intent = _intentParser.Parse(message);
+            if (intent is null)
+            {
+                return false;
+            }
+
+            AppendAssistantMessage($"Je peux lancer : {intent.DisplayName}. Tu confirmes, ou tu voulais juste me faire lire ça à voix haute ?", MessageType.Info);
+            var confirmed = _confirmationService.Confirm($"Virgil veut lancer : {intent.DisplayName}", "Confirmer l’action");
+            if (!confirmed)
+            {
+                AppendAssistantMessage("Parfait. On ne touche à rien, pour une fois que tu fais preuve de prudence.", MessageType.Warning);
+                return true;
+            }
+
+            AppendAssistantMessage(BuildActionStartNarration(intent.DisplayName), MessageType.Info);
+            try
+            {
+                var result = await _actionExecutor(intent.ActionId, null, CancellationToken.None).ConfigureAwait(false);
+                var summary = string.IsNullOrWhiteSpace(result.Message) ? result.Title : result.Message;
+                AppendAssistantMessage($"{BuildActionDoneNarration(intent.DisplayName)} {summary}", result.Success ? MessageType.Success : MessageType.Warning);
+                TryEmitAutonomousReflection("action_finished");
+            }
+            catch (Exception ex)
+            {
+                AppendAssistantMessage($"Échec sur {intent.DisplayName}. Oui, encore. Détail: {ex.Message}", MessageType.Error);
+            }
+
+            return true;
         }
 
         private async Task<bool> TryRunLocalChatAsync(string message)
@@ -526,12 +580,14 @@ namespace Virgil.App.ViewModels
             }
 
             AppendAssistantMessage($"Exécution… {action.Title}", MessageType.Info);
+            AppendAssistantMessage(BuildActionStartNarration(action.Title), MessageType.Info);
 
             try
             {
                 var result = await _actionExecutor(action.ActionId, action.Parameters, CancellationToken.None).ConfigureAwait(false);
                 var summary = string.IsNullOrWhiteSpace(result.Message) ? result.Title : result.Message;
-                AppendAssistantMessage(summary, result.Success ? MessageType.Success : MessageType.Warning);
+                AppendAssistantMessage($"{BuildActionDoneNarration(action.Title)} {summary}", result.Success ? MessageType.Success : MessageType.Warning);
+                TryEmitAutonomousReflection("action_finished");
             }
             catch (Exception ex)
             {
@@ -615,6 +671,64 @@ namespace Virgil.App.ViewModels
         }
 
         private bool CanSend() => IsChatReady && !IsBusy && !string.IsNullOrWhiteSpace(InputText);
+
+        private static string BuildActionStartNarration(string actionName)
+            => $"Je lance {actionName}. On va voir ce que ton Windows essaie encore de cacher.";
+
+        private static string BuildActionDoneNarration(string actionName)
+            => $"{actionName} terminé. C'était sale, maintenant c'est au moins vivable.";
+
+        private void TryEmitAutonomousReflection(string? forcedReason = null)
+        {
+            if (_settingsService is null || _assistantContextProvider is null)
+            {
+                return;
+            }
+
+            if (!_settingsService.Settings.EnableAutonomousVirgilReflections || LocalLlamaStateService.Instance.Status != LocalStatus.Ready)
+            {
+                return;
+            }
+
+            if (DateTimeOffset.UtcNow - _lastAutonomousReflectionUtc < AutonomousReflectionCooldown)
+            {
+                return;
+            }
+
+            var context = _assistantContextProvider();
+            var reason = forcedReason ?? DetectReflectionReason(context);
+            if (reason is null)
+            {
+                return;
+            }
+
+            _lastAutonomousReflectionUtc = DateTimeOffset.UtcNow;
+            AppendAssistantMessage(BuildReflectionMessage(reason), MessageType.Info);
+        }
+
+        private static string? DetectReflectionReason(AssistantContext context)
+        {
+            if (TryParsePercent(context.Telemetry.Ram) >= 85) return "ram_high";
+            if (TryParsePercent(context.Telemetry.Disk) >= 90) return "disk_full";
+            if (TryParseTemp(context.Telemetry.Temperature) >= 80) return "cpu_temp_high";
+            return null;
+        }
+
+        private static int TryParsePercent(string input)
+            => int.TryParse(new string(input.Where(char.IsDigit).ToArray()), out var value) ? value : 0;
+
+        private static int TryParseTemp(string input)
+            => int.TryParse(new string(input.Where(char.IsDigit).ToArray()), out var value) ? value : 0;
+
+        private static string BuildReflectionMessage(string reason)
+            => reason switch
+            {
+                "cpu_temp_high" => "Ton CPU chauffe. Rien de dramatique, mais ce n’est pas exactement un spa.",
+                "ram_high" => "La RAM grimpe encore. Tu collectionnes les processus comme des trophées.",
+                "disk_full" => "Le disque commence à étouffer. Ce n’est jamais une bonne idée.",
+                "action_finished" => "Le système tient debout. C’est déjà mieux que beaucoup de machines.",
+                _ => "Tout tient encore. Statistiquement, c’est presque une victoire."
+            };
 
         private static bool ShouldSuppressGenerationError(string? message)
         {

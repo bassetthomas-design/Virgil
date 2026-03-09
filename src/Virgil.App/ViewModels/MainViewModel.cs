@@ -116,7 +116,8 @@ namespace Virgil.App.ViewModels
                 BuildAssistantContext,
                 RunActionAsync,
                 settingsService,
-                localLlamaController);
+                localLlamaController,
+                confirmationService);
 
             RunActionCommand = new AsyncRelayCommand(async param =>
             {

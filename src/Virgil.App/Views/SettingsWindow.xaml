@@ -32,6 +32,7 @@
 
                 <TextBlock Text="Compagnon" FontWeight="Bold" Margin="0,8,0,6"/>
                 <CheckBox Content="Bavard (CompanionTalkative)" IsChecked="{Binding CompanionTalkative}"/>
+                <CheckBox Content="Réflexions autonomes de Virgil" IsChecked="{Binding EnableAutonomousVirgilReflections}"/>
 
                 <TextBlock Text="IA" FontWeight="Bold" Margin="0,16,0,6"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
