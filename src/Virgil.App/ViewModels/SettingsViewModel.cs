@@ -86,6 +86,7 @@ namespace Virgil.App.ViewModels
             _chatMessageTtlSeconds = s.ChatMessageTTLSeconds;
             _localMaxTokens = s.LocalMaxTokens;
             _companionTalkative = s.CompanionTalkative;
+            _enableAutonomousVirgilReflections = s.EnableAutonomousVirgilReflections;
             _enableBeatPulse = s.EnableBeatPulse;
             _selectedProviderPreference = s.ProviderPreference ?? ProviderPreference.LocalFirst;
             _providerPreferenceOptions = new[]
@@ -157,6 +158,13 @@ namespace Virgil.App.ViewModels
         {
             get => _enableBeatPulse;
             set { _enableBeatPulse = value; OnPropertyChanged(); }
+        }
+
+        private bool _enableAutonomousVirgilReflections;
+        public bool EnableAutonomousVirgilReflections
+        {
+            get => _enableAutonomousVirgilReflections;
+            set { _enableAutonomousVirgilReflections = value; OnPropertyChanged(); }
         }
 
         private double _warnTemp;
@@ -484,6 +492,7 @@ namespace Virgil.App.ViewModels
             s.DefaultMessageTtlMs = chatTtlSeconds * 1000;
             s.LocalMaxTokens = _localMaxTokens;
             s.CompanionTalkative = _companionTalkative;
+            s.EnableAutonomousVirgilReflections = _enableAutonomousVirgilReflections;
             s.EnableBeatPulse = _enableBeatPulse;
 
             s.Mood.WarnTemp = _warnTemp;
